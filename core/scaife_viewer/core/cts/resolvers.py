@@ -8,12 +8,11 @@ from MyCapytain.resolvers.cts.local import CtsCapitainsLocalResolver
 from MyCapytain.resources.collections.cts import (
     XmlCtsCitation,
     XmlCtsTextgroupMetadata,
-    XmlCtsWorkMetadata
+    XmlCtsWorkMetadata,
 )
 
 
 class LocalResolver(CtsCapitainsLocalResolver):
-
     def process_text_group(self, path):
         with open(path) as f:
             metadata = XmlCtsTextgroupMetadata.parse(resource=f)
@@ -28,8 +27,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
         text_group_urn = str(text_group_metadata.urn)
         with open(path) as f:
             metadata = XmlCtsWorkMetadata.parse(
-                resource=f,
-                parent=self.inventory[text_group_urn],
+                resource=f, parent=self.inventory[text_group_urn]
             )
         work_urn = str(metadata.urn)
         if work_urn in self.inventory[text_group_urn].works:
@@ -46,11 +44,14 @@ class LocalResolver(CtsCapitainsLocalResolver):
         if to_remove is None:
             to_remove = []
         metadata = self.inventory[urn]
-        metadata.path = os.path.join(base_path, "{text_group}.{work}.{version}.xml".format(
-            text_group=metadata.urn.textgroup,
-            work=metadata.urn.work,
-            version=metadata.urn.version,
-        ))
+        metadata.path = os.path.join(
+            base_path,
+            "{text_group}.{work}.{version}.xml".format(
+                text_group=metadata.urn.textgroup,
+                work=metadata.urn.work,
+                version=metadata.urn.version,
+            ),
+        )
         try:
             text = self.load_text(metadata.path)
             cites = []
@@ -85,10 +86,16 @@ class LocalResolver(CtsCapitainsLocalResolver):
             for text_group_path in text_group_paths:
                 try:
                     text_group_metadata = self.process_text_group(text_group_path)
-                    for work_path in glob.glob(f"{os.path.dirname(text_group_path)}/*/__cts__.xml"):
-                        work_metadata = self.process_work(text_group_metadata, work_path)
+                    for work_path in glob.glob(
+                        f"{os.path.dirname(text_group_path)}/*/__cts__.xml"
+                    ):
+                        work_metadata = self.process_work(
+                            text_group_metadata, work_path
+                        )
                         for text_urn in work_metadata.texts:
-                            self.process_text(text_urn, os.path.dirname(work_path), to_remove)
+                            self.process_text(
+                                text_urn, os.path.dirname(work_path), to_remove
+                            )
                 except UndispatchedTextError as e:
                     self.logger.warning(f"Error dispatching {text_group_path}: {e}")
                     if self.RAISE_ON_UNDISPATCHED:

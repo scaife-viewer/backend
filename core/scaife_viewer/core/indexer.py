@@ -25,8 +25,15 @@ class SortedPassage(NamedTuple):
 
 
 class Indexer:
-
-    def __init__(self, pusher, morphology_path, urn_prefix=None, chunk_size=100, limit=None, dry_run=False):
+    def __init__(
+        self,
+        pusher,
+        morphology_path,
+        urn_prefix=None,
+        chunk_size=100,
+        limit=None,
+        dry_run=False,
+    ):
         self.pusher = pusher
         self.urn_prefix = urn_prefix
         self.chunk_size = chunk_size
@@ -49,9 +56,7 @@ class Indexer:
         else:
             urn_prefix = None
         texts = dask.bag.from_sequence(
-            self.texts(
-                urn_prefix.upTo(cts.URN.NO_PASSAGE) if urn_prefix else None
-            )
+            self.texts(urn_prefix.upTo(cts.URN.NO_PASSAGE) if urn_prefix else None)
         )
         passages = texts.map(self.passages_from_text).flatten()
         if urn_prefix and urn_prefix.reference:
@@ -62,11 +67,15 @@ class Indexer:
         else:
             passages = passages.compute()
         print(f"Indexing {len(passages)} passages")
-        word_counts = dask.bag.from_sequence(passages).map_partitions(self.indexer).compute()
+        word_counts = (
+            dask.bag.from_sequence(passages).map_partitions(self.indexer).compute()
+        )
         total_word_counts = Counter()
         for (lang, count) in word_counts:
             total_word_counts[lang] += count
-        word_count_line = [f"{lang}={count}" for lang, count in total_word_counts.items()]
+        word_count_line = [
+            f"{lang}={count}" for lang, count in total_word_counts.items()
+        ]
         print("Word Count Summary: {0}".format(", ".join(word_count_line)))
 
     def texts(self, urn_prefix):
@@ -107,14 +116,14 @@ class Indexer:
         else:
             leaves = PreOrderIter(toc.root, filter_=attrgetter("is_leaf"))
             for i, node in enumerate(leaves):
-                passages.append(SortedPassage(
-                    urn=f"{text.urn}:{node.reference}",
-                    sort_idx=i,
-                ))
+                passages.append(
+                    SortedPassage(urn=f"{text.urn}:{node.reference}", sort_idx=i)
+                )
         return passages
 
     def indexer(self, chunk: Iterable[SortedPassage]):
         from raven.contrib.django.raven_compat.models import client as sentry
+
         words = []
         for p in chunk:
             urn = p.urn
@@ -162,11 +171,10 @@ class Indexer:
             form_key = form_keys[0]
             form = morphology.forms[int(form_key) - 1]
             giuseppe.append((form.form, form.lemma))
-        missing = chr(0xfffd)
-        return " ".join([
-            {None: missing}.get(w, w)
-            for w in align_text(thibault, giuseppe)
-        ])
+        missing = chr(0xFFFD)
+        return " ".join(
+            [{None: missing}.get(w, w) for w in align_text(thibault, giuseppe)]
+        )
 
     def passage_to_doc(self, passage, sort_idx, tokens):
         return {
@@ -196,7 +204,6 @@ def chunker(iterable, n):
 
 
 class DirectPusher:
-
     def __init__(self, chunk_size=500):
         self.chunk_size = chunk_size
         self.index_name = settings.ELASTICSEARCH_INDEX_NAME
@@ -224,11 +231,7 @@ class DirectPusher:
             self.commit_docs()
 
     def commit_docs(self):
-        metadata = {
-            "_op_type": "index",
-            "_index": self.index_name,
-            "_type": "text",
-        }
+        metadata = {"_op_type": "index", "_index": self.index_name, "_type": "text"}
         docs = ({"_id": doc["urn"], **metadata, **doc} for doc in self.docs)
         elasticsearch.helpers.bulk(self.es, docs)
         self.docs.clear()
@@ -243,7 +246,6 @@ class DirectPusher:
 
 
 class PubSubPusher:
-
     def __init__(self, project, topic):
         self.topic_path = f"projects/{project}/topics/{topic}"
 
@@ -253,6 +255,7 @@ class PubSubPusher:
             # import happens here because module-level kicks off the
             # thread to handle publishing (which breaks multiprocessing)
             import google.cloud.pubsub
+
             self._publisher = google.cloud.pubsub.PublisherClient()
         return self._publisher
 
@@ -277,11 +280,13 @@ def nw_align(a, b, replace_func=lambda x, y: -1 if x != y else 0, insert=-1, del
     for i in range(1, len_a + 1):
         for j in range(1, len_b + 1):
             replace = replace_func(a[i - 1], b[j - 1])
-            matrix[i][j] = max([
-                (matrix[i - 1][j - 1][0] + replace, DIAGONAL),
-                (matrix[i][j - 1][0] + insert, LEFT),
-                (matrix[i - 1][j][0] + delete, UP)
-            ])
+            matrix[i][j] = max(
+                [
+                    (matrix[i - 1][j - 1][0] + replace, DIAGONAL),
+                    (matrix[i][j - 1][0] + insert, LEFT),
+                    (matrix[i - 1][j][0] + delete, UP),
+                ]
+            )
     i, j = len_a, len_b
     alignment = []
     while (i, j) != (0, 0):

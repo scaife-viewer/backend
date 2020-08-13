@@ -8,7 +8,6 @@ TextKey = namedtuple("TextKey", ["short_key", "ref"])
 
 
 class Morphology:
-
     @classmethod
     def load(cls, root_dir):
         short_keys = {}

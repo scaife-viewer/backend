@@ -9,7 +9,6 @@ from google.auth.transport.requests import AuthorizedSession
 
 
 class CloudJob:
-
     def setup(self):
         self.unique_id = str(uuid.uuid4())
         credentials, self.gce_project = google.auth.default()
@@ -49,17 +48,13 @@ class CloudJob:
             r.raise_for_status()
             metadata = r.json()["metadata"]
             new_metadata = {
-                **{
-                    item["key"]: item["value"]
-                    for item in metadata["items"]
-                },
+                **{item["key"]: item["value"] for item in metadata["items"]},
                 "status": status,
             }
             body = {
                 "fingerprint": metadata["fingerprint"],
                 "items": [
-                    dict(key=key, value=value)
-                    for key, value in new_metadata.items()
+                    dict(key=key, value=value) for key, value in new_metadata.items()
                 ],
             }
             r = self.gce_http.post(
@@ -82,9 +77,7 @@ class CloudJob:
 @functools.lru_cache()
 def query_metadata(key):
     url = f"http://metadata.google.internal/computeMetadata/v1/{key}"
-    headers = {
-        "Metadata-Flavor": "Google",
-    }
+    headers = {"Metadata-Flavor": "Google"}
     r = requests.get(url, headers=headers)
     if r.status_code == 404:
         raise KeyError(key)

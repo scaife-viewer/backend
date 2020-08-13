@@ -8,18 +8,19 @@ from .utils import chunker, natural_keys
 
 
 class RefTreeDepthIter(anytree.iterators.PreOrderIter):
-
     def __init__(self, node, depth=0):
-        super(RefTreeDepthIter, self).__init__(node, filter_=self.filter_func(depth + 1))
+        super(RefTreeDepthIter, self).__init__(
+            node, filter_=self.filter_func(depth + 1)
+        )
 
     def filter_func(self, depth):
         def f(node):
             return node.depth == depth
+
         return f
 
 
 class RefTree:
-
     def __init__(self, urn, citations):
         self.urn = urn
         self.citations = citations
@@ -32,11 +33,13 @@ class RefTree:
         #   citations = ["book", "line"]
         #   reff = "1.2"
         #   -> [[("book", "1"), ("line", "2")], ...]
-        mapped = list(zip_longest(
-            # MyCapytain bugish: citation name could be None (should always be a string)
-            map(str, map(attrgetter("name"), self.citations)),
-            reff.split("."),
-        ))
+        mapped = list(
+            zip_longest(
+                # MyCapytain bugish: citation name could be None (should always be a string)
+                map(str, map(attrgetter("name"), self.citations)),
+                reff.split("."),
+            )
+        )
         ancestors, leaf = mapped[:-1], mapped[-1]
         if ancestors:
             # set up parents and get leaf parent
@@ -68,7 +71,7 @@ class RefTree:
         level = len(labels)
         groupby = 5
         if "word" in labels:
-            labels = labels[:labels.index("word")]
+            labels = labels[: labels.index("word")]
         if str(self.urn) == "urn:cts:latinLit:stoa0040.stoa062.opp-lat1":
             level, groupby = 1, 2
         elif labels == ["book", "poem", "line"]:
@@ -157,7 +160,6 @@ class RefNode(anytree.NodeMixin):
 
 
 class RefChunk:
-
     def __init__(self, urn, start, end=None):
         self.passage_urn = urn
         self.start, self.end = start, end

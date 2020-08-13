@@ -30,7 +30,8 @@ class IndexerCommand(BaseCommand):
         elif options["pusher"] == "pubsub":
             pusher = PubSubPusher(options["pubsub_project"], options["pubsub_topic"])
         indexer = Indexer(
-            pusher, options["morphology_path"],
+            pusher,
+            options["morphology_path"],
             urn_prefix=options["urn_prefix"],
             chunk_size=options["chunk_size"],
             limit=options["limit"],
@@ -47,7 +48,6 @@ class Command(CloudJob, IndexerCommand):
 
 
 class Timer:
-
     def __enter__(self):
         self.start = time.perf_counter()
         return self

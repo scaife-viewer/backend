@@ -8,7 +8,7 @@ from django.http import (
     Http404,
     HttpResponse,
     HttpResponseBadRequest,
-    JsonResponse
+    JsonResponse,
 )
 from django.shortcuts import redirect, render
 from django.views import View
@@ -29,15 +29,13 @@ class BaseLibraryView(View):
     format = "html"
 
     def get(self, request, **kwargs):
-        to_response = {
-            "html": self.as_html,
-            "json": self.as_json,
-        }.get(self.format, "html")
+        to_response = {"html": self.as_html, "json": self.as_json}.get(
+            self.format, "html"
+        )
         return to_response()
 
 
 class LibraryConditionMixin(ConditionMixin):
-
     def get_last_modified(self, request, *args, **kwargs):
         # @@@ per-URN modification dates will need nautilus-cnd
         # for now, use only deployment creation timestamp.
@@ -49,7 +47,6 @@ class LibraryConditionMixin(ConditionMixin):
 
 
 class LibraryView(LibraryConditionMixin, BaseLibraryView):
-
     def as_html(self):
         return render(self.request, "library/index.html", {})
 
@@ -59,16 +56,12 @@ class LibraryView(LibraryConditionMixin, BaseLibraryView):
 
 
 class LibraryInfoView(View):
-
     def get(self, request, **kwargs):
-        payload = {
-            "api_version": settings.LIBRARY_VIEW_API_VERSION
-        }
+        payload = {"api_version": settings.LIBRARY_VIEW_API_VERSION}
         return JsonResponse(payload)
 
 
 class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
-
     def validate_urn(self):
         if not self.kwargs["urn"].startswith("urn:"):
             raise Http404()
@@ -83,9 +76,7 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
     def as_html(self):
         collection = self.get_collection()
         collection_name = collection.__class__.__name__.lower()
-        ctx = {
-            collection_name: collection,
-        }
+        ctx = {collection_name: collection}
         return render(self.request, f"library/cts_{collection_name}.html", ctx)
 
     def should_toc(self, collection_obj):
@@ -126,7 +117,6 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
 
 
 class LibraryCollectionVectorView(LibraryConditionMixin, View):
-
     def get(self, request, urn):
         entries = request.GET.getlist("e[]")
         try:
@@ -137,9 +127,7 @@ class LibraryCollectionVectorView(LibraryConditionMixin, View):
         for entry in entries:
             collection = cts.collection(f"{urn}.{entry}")
             collections[str(collection.urn)] = apify(collection)
-        payload = {
-            "collections": collections,
-        }
+        payload = {"collections": collections}
         return JsonResponse(payload)
 
 
@@ -152,25 +140,18 @@ class LibraryPassageView(LibraryConditionMixin, View):
             passage, healed = self.get_passage()
         except cts.InvalidPassageReference as e:
             return HttpResponse(
-                json.dumps({
-                    "reason": str(e),
-                }),
+                json.dumps({"reason": str(e)}),
                 status=400,
                 content_type="application/json",
             )
         except cts.InvalidURN as e:
             return HttpResponse(
-                json.dumps({
-                    "reason": str(e),
-                }),
+                json.dumps({"reason": str(e)}),
                 status=404,
                 content_type="application/json",
             )
         if healed:
-            key = {
-                "json": "json_url",
-                "text": "text_url",
-            }.get(self.format, "json")
+            key = {"json": "json_url", "text": "text_url"}.get(self.format, "json")
             redirect = HttpResponse(status=303)
             redirect["Location"] = link_passage(str(passage.urn))[key]
             return redirect
@@ -209,15 +190,11 @@ class LibraryPassageView(LibraryConditionMixin, View):
 
     def as_text(self):
         return HttpResponse(
-            f"{self.passage.content}\n",
-            content_type="text/plain; charset=utf-8",
+            f"{self.passage.content}\n", content_type="text/plain; charset=utf-8"
         )
 
     def as_xml(self):
-        return HttpResponse(
-            f"{self.passage.xml}",
-            content_type="application/xml",
-        )
+        return HttpResponse(f"{self.passage.xml}", content_type="application/xml")
 
 
 class Reader(TemplateView):
@@ -271,7 +248,9 @@ def search_json(request):
 
     # validate params
     if not search_type:
-        return JsonResponse({"error": "Provide a search type - 'library' or 'reader'."}, status=400)
+        return JsonResponse(
+            {"error": "Provide a search type - 'library' or 'reader'."}, status=400
+        )
     if not q:
         return JsonResponse({"error": "Provide a search query."}, status=400)
 
@@ -283,28 +262,15 @@ def search_json(request):
 
         page_num = int(request.GET.get("page_num"))
         aggregate_fields = {
-            "filtered_text_group": {
-                "terms": {
-                    "field": "text_group",
-                    "size": 300,
-                }
-            }
+            "filtered_text_group": {"terms": {"field": "text_group", "size": 300}}
         }
 
-        data.update({
-            "q": q,
-            "kind": kind,
-            "page_num": page_num,
-            "type": search_type,
-        })
+        data.update({"q": q, "kind": kind, "page_num": page_num, "type": search_type})
 
         if text_group_urn:
             scope["text_group"] = text_group_urn
             aggregate_fields["filtered_work"] = {
-                "terms": {
-                    "field": "work",
-                    "size": 300,
-                }
+                "terms": {"field": "work", "size": 300}
             }
 
         if work_urn:
@@ -316,7 +282,7 @@ def search_json(request):
             "scope": scope,
             "aggregate_fields": aggregate_fields,
             "kind": kind,
-            "offset": (page_num - 1) * 10
+            "offset": (page_num - 1) * 10,
         }
         try:
             sq = SearchQuery(q, **kwargs)
@@ -327,21 +293,23 @@ def search_json(request):
         results = sq.search_window(size=size, offset=((page_num - 1) * 10))
 
         for result in results:
-            r = {
-                "passage": apify(result["passage"], with_content=False),
-            }
+            r = {"passage": apify(result["passage"], with_content=False)}
             if kind == "form":
                 r["content"] = result["raw_content"]
             else:
                 r["content"] = result["content"]
             data["results"].append(r)
 
-        data.update({
-            "text_groups": results.filtered_aggs("filtered_text_group"),
-            "works": results.filtered_aggs("filtered_work") if text_group_urn else None,
-            "total_count": total_count,
-            "page": page,
-        })
+        data.update(
+            {
+                "text_groups": results.filtered_aggs("filtered_text_group"),
+                "works": results.filtered_aggs("filtered_work")
+                if text_group_urn
+                else None,
+                "total_count": total_count,
+                "page": page,
+            }
+        )
 
     else:
 
@@ -386,16 +354,11 @@ def search_json(request):
         fields = set(request.GET.get("fields", "content,highlights").split(","))
 
         for result in sq.search_window(size=size, offset=offset):
-            r = {
-                "passage": apify(result["passage"], with_content=False),
-            }
+            r = {"passage": apify(result["passage"], with_content=False)}
             if "content" in fields:
                 r["content"] = result["content"]
             if "highlights" in fields:
-                r["highlights"] = [
-                    dict(w=w, i=i)
-                    for w, i in result["highlights"]
-                ]
+                r["highlights"] = [dict(w=w, i=i) for w, i in result["highlights"]]
             data["results"].append(r)
 
     return JsonResponse(data)
@@ -411,18 +374,14 @@ def morpheus(request):
     allowed_langs = ["grc", "lat"]
     if lang not in allowed_langs:
         return HttpResponseBadRequest(
-            content='Error when processing morpheus request: "lang" parameter must be one of: {}'.format(", ".join(allowed_langs))
+            content='Error when processing morpheus request: "lang" parameter must be one of: {}'.format(
+                ", ".join(allowed_langs)
+            )
         )
-    params = {
-        "word": word,
-        "lang": lang,
-        "engine": f"morpheus{lang}",
-    }
+    params = {"word": word, "lang": lang, "engine": f"morpheus{lang}"}
     qs = urlencode(params)
     url = f"http://services.perseids.org/bsp/morphologyservice/analysis/word?{qs}"
-    headers = {
-        "Accept": "application/json",
-    }
+    headers = {"Accept": "application/json"}
     r = requests.get(url, headers=headers)
     r.raise_for_status()
     body = r.json().get("RDF", {}).get("Annotation", {}).get("Body", [])

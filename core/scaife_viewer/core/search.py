@@ -36,10 +36,16 @@ ENTIRE_FIELD_CONTENTS = 0
 
 
 class SearchQuery:
-
     def __init__(
-        self, q, search_type, scope=None, sort_by=None, aggregate_fields=None,
-        kind="form", size=10, offset=0
+        self,
+        q,
+        search_type,
+        scope=None,
+        sort_by=None,
+        aggregate_fields=None,
+        kind="form",
+        size=10,
+        offset=0,
     ):
         self.q = q
         self.search_type = search_type
@@ -52,10 +58,7 @@ class SearchQuery:
         self.total_count = None
 
     def query_index(self):
-        return {
-            "index": settings.ELASTICSEARCH_INDEX_NAME,
-            "doc_type": "text",
-        }
+        return {"index": settings.ELASTICSEARCH_INDEX_NAME, "doc_type": "text"}
 
     def query_sort(self):
         if not self.sort_by:
@@ -86,12 +89,7 @@ class SearchQuery:
             }
         }
         if self.scope:
-            q = {
-                "bool": {
-                    "must": sq,
-                    "filter": {"term": self.scope},
-                },
-            }
+            q = {"bool": {"must": sq, "filter": {"term": self.scope}}}
         else:
             q = {**sq}
         return q
@@ -122,7 +120,7 @@ class SearchQuery:
             },
             "size": size,
             "from_": offset,
-            **self.query_index()
+            **self.query_index(),
         }
 
     def search_window(self, **kwargs):
@@ -134,20 +132,15 @@ class SearchQuery:
 
     def count(self):
         if self.total_count is None:
-            self.total_count = es.count(**{
-                "body": {"query": self.query()},
-                **self.query_index()
-            })["count"]
+            self.total_count = es.count(
+                **{"body": {"query": self.query()}, **self.query_index()}
+            )["count"]
         return self.total_count
 
     def scan(self):
         return scanner(
             es,
-            query={
-                **self.query_sort(),
-                "_source": False,
-                "query": self.query(),
-            },
+            query={**self.query_sort(), "_source": False, "query": self.query()},
             preserve_order=bool(self.sort_by),
             raise_on_error=False,
         )
@@ -160,7 +153,6 @@ class SearchQuery:
 
 
 class SearchResultSet:
-
     def __init__(self, response, search_type, kind):
         self.response = response
         self.search_type = search_type
@@ -176,25 +168,30 @@ class SearchResultSet:
     def filtered_aggs(self, aggregate_type):
         buckets = []
         for bucket in self.response["aggregations"][aggregate_type]["buckets"]:
-            buckets.append({
-                "text_group": cts.collection(bucket["key"]).as_json(),
-                "count": bucket["doc_count"],
-            })
+            buckets.append(
+                {
+                    "text_group": cts.collection(bucket["key"]).as_json(),
+                    "count": bucket["doc_count"],
+                }
+            )
         return sorted(buckets, key=itemgetter("count"), reverse=True)
 
 
 class SearchResult:
-
     def __init__(self, hit):
         self.hit = hit
         self.passage = cts.passage(hit["_id"])
-        self.link_urn = self.passage.urn  # @@@ consider dynamically chunking and giving a better passage URN
+        self.link_urn = (
+            self.passage.urn
+        )  # @@@ consider dynamically chunking and giving a better passage URN
         self.raw_content = hit["highlight"].get("raw_content", [""])
         self.content_highlights = hit["highlight"].get("content", [""])[0]
         self.lemma_highlights = hit["highlight"].get("lemma_content", [""])[0]
         self.highlighter = Highlighter(
             self.passage,
-            self.content_highlights if self.content_highlights else self.lemma_highlights,
+            self.content_highlights
+            if self.content_highlights
+            else self.lemma_highlights,
         )
         self.sort_idx = hit["_source"]["sort_idx"]
 
@@ -222,7 +219,6 @@ w_re = regex.compile(fr"(?:<em>)?(?:\w[-\w]*|{chr(0xfffd)})(?:</em>)?")
 
 
 class Highlighter:
-
     def __init__(self, passage, highlights):
         self.passage = passage
         self.highlights = highlights
@@ -232,7 +228,7 @@ class Highlighter:
             acc = set()
             it = zip(
                 self.highlights.split(" "),
-                [(t["w"], t["i"]) for t in self.passage.tokenize(whitespace=False)]
+                [(t["w"], t["i"]) for t in self.passage.tokenize(whitespace=False)],
             )
             is_highlight = False
             for hw, (sw, si) in it:
@@ -265,8 +261,8 @@ class Highlighter:
         for i, w in enumerate(L):
             fragment = []
             if regex.match(r"</?em>", w):
-                fragment.extend(L[max(0, i - context):i])
+                fragment.extend(L[max(0, i - context) : i])
                 fragment.append(w)
-                fragment.extend(L[i + 1:i + context + 1])
+                fragment.extend(L[i + 1 : i + context + 1])
                 acc.append(" ".join(fragment))
         return acc

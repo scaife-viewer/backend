@@ -7,9 +7,10 @@ tests_require = [
 ]
 
 dev_requires = [
-    "flake8==3.6.0",
-    "flake8-quotes==1.0.0",
-    "isort==4.3.4",
+    "black==19.10b0",
+    "flake8>=3.7,<4",
+    "flake8-quotes>=2.1.1,<3",
+    "isort>=4.3.21,<5",
 ] + tests_require
 
 setup(

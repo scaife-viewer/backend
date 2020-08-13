@@ -30,9 +30,8 @@ def local_resolver(data_path: str) -> Resolver:
 def default_resolver() -> Resolver:
     global resolver
     if resolver is None:
-        resolver_func = {
-            "api": api_resolver,
-            "local": local_resolver,
-        }[settings.CTS_RESOLVER["type"]]
+        resolver_func = {"api": api_resolver, "local": local_resolver}[
+            settings.CTS_RESOLVER["type"]
+        ]
         resolver = resolver_func(**settings.CTS_RESOLVER["kwargs"])
     return resolver

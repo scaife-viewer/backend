@@ -30,7 +30,6 @@ def load_text_inventory_metadata() -> cts.CtsTextInventoryMetadata:
 
 
 class TextInventory:
-
     @classmethod
     def load(cls):
         return cls(load_text_inventory_metadata())
@@ -50,7 +49,6 @@ class TextInventory:
 
 
 class Collection:
-
     def __init__(self, urn: URN, metadata: CtsCollectionMetadata):
         self.urn = urn
         self.metadata = metadata
@@ -81,7 +79,6 @@ class Collection:
 
 
 class TextGroup(Collection):
-
     def __repr__(self):
         return f"<cts.TextGroup {self.urn} at {hex(id(self))}>"
 
@@ -100,12 +97,7 @@ class TextGroup(Collection):
             "works": [
                 {
                     "urn": str(work.urn),
-                    "texts": [
-                        {
-                            "urn": str(text.urn),
-                        }
-                        for text in work.texts()
-                    ],
+                    "texts": [{"urn": str(text.urn)} for text in work.texts()],
                 }
                 for work in self.works()
             ],
@@ -113,7 +105,6 @@ class TextGroup(Collection):
 
 
 class Work(Collection):
-
     def __repr__(self):
         return f"<cts.Work {self.urn} at {hex(id(self))}>"
 
@@ -131,15 +122,11 @@ class Work(Collection):
         return {
             "urn": str(self.urn),
             "label": str(self.label),
-            "texts": [
-                dict(urn=str(text.urn))
-                for text in self.texts()
-            ],
+            "texts": [dict(urn=str(text.urn)) for text in self.texts()],
         }
 
 
 class Text(Collection):
-
     def __init__(self, kind, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.kind = kind
@@ -209,24 +196,23 @@ class Text(Collection):
         }
         if with_toc:
             toc = self.toc()
-            payload.update({
-                "first_passage": dict(urn=str(self.first_passage().urn)),
-                "ancestors": [
-                    {
-                        "urn": str(ancestor.urn),
-                        "label": ancestor.label,
-                    }
-                    for ancestor in self.ancestors()
-                ],
-                "toc": [
-                    {
-                        "urn": next(toc.chunks(ref_node), None).urn,
-                        "label": ref_node.label.title(),
-                        "num": ref_node.num,
-                    }
-                    for ref_node in toc.num_resolver.glob(toc.root, "*")
-                ],
-            })
+            payload.update(
+                {
+                    "first_passage": dict(urn=str(self.first_passage().urn)),
+                    "ancestors": [
+                        {"urn": str(ancestor.urn), "label": ancestor.label}
+                        for ancestor in self.ancestors()
+                    ],
+                    "toc": [
+                        {
+                            "urn": next(toc.chunks(ref_node), None).urn,
+                            "label": ref_node.label.title(),
+                            "num": ref_node.num,
+                        }
+                        for ref_node in toc.num_resolver.glob(toc.root, "*")
+                    ],
+                }
+            )
         return payload
 
 

@@ -25,7 +25,6 @@ ws_re = regex.compile(ws)
 
 
 class Passage:
-
     def __init__(self, text, reference):
         self.text = text
         self.reference = reference
@@ -62,12 +61,14 @@ class Passage:
     @lru_cache()
     def textual_node(self):
         # MyCapytain bug: local resolver getTextualNode can't take a Reference
-        return default_resolver().getTextualNode(self.text.urn, subreference=str(self.reference))
+        return default_resolver().getTextualNode(
+            self.text.urn, subreference=str(self.reference)
+        )
 
     @property
     def refs(self):
         ref_range = {
-            "start": self.text.toc().lookup(".".join(self.reference.start.list)),
+            "start": self.text.toc().lookup(".".join(self.reference.start.list))
         }
         if self.reference.end:
             ref_range["end"] = self.text.toc().lookup(".".join(self.reference.end.list))
@@ -116,14 +117,9 @@ class Passage:
                     if not whitespace:
                         continue
                     t = "s"
-                for wk in (w[i:j + 1] for i in range(wl) for j in range(i, wl)):
+                for wk in (w[i : j + 1] for i in range(wl) for j in range(i, wl)):
                     idx[wk] += 1
-                token = {
-                    "w": w,
-                    "i": idx[w],
-                    "t": t,
-                    "o": offset,
-                }
+                token = {"w": w, "i": idx[w], "t": t, "o": offset}
                 tokens.append(token)
         return tokens
 
@@ -149,7 +145,7 @@ class Passage:
             "start": {
                 "reference": self.refs["start"].reference,
                 "human_reference": self.refs["start"].human_reference,
-            },
+            }
         }
         if "end" in self.refs:
             refs["end"] = {
@@ -162,10 +158,7 @@ class Passage:
                 "urn": str(self.text.urn),
                 "label": self.text.label,
                 "ancestors": [
-                    {
-                        "urn": str(ancestor.urn),
-                        "label": ancestor.label,
-                    }
+                    {"urn": str(ancestor.urn), "label": ancestor.label}
                     for ancestor in self.text.ancestors()
                 ],
                 "lang": self.text.lang,
@@ -174,29 +167,24 @@ class Passage:
             },
             "refs": refs,
             "ancestors": [
-                {
-                    "reference": str(ancestor.reference),
-                }
-                for ancestor in self.ancestors()
+                {"reference": str(ancestor.reference)} for ancestor in self.ancestors()
             ],
             "children": [
-                {
-                    "reference": str(child.reference),
-                    "lsb": child.lsb,
-                }
+                {"reference": str(child.reference), "lsb": child.lsb}
                 for child in self.children()
             ],
         }
         if with_content:
-            o.update({
-                "text_html": str(self.render()),
-                "word_tokens": self.tokenize(punctuation=False, whitespace=False),
-            })
+            o.update(
+                {
+                    "text_html": str(self.render()),
+                    "word_tokens": self.tokenize(punctuation=False, whitespace=False),
+                }
+            )
         return o
 
 
 class TEIRenderer:
-
     def __init__(self, tei):
         self.tei = tei
         self.indexes = defaultdict(int)
@@ -217,7 +205,7 @@ class TEIRenderer:
                     (func_ns, "token_type"): self.token_type,
                     (func_ns, "token_index"): self.token_index,
                     (func_ns, "token_offset"): self.token_offset,
-                }
+                },
             )
             try:
                 return str(transform(self.tei))
@@ -252,6 +240,6 @@ class TEIRenderer:
     def token_index(self, context, value):
         v = "".join(value)
         lv = len(v)
-        for k in (v[i:j + 1] for i in range(lv) for j in range(i, lv)):
+        for k in (v[i : j + 1] for i in range(lv) for j in range(i, lv)):
             self.indexes[k] += 1
         return self.indexes[v]
