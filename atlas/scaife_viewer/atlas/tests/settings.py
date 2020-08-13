@@ -11,6 +11,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "scaife_viewer.atlas",
     "scaife_viewer.atlas.tests",
+    "django_jsonfield_backport",
 ]
 MIDDLEWARE = []
 TEMPLATES = [

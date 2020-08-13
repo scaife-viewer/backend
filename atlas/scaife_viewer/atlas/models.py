@@ -7,8 +7,8 @@ from django.conf import settings
 from django.core import serializers
 from django.db import models
 
-# @@@ https://code.djangoproject.com/ticket/12990
-from django_extensions.db.fields.json import JSONField
+# @@@ optional for Django 3.1+
+from django_jsonfield_backport.models import JSONField
 from graphene_django.utils import camelize
 from sortedm2m.fields import SortedManyToManyField
 from treebeard.mp_tree import MP_Node
@@ -362,7 +362,7 @@ class Node(MP_Node):
             del fields["path"]
             del fields["numchild"]
 
-            metadata = json.loads(fields["metadata"])
+            metadata = fields["metadata"]
             if to_camel:
                 fields = camelize(fields)
                 metadata = camelize(metadata)
