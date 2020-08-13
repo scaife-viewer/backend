@@ -7,6 +7,9 @@ from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 from graphene_django.utils import camelize
 
+# @@@ ensure convert signal is registered
+from .compat import convert_jsonfield_to_string  # noqa
+
 # from .models import Node as TextPart
 from .models import (
     AudioAnnotation,
