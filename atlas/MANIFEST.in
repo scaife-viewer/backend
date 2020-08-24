@@ -1,0 +1,3 @@
+include LICENSE
+recursive-include scaife_viewer/atlas/static *
+recursive-include scaife_viewer/atlas/templates *
