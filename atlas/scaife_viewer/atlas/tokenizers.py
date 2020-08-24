@@ -1,5 +1,5 @@
 import sys
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor as PreferredExecutor
 
 from .conf import settings
 from .models import Node, Token
@@ -24,7 +24,7 @@ def tokenize_text_parts(version_exemplar_urn, force=True):
 
 
 def tokenize_all_text_parts(reset=False):
-    with ProcessPoolExecutor(
+    with PreferredExecutor(
         max_workers=settings.SCAIFE_VIEWER_ATLAS_INGESTION_CONCURRENCY
     ) as executor:
         for version_exemplar_node in Node.objects.filter(

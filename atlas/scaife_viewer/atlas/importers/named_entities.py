@@ -56,6 +56,7 @@ def get_standoff_paths():
 
 
 def _apply_entities(path, lookup):
+    # @@@ good transaction candidate
     with open(path, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:

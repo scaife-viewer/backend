@@ -208,6 +208,7 @@ class MetricalAnnotation(models.Model):
                 form += syllable["text"]
         return form
 
+    # @@@ good transaction candidate
     def resolve_references(self):
         if "references" not in self.data:
             print(f'No references found [urn="{self.urn}"]')
