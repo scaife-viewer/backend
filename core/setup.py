@@ -22,9 +22,7 @@ setup(
     url="https://github.com/scaife-viewer/backend/",
     license="MIT",
     packages=find_packages(),
-    package_data={
-        "core": []
-    },
+    include_package_data=True,
     test_suite="runtests.runtests",
     install_requires=[
         "anytree==2.4.3",
