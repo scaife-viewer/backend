@@ -22,10 +22,10 @@ from .models import (
     TextAnnotation,
     Token,
 )
+from .passage import PassageMetadata, PassageSiblingMetadata
 from .utils import (
     extract_version_urn_and_ref,
     filter_via_ref_predicate,
-    get_chunker,
     get_textparts_from_passage_reference,
 )
 
@@ -72,103 +72,87 @@ class LimitedConnectionField(DjangoFilterConnectionField):
         )
 
 
+class PassageSiblingsNode(ObjectType):
+    # @@@ dry for resolving scalars
+    all_siblings = generic.GenericScalar(
+        name="all", description="Inclusive list of siblings for a passage"
+    )
+    selected = generic.GenericScalar(
+        description="Only the selected sibling objects for a given passage"
+    )
+    previous = generic.GenericScalar(description="Siblings for the previous passage")
+    next_siblings = generic.GenericScalar(
+        name="next", description="Siblings for the next passage"
+    )
+
+    class Meta:
+        description = "Provides lists of sibling objects for a given passage"
+
+    def resolve_all_siblings(obj, info, **kwargs):
+        return obj.all
+
+    def resolve_selected(obj, info, **kwargs):
+        return obj.selected
+
+    def resolve_previous(obj, info, **kwargs):
+        return obj.previous
+
+    def resolve_next_siblings(obj, info, **kwargs):
+        return obj.next
+
+
+class PassageMetadataNode(ObjectType):
+    human_reference = String()
+    ancestors = generic.GenericScalar()
+    siblings = Field(PassageSiblingsNode)
+    children = generic.GenericScalar()
+    next_passage = String(description="Next passage reference")
+    previous_passage = String(description="Previous passage reference")
+    healed_passage = String(description="Healed passage")
+
+    def resolve_metadata(self, info, *args, **kwargs):
+        # @@@
+        return {}
+
+    def resolve_previous_passage(self, info, *args, **kwargs):
+        passage = info.context.passage
+        if passage.previous_objects:
+            return self.generate_passage_urn(passage.version, passage.previous_objects)
+
+    def resolve_next_passage(self, info, *args, **kwargs):
+        passage = info.context.passage
+        if passage.next_objects:
+            return self.generate_passage_urn(passage.version, passage.next_objects)
+
+    def resolve_ancestors(self, info, *args, **kwargs):
+        passage = info.context.passage
+        return self.get_ancestor_metadata(passage.version, passage.start)
+
+    def resolve_siblings(self, info, *args, **kwargs):
+        passage = info.context.passage
+        return PassageSiblingMetadata(passage)
+
+    def resolve_children(self, info, *args, **kwargs):
+        passage = info.context.passage
+        return self.get_children_metadata(passage.start)
+
+    def resolve_human_reference(self, info, *args, **kwargs):
+        passage = info.context.passage
+        return passage.human_readable_reference
+
+    def resolve_healed_passage(self, info, *args, **kwargs):
+        return getattr(info.context, "healed_passage_reference", None)
+
+
 class PassageTextPartConnection(Connection):
-    metadata = generic.GenericScalar()
+    metadata = Field(PassageMetadataNode)
 
     class Meta:
         abstract = True
 
-    @staticmethod
-    def generate_passage_urn(version, object_list):
-        first = object_list[0]
-        last = object_list[-1]
-
-        if first == last:
-            return first.get("urn")
-        line_refs = [tp.get("ref") for tp in [first, last]]
-        passage_ref = "-".join(line_refs)
-        return f"{version.urn}{passage_ref}"
-
-    def get_ancestor_metadata(self, version, obj):
-        # @@@ we need to stop it at the version boundary for backwards
-        # compatability with SV
-        data = []
-        if obj and obj.get_parent() != version:
-            ancestor_refparts = obj.ref.split(".")[:-1]
-            for pos, part in enumerate(ancestor_refparts):
-                ancestor_ref = ".".join(ancestor_refparts[: pos + 1])
-                data.append(
-                    {
-                        # @@@ proper name for this is ref or position?
-                        "ref": ancestor_ref,
-                        "urn": f"{version.urn}{ancestor_ref}",
-                    }
-                )
-        return data
-
-    def get_adjacent_passages(self, version, all_queryset, start_idx, count):
-        data = {}
-
-        chunker = get_chunker(
-            all_queryset, start_idx, count, queryset_values=["idx", "urn", "ref"]
-        )
-        previous_objects, next_objects = chunker.get_prev_next_boundaries()
-
-        if previous_objects:
-            data["previous"] = self.generate_passage_urn(version, previous_objects)
-
-        if next_objects:
-            data["next"] = self.generate_passage_urn(version, next_objects)
-        return data
-
-    def get_sibling_metadata(self, version, text_part):
-        text_part_siblings = text_part.get_siblings()
-        data = []
-        for tp in text_part_siblings.values("ref", "urn"):
-            lcp = tp["ref"].split(".").pop()
-            data.append({"lcp": lcp, "urn": tp.get("urn")})
-        if len(data) == 1:
-            # don't return
-            data = []
-        return data
-
-    def get_children_metadata(self, start_obj):
-        data = []
-        for tp in start_obj.get_children().values("ref", "urn"):
-            lcp = tp["ref"].split(".").pop()
-            data.append({"lcp": lcp, "urn": tp.get("urn")})
-        return data
-
     def resolve_metadata(self, info, *args, **kwargs):
-        # @@@ resolve metadata.siblings|ancestors|children individually
-        passage_dict = info.context.passage
-        if not passage_dict:
-            return
-
-        urn = passage_dict["urn"]
-        version = passage_dict["version"]
-
-        refs = urn.rsplit(":", maxsplit=1)[1].split("-")
-        first_ref = refs[0]
-        last_ref = refs[-1]
-        if first_ref == last_ref:
-            start_obj = end_obj = version.get_descendants().get(ref=first_ref)
-        else:
-            start_obj = version.get_descendants().get(ref=first_ref)
-            end_obj = version.get_descendants().get(ref=last_ref)
-
-        data = {}
-        siblings_qs = start_obj.get_refpart_siblings(version)
-        start_idx = start_obj.idx
-        chunk_length = end_obj.idx - start_obj.idx + 1
-        data.update(
-            self.get_adjacent_passages(version, siblings_qs, start_idx, chunk_length)
-        )
-
-        data["ancestors"] = self.get_ancestor_metadata(version, start_obj)
-        data["siblings"] = self.get_sibling_metadata(version, start_obj)
-        data["children"] = self.get_children_metadata(start_obj)
-        return camelize(data)
+        passage = info.context.passage
+        return PassageMetadata(passage)
 
 
 # @@@ consider refactoring with TextPartsReferenceFilterMixin
@@ -202,23 +186,21 @@ class TextPartFilterSet(django_filters.FilterSet):
         }
 
 
+def initialize_passage(request, reference):
+    # @@@ mimic how DataLoaders are using request == info.context
+    from scaife_viewer.atlas.backports.scaife_viewer.cts import passage_heal
+
+    passage, healed = passage_heal(reference)
+    request.passage = passage
+    if healed:
+        request.healed_passage_reference = passage.reference
+    return passage.reference
+
+
 class TextPartsReferenceFilterMixin:
-    def _add_passage_to_context(self, reference):
-        # @@@ instance.request is an alias for info.context and used to store
-        # context data across filtersets
-        self.request.passage = dict(urn=reference)
-
-        version_urn, ref = extract_version_urn_and_ref(reference)
-        try:
-            version = TextPart.objects.get(urn=version_urn)
-        except TextPart.DoesNotExist:
-            raise Exception(f"{version_urn} was not found.")
-
-        self.request.passage["version"] = version
-
     def get_lowest_textparts_queryset(self, value):
-        self._add_passage_to_context(value)
-        version = self.request.passage["version"]
+        value = initialize_passage(self.request, value)
+        version = self.request.passage.version
         return get_textparts_from_passage_reference(value, version=version)
 
 
@@ -338,7 +320,7 @@ class TextAlignmentChunkFilterSet(
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         start = textparts_queryset.first()
         end = textparts_queryset.last()
-        version = self.request.passage["version"]
+        version = self.request.passage.version
         return (
             queryset.filter(version=version)
             .filter(end__idx__gte=start.idx)
