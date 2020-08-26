@@ -211,12 +211,19 @@ class Reader(TemplateView):
 
     template_name = "reader/reader.html"
 
+    def get(self, request, *args, **kwargs):
+        self.urn = cts.URN(self.kwargs["urn"])
+        if not self.urn.reference:
+            return redirect("library_text_redirect", urn=self.kwargs["urn"])
+        return super().get(request, *args, **kwargs)
+
     def get_text(self):
-        urn = cts.URN(self.kwargs["urn"])
         try:
-            text = cts.collection(urn.upTo(cts.URN.NO_PASSAGE))
+            text = cts.collection(self.urn.upTo(cts.URN.NO_PASSAGE))
         except cts.CollectionDoesNotExist:
             raise Http404()
+        # @@@ KeyError is a possibility if the URN is for a text group
+        # or work
         return text
 
     def get_context_data(self, **kwargs):
@@ -230,6 +237,9 @@ def library_text_redirect(request, urn):
     Given a text URN redirect to the first chunk. Required to prevent
     TOCing on the top-level library page.
     """
+    # @@@ how to indicate that healing has happened
+    urn = normalize_urn(urn)
+
     try:
         text = cts.collection(urn)
     except cts.CollectionDoesNotExist:
