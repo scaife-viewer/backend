@@ -3,6 +3,7 @@ import math
 from django.urls import reverse
 
 from . import cts
+from .conf import settings
 
 
 def link_collection(urn) -> dict:
@@ -117,3 +118,10 @@ def get_pagination_info(total_count, page_num):
         "has_next": has_next,
         "num_pages": num_pages,
     }
+
+
+def normalize_urn(urn):
+    if not settings.SCAIFE_VIEWER_CORE_ALLOW_TRAILING_COLON and urn.endswith(":"):
+        # @@@ logging
+        urn = urn[:-1]
+    return urn

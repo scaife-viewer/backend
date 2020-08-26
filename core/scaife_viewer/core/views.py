@@ -21,7 +21,13 @@ from . import cts
 from .http import ConditionMixin
 from .precomputed import library_view_json
 from .search import SearchQuery
-from .utils import apify, encode_link_header, get_pagination_info, link_passage
+from .utils import (
+    apify,
+    encode_link_header,
+    get_pagination_info,
+    link_passage,
+    normalize_urn,
+)
 
 
 class BaseLibraryView(View):
@@ -74,6 +80,10 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
             raise Http404()
 
     def as_html(self):
+        normalized_urn = normalize_urn(self.kwargs["urn"])
+        if normalized_urn != self.kwargs["urn"]:
+            return redirect("library_collection", urn=normalized_urn)
+
         collection = self.get_collection()
         collection_name = collection.__class__.__name__.lower()
         ctx = {collection_name: collection}
