@@ -235,7 +235,6 @@ def library_text_redirect(request, urn):
     Given a text URN redirect to the first chunk. Required to prevent
     TOCing on the top-level library page.
     """
-    # @@@ how to indicate that healing has happened
     urn = normalize_urn(urn)
 
     try:
