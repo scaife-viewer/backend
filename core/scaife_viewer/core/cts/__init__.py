@@ -11,13 +11,13 @@ from .collections import (  # noqa
 )
 from .exceptions import (  # noqa
     CollectionDoesNotExist,
-    PassageDoesNotExist,
     InvalidPassageReference,
     InvalidURN,
+    PassageDoesNotExist,
 )
+from .heal import heal
 from .passage import Passage
 from .reference import URN
-from .heal import heal
 
 
 def text_inventory() -> TextInventory:
