@@ -222,8 +222,6 @@ class Reader(TemplateView):
             text = cts.collection(self.urn.upTo(cts.URN.NO_PASSAGE))
         except cts.CollectionDoesNotExist:
             raise Http404()
-        # @@@ KeyError is a possibility if the URN is for a text group
-        # or work
         return text
 
     def get_context_data(self, **kwargs):
@@ -245,7 +243,7 @@ def library_text_redirect(request, urn):
     except cts.CollectionDoesNotExist:
         raise Http404()
     if not isinstance(text, cts.Text):
-        raise Http404()
+        return redirect("library_collection", urn=urn)
     passage = text.first_passage()
     if not passage:
         raise Http404()
