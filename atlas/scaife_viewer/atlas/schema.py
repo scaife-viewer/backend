@@ -352,6 +352,9 @@ class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.Filt
 class TextAnnotationNode(DjangoObjectType):
     data = generic.GenericScalar()
 
+    def resolve_data(obj, *args, **kwargs):
+        return camelize(obj.data)
+
     class Meta:
         model = TextAnnotation
         interfaces = (relay.Node,)
