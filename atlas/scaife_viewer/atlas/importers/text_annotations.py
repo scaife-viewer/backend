@@ -3,7 +3,11 @@ import os
 
 from django.conf import settings
 
-from ..models import TEXT_ANNOTATION_KIND_SCHOLIA, TextAnnotation
+from ..models import (
+    TEXT_ANNOTATION_KIND_SCHOLIA,
+    TEXT_ANNOTATION_KIND_SYNTAX_TREE,
+    TextAnnotation,
+)
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
@@ -23,16 +27,16 @@ def get_paths():
 
 def _prepare_text_annotations(path, counters):
     data = json.load(open(path))
+    # @@@ we probably want a better metadata map,
+    # or want to map the ingestion pipelines a bit differently
+    kind = TEXT_ANNOTATION_KIND_SCHOLIA
+    if os.path.basename(path).startswith("syntax_trees"):
+        kind = TEXT_ANNOTATION_KIND_SYNTAX_TREE
     to_create = []
     for row in data:
         urn = row.pop("urn")
         to_create.append(
-            TextAnnotation(
-                kind=TEXT_ANNOTATION_KIND_SCHOLIA,
-                idx=counters["idx"],
-                urn=urn,
-                data=row,
-            )
+            TextAnnotation(kind=kind, idx=counters["idx"], urn=urn, data=row,)
         )
         counters["idx"] += 1
     return to_create
