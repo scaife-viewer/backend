@@ -25,6 +25,7 @@ def get_paths():
         if f.endswith(".json")
     ]
 
+
 # @@@ transaction candidate
 def _prepare_rois(ia, rois):
     for roi in rois:

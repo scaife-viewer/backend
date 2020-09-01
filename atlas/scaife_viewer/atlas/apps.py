@@ -10,13 +10,9 @@ class AppConfig(BaseAppConfig):
     verbose_name = _("Scaife Viewer ATLAS")
 
 
-
-from django.db.backends.signals import connection_created
-
-
 def tweak_sqlite(sender, connection, **kwargs):
     """Enable integrity constraint with sqlite."""
-    if connection.vendor == 'sqlite':
+    if connection.vendor == "sqlite":
         cursor = connection.cursor()
         cursor.execute("PRAGMA synchronous=OFF;")
         cursor.execute("PRAGMA cache_size=100000;")
