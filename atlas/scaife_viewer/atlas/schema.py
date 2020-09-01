@@ -342,7 +342,7 @@ class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.Filt
 
     class Meta:
         model = TextAnnotation
-        fields = ["urn"]
+        fields = ["urn", "kind"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)

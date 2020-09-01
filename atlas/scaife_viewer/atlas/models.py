@@ -74,7 +74,11 @@ class TextAlignmentChunk(models.Model):
 
 
 TEXT_ANNOTATION_KIND_SCHOLIA = "scholia"
-TEXT_ANNOTATION_KIND_CHOICES = ((TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),)
+TEXT_ANNOTATION_KIND_SYNTAX_TREE = "syntax-tree"
+TEXT_ANNOTATION_KIND_CHOICES = (
+    (TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),
+    (TEXT_ANNOTATION_KIND_SYNTAX_TREE, "Syntax tree"),
+)
 
 
 class TextAnnotation(models.Model):
