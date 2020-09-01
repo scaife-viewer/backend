@@ -2,6 +2,7 @@ from operator import itemgetter
 
 from django.conf import settings
 from django.urls import reverse
+from django.utils.functional import SimpleLazyObject
 
 import regex
 from elasticsearch import Elasticsearch
@@ -10,11 +11,20 @@ from elasticsearch.helpers import scan as scanner
 from . import cts
 
 
-es = Elasticsearch(
-    hosts=settings.ELASTICSEARCH_HOSTS,
-    sniff_on_start=settings.ELASTICSEARCH_SNIFF_ON_START,
-    sniff_on_connection_fail=settings.ELASTICSEARCH_SNIFF_ON_CONNECTION_FAIL,
-)
+def default_es_client_config():
+    return dict(
+        hosts=settings.ELASTICSEARCH_HOSTS,
+        sniff_on_start=settings.ELASTICSEARCH_SNIFF_ON_START,
+        sniff_on_connection_fail=settings.ELASTICSEARCH_SNIFF_ON_CONNECTION_FAIL,
+    )
+
+
+def get_es_client():
+    return Elasticsearch(**default_es_client_config())
+
+
+es = SimpleLazyObject(get_es_client)
+
 
 """
 From https://www.elastic.co/guide/en/elasticsearch/reference/6.0/search-request-highlighting.html#boundary-scanners:

@@ -21,7 +21,13 @@ from . import cts
 from .http import ConditionMixin
 from .precomputed import library_view_json
 from .search import SearchQuery
-from .utils import apify, encode_link_header, get_pagination_info, link_passage
+from .utils import (
+    apify,
+    encode_link_header,
+    get_pagination_info,
+    link_passage,
+    normalize_urn,
+)
 
 
 class BaseLibraryView(View):
@@ -74,6 +80,10 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
             raise Http404()
 
     def as_html(self):
+        normalized_urn = normalize_urn(self.kwargs["urn"])
+        if normalized_urn != self.kwargs["urn"]:
+            return redirect("library_collection", urn=normalized_urn)
+
         collection = self.get_collection()
         collection_name = collection.__class__.__name__.lower()
         ctx = {collection_name: collection}
@@ -201,10 +211,15 @@ class Reader(TemplateView):
 
     template_name = "reader/reader.html"
 
+    def get(self, request, *args, **kwargs):
+        self.urn = cts.URN(self.kwargs["urn"])
+        if not self.urn.reference:
+            return redirect("library_text_redirect", urn=self.kwargs["urn"])
+        return super().get(request, *args, **kwargs)
+
     def get_text(self):
-        urn = cts.URN(self.kwargs["urn"])
         try:
-            text = cts.collection(urn.upTo(cts.URN.NO_PASSAGE))
+            text = cts.collection(self.urn.upTo(cts.URN.NO_PASSAGE))
         except cts.CollectionDoesNotExist:
             raise Http404()
         return text
@@ -220,12 +235,14 @@ def library_text_redirect(request, urn):
     Given a text URN redirect to the first chunk. Required to prevent
     TOCing on the top-level library page.
     """
+    urn = normalize_urn(urn)
+
     try:
         text = cts.collection(urn)
     except cts.CollectionDoesNotExist:
         raise Http404()
     if not isinstance(text, cts.Text):
-        raise Http404()
+        return redirect("library_collection", urn=urn)
     passage = text.first_passage()
     if not passage:
         raise Http404()

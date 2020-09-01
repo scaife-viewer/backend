@@ -28,6 +28,7 @@ setup(
         "anytree==2.4.3",
         "certifi==2018.11.29",
         "dask[bag]==1.1.0",
+        "django_appconf>=1.0.4",
         "Django>=2.2,<3.0",
         "elasticsearch==6.3.1",
         "google-auth==1.6.2",

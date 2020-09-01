@@ -1,0 +1,49 @@
+<GetCapabilities xmlns="http://chs.harvard.edu/xmlns/cts">
+      <request>
+            <requestName>GetInventory</requestName>
+            <requestFilters>urn=None</requestFilters>
+      </request>
+      <reply>
+            <TextInventory tiid="defaultTic"
+                  xmlns:ns1="http://purl.org/dc/elements/1.1/"
+                  xmlns:skos="http://www.w3.org/2004/02/skos/core#"
+                  xmlns:dts="http://w3id.org/dts-ontology/"
+                  xmlns="http://chs.harvard.edu/xmlns/cts"
+                  xmlns:ns2="http://purl.org/dc/terms/"
+                  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+                  xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+                  <textgroup urn="urn:cts:greekLit:tlg0096">
+                        <groupname xml:lang="eng">Aesop</groupname>
+                        <work urn="urn:cts:greekLit:tlg0096.tlg002" xml:lang="grc" groupUrn="urn:cts:greekLit:tlg0096">
+                              <title xml:lang="lat">Fabulae</title>
+                              <edition urn="urn:cts:greekLit:tlg0096.tlg002.First1K-grc1" xml:lang="grc" workUrn="urn:cts:greekLit:tlg0096.tlg002">
+                                    <label xml:lang="lat">Fabulae Aesopicae Collectae</label>
+                                    <label xml:lang="grc">ΑΙΣΩΠΕΙΩΝ ΜΥΘΩΝ ΣΥΝΑΓΩΓΗ</label>
+                                    <description xml:lang="lat">Fabulae Aesopicae Collectae, Halm, Teubner, 1872</description>
+                                    <online>
+                                          <citationMapping>
+                                                <citation xpath="/tei:div[@n='?']" scope="/tei:TEI/tei:text/tei:body/tei:div" label="fabula"></citation>
+                                          </citationMapping>
+                                    </online>
+                              </edition>
+                        </work>
+                  </textgroup>
+                  <textgroup urn="urn:cts:greekLit:tlg4031">
+                        <groupname xml:lang="lat">Eustratius</groupname>
+                        <work urn="urn:cts:greekLit:tlg4031.tlg002" xml:lang="grc" groupUrn="urn:cts:greekLit:tlg4031">
+                              <title xml:lang="lat">In Aristotelis Ethica Nicomachea I Commentaria</title>
+                              <edition urn="urn:cts:greekLit:tlg4031.tlg002.opp-grc1" xml:lang="grc" workUrn="urn:cts:greekLit:tlg4031.tlg002">
+                                    <label xml:lang="lat">In Aristotelis Ethica Nicomachea I Commentaria</label>
+                                    <description xml:lang="mul">Eustratius, In Aristotelis Ethica Nicomachea I Commentaria, Commentaria in Aristotelem Graeca 20,
+    Reimer, Heylbut, 1892</description>
+                                    <online>
+                                          <citationMapping>
+                                                <citation xpath="/tei:div[@n='?']" scope="/tei:TEI/tei:text/tei:body/tei:div" label="chapter"></citation>
+                                          </citationMapping>
+                                    </online>
+                              </edition>
+                        </work>
+                  </textgroup>
+            </TextInventory>
+      </reply>
+</GetCapabilities>

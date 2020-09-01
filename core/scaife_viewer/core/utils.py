@@ -1,8 +1,13 @@
+import logging
 import math
 
 from django.urls import reverse
 
 from . import cts
+from .conf import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 def link_collection(urn) -> dict:
@@ -117,3 +122,12 @@ def get_pagination_info(total_count, page_num):
         "has_next": has_next,
         "num_pages": num_pages,
     }
+
+
+def normalize_urn(urn):
+    if not settings.SCAIFE_VIEWER_CORE_ALLOW_TRAILING_COLON and urn.endswith(":"):
+        new_urn = urn[:-1]
+        msg = f'Normalized "{urn}" to "{new_urn}"'
+        logger.info(msg)
+        return new_urn
+    return urn
