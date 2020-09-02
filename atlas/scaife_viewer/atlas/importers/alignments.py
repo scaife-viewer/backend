@@ -4,17 +4,24 @@ import os
 import re
 
 from django.conf import settings
+from django.utils.text import slugify
 
-from ..models import Node, TextAlignment, TextAlignmentChunk
+from ..models import (
+    Node,
+    TextAlignment,
+    TextAlignmentRecord,
+    TextAlignmentRecordRelation,
+    Token,
+)
 
 
-ALIGNMENTS_DATA_PATH = os.path.join(settings.ATLAS_CONFIG["DATA_DIR"], "alignments")
+ALIGNMENTS_DATA_PATH = os.path.join(settings.PROJECT_ROOT, "data", "alignments")
 ALIGNMENTS_METADATA_PATH = os.path.join(ALIGNMENTS_DATA_PATH, "metadata.json")
 
-LINE_KIND_UNKNOWN = None
-LINE_KIND_NEW = "new"
-LINE_KIND_CONTINUES = "continues"
-LINE_KIND_CONTINUATION = "continuation"
+# LINE_KIND_UNKNOWN = None
+# LINE_KIND_NEW = "new"
+# LINE_KIND_CONTINUES = "continues"
+# LINE_KIND_CONTINUATION = "continuation"
 
 CITATION_REFERENCE_REGEX = re.compile(r"\d+\.\d+")
 CONTENT_REFERENCE_REGEX = re.compile(r"\[\d+\.\d+\]")
@@ -100,29 +107,30 @@ def get_alignment_milestones(path):
                     "greek_content": cleaned_greek_content,
                     "english_content": [
                         # @@@ continuation
-                        (citation, row[3], LINE_KIND_UNKNOWN)
+                        # (citation, row[3], LINE_KIND_UNKNOWN)
+                        (citation, row[3])
                     ],
                 }
             )
 
-    for milestone_idx, alignment in enumerate(ALIGNMENTS):
-        for pos, entry in enumerate(alignment["greek_content"]):
-            offsets = LEAVES_TO_MILESTONES[entry[0]]
-            if [milestone_idx] == offsets:
-                alignment["greek_content"][pos] += (LINE_KIND_NEW,)
-            elif offsets[0] == milestone_idx:
-                alignment["greek_content"][pos] += (LINE_KIND_CONTINUES,)
-            else:
-                alignment["greek_content"][pos] += (LINE_KIND_CONTINUATION,)
+    # @@@ restore continuation data
+    # for milestone_idx, alignment in enumerate(ALIGNMENTS):
+    #     for pos, entry in enumerate(alignment["greek_content"]):
+    #         offsets = LEAVES_TO_MILESTONES[entry[0]]
+    #         if [milestone_idx] == offsets:
+    #             alignment["greek_content"][pos] += (LINE_KIND_NEW,)
+    #         elif offsets[0] == milestone_idx:
+    #             alignment["greek_content"][pos] += (LINE_KIND_CONTINUES,)
+    #         else:
+    #             alignment["greek_content"][pos] += (LINE_KIND_CONTINUATION,)
 
     return {"ALIGNMENTS": ALIGNMENTS, "LEAVES_TO_MILESTONES": LEAVES_TO_MILESTONES}
 
 
-def _alignment_chunk_obj(version, line_lookup, alignment, milestone, milestone_idx):
-    chunk_obj = TextAlignmentChunk(
+def _alignment_record_obj(version, line_lookup, alignment, milestone, milestone_idx):
+    chunk_obj = TextAlignmentRecord(
         citation=milestone["citation"],
         idx=milestone_idx,
-        version=version,
         alignment=alignment,
         items=[milestone["greek_content"], milestone["english_content"]],
     )
@@ -153,31 +161,53 @@ def _build_line_lookup(version):
     return lookup
 
 
+def _build_token_lookup(version):
+    lookup = {}
+    for token in Token.objects.filter(
+        text_part__urn__startswith=version.urn
+    ).select_related("text_part"):
+        # @@@ ve_ref
+        ve_ref = f"{token.text_part.ref}.{token.position}"
+        lookup[ve_ref] = token
+    return lookup
+
+
 def _import_alignment(data):
     full_content_path = os.path.join(ALIGNMENTS_DATA_PATH, data["content_path"])
 
     milestones = get_alignment_milestones(full_content_path)
-    # the version urns in data need a trailing colon
-    version_urn = f'{data["version_urn"]}:'
-    version = Node.objects.get(urn=version_urn)
+    versions = Node.objects.filter(urn__in=data["version_urns"])
     alignment, _ = TextAlignment.objects.update_or_create(
-        version=version,
         name=data["metadata"]["name"],
+        slug=slugify(data["metadata"]["name"]),
         defaults=dict(metadata=data["metadata"]),
     )
+    alignment.versions.set(versions)
 
+    version = versions.get(urn=data["version_urns"][0])
     chunks_created = 0
     line_lookup = _build_line_lookup(version)
     to_create = []
     for milestone_idx, milestone in enumerate(milestones["ALIGNMENTS"]):
-        chunk = _alignment_chunk_obj(
+        chunk = _alignment_record_obj(
             version, line_lookup, alignment, milestone, milestone_idx
         )
         if chunk:
             to_create.append(chunk)
             chunks_created += 1
-    created = len(TextAlignmentChunk.objects.bulk_create(to_create, batch_size=500))
+    created = len(TextAlignmentRecord.objects.bulk_create(to_create, batch_size=500))
     assert created == chunks_created
+
+    # @@@ stop-gap to maintain parity, dreadfully slow
+    # @@@ can we bulk set many to many ?
+    token_lookup = _build_token_lookup(version)
+    for chunk in alignment.text_alignment_records.all():
+        ref = chunk.citation.split("-")[0]
+        first_token = token_lookup[f"{ref}.1"]
+        relation = TextAlignmentRecordRelation.objects.create(
+            version=version, alignment_record=chunk, citation=chunk.citation,
+        )
+        relation.tokens.set([first_token])
 
 
 def import_alignments(reset=False):
@@ -187,3 +217,187 @@ def import_alignments(reset=False):
     alignments_metadata = json.load(open(ALIGNMENTS_METADATA_PATH))
     for alignment_data in alignments_metadata["alignments"]:
         _import_alignment(alignment_data)
+
+
+def sentence_alignment_fresh_start():
+    version_a = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:")
+    version_b = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-eng3:")
+    alignment = TextAlignment(
+        name="Iliad Sentence Alignment", slug="iliad-sentence-alignment"
+    )
+    alignment.save()
+    alignment.versions.set([version_a, version_b])
+
+    record = TextAlignmentRecord(citation="1.1-1.7", alignment=alignment, idx=0)
+    record.save()
+
+    relation_a = TextAlignmentRecordRelation(
+        version=version_a, record=record, citation="1.1-1.7"
+    )
+    relation_a.save()
+    text_parts = version_a.get_descendants().filter(kind="line")[0:7]
+    relation_a.tokens.set(Token.objects.filter(text_part__in=text_parts))
+
+    relation_b = TextAlignmentRecordRelation(
+        # @@@ citation is backwards incompatible with prior data
+        version=version_b,
+        record=record,
+        citation="1.1",
+    )
+    relation_b.save()
+    text_parts = version_b.get_descendants().filter(kind="card")[0:1]
+    relation_b.tokens.set(Token.objects.filter(text_part__in=text_parts)[0:63])
+
+    record.items = list(record.denorm_relations())
+    record.save()
+
+    alignment = TextAlignment.objects.first()
+    record = TextAlignmentRecord(citation="1.9-1.12", alignment=alignment, idx=3)
+    record.save()
+
+    relation_a = TextAlignmentRecordRelation(
+        version=version_a, record=record, citation="1.9-1.12"
+    )
+    relation_a.save()
+    text_parts = list(version_a.get_descendants().filter(kind="line")[8:12])
+    tokens = []
+    tokens += text_parts[0].tokens.filter(position__gte=5)
+    for text_part in text_parts[1:-1]:
+        tokens.extend(text_part.tokens.all())
+    tokens += text_parts[-1].tokens.filter(position=1)
+    relation_a.tokens.set(tokens)
+
+    relation_b = TextAlignmentRecordRelation(
+        version=version_b, record=record, citation="1.1"
+    )
+    relation_b.save()
+    text_parts = version_b.get_descendants().filter(kind="card")[0:1]
+    relation_b.tokens.set(Token.objects.filter(text_part__in=text_parts)[83:115])
+
+    record.items = list(record.denorm_relations())
+    record.save()
+
+    version_a = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:")
+    version_b = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-eng3:")
+    alignment = TextAlignment(name="Iliad Word Alignment", slug="iliad-word-alignment")
+    alignment.save()
+    alignment.versions.set([version_a, version_b])
+
+    record = TextAlignmentRecord(citation="1.1.2", alignment=alignment, idx=1)
+    record.save()
+
+    relation_a = TextAlignmentRecordRelation(
+        version=version_a, record=record, citation="1.1.2"
+    )
+    relation_a.save()
+    tokens = Token.objects.filter(
+        text_part__urn="urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.1", position=2
+    )
+    relation_a.tokens.set(tokens)
+
+    relation_b = TextAlignmentRecordRelation(
+        # @@@ citation is backwards incompatible with prior data
+        version=version_b,
+        record=record,
+        citation="1.1.3",
+    )
+    relation_b.save()
+    tokens = Token.objects.filter(
+        text_part__urn="urn:cts:greekLit:tlg0012.tlg001.perseus-eng3:1.1", position=3
+    )
+    relation_b.tokens.set(tokens)
+
+
+def process_cex(path):
+    lookup = {}
+    with open(path) as f:
+        for line in f:
+            if line.startswith("urn:cite2:ducat:alignments.temp:") and line.count(
+                "urn:cite2:cite:verbs.v1:aligns"
+            ):
+                alignment_id, _, urn = line.strip().split("#")
+                lang = "greek" if urn.count("grc") else "english"
+                alignment = lookup.setdefault(
+                    alignment_id, {"greek": [], "english": []}
+                )
+                alignment[lang].append(urn)
+
+    alignments = list(lookup.values())
+
+    def sort_textpart(urn):
+        _, ref = urn.rsplit(":", maxsplit=1)
+        book, line, position = [int(i) for i in ref.split(".")]
+        return (book, line, position)
+
+    unique_alignments = set()
+    for alignment in alignments:
+        greek = sorted(alignment["greek"], key=sort_textpart)
+        english = sorted(alignment["english"], key=sort_textpart)
+        sort_key = sort_textpart(alignment["greek"][0])
+        unique_alignments.add((sort_key, tuple(greek), tuple(english)))
+
+    unique_alignments = list(unique_alignments)
+    alignments = sorted(unique_alignments, key=lambda x: x[0])
+
+    version_a = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:")
+    version_b = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-eng3:")
+    slug_fragment = os.path.basename(path).rsplit(".")[-2].split("_")[0]
+    alignment = TextAlignment(
+        name=f"Iliad {slug_fragment.title()} Alignment",
+        slug=f"iliad-{slug_fragment}-alignment",
+    )
+    alignment.save()
+    alignment.versions.set([version_a, version_b])
+
+    def get_ref(urn):
+        _, ref = urn.rsplit(":", maxsplit=1)
+        return ref
+
+    def get_textpart_ref(urn):
+        ref = get_ref(urn)
+        text_part_ref, position = ref.rsplit(".", maxsplit=1)
+        return text_part_ref
+
+    idx = 0
+    for sort_key, greek, english in alignments:
+        citation = ".".join([str(s) for s in sort_key])
+        record = TextAlignmentRecord(citation=citation, idx=idx, alignment=alignment)
+        record.save()
+        idx += 1
+
+        relation_a = TextAlignmentRecordRelation(
+            version=version_a, record=record, citation=citation,
+        )
+        relation_a.save()
+        # @@@ ve_ref would save us here quite a bit
+        tokens = []
+        for urn in greek:
+            ref = get_ref(urn)
+            text_part_ref, position = ref.rsplit(".", maxsplit=1)
+            text_part_urn = f"{version_a.urn}{text_part_ref}"
+            tokens.append(
+                Token.objects.get(text_part__urn=text_part_urn, position=position)
+            )
+        relation_a.tokens.set(tokens)
+
+        relation_b = TextAlignmentRecordRelation(
+            # @@@ citation is backwards incompatible with prior data
+            version=version_b,
+            record=record,
+            citation=citation,
+        )
+        relation_b.save()
+
+        # @@@ ve_ref would save us here quite a bit
+        tokens = []
+        for urn in english:
+            ref = get_ref(urn)
+            text_part_ref, position = ref.rsplit(".", maxsplit=1)
+            text_part_urn = f"{version_b.urn}{text_part_ref}"
+            tokens.append(
+                Token.objects.get(text_part__urn=text_part_urn, position=position)
+            )
+        relation_b.tokens.set(tokens)
+
+        record.items = list(record.denorm_relations())
+        record.save()

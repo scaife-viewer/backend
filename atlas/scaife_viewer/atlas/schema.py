@@ -18,13 +18,15 @@ from .models import (
     NamedEntity,
     Node,
     TextAlignment,
-    TextAlignmentChunk,
+    TextAlignmentRecord,
+    TextAlignmentRecordRelation,
     TextAnnotation,
     Token,
 )
 from .passage import PassageMetadata, PassageSiblingMetadata
 from .utils import (
     extract_version_urn_and_ref,
+    filter_alignment_records_by_textparts,
     filter_via_ref_predicate,
     get_textparts_from_passage_reference,
 )
@@ -239,7 +241,7 @@ class AbstractTextPartNode(DjangoObjectType):
 
 
 class VersionNode(AbstractTextPartNode):
-    text_alignment_chunks = LimitedConnectionField(lambda: TextAlignmentChunkNode)
+    text_alignment_records = LimitedConnectionField(lambda: TextAlignmentRecordNode)
 
     @classmethod
     def get_queryset(cls, queryset, info):
@@ -286,55 +288,133 @@ class TreeNode(ObjectType):
         return obj
 
 
+class TextAlignmentFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = TextAlignment
+        fields = ["name", "slug"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        # @@@ we may wish to further denorm relations to textparts
+        # OR query based on the version, rather than the passage reference
+        return queryset.filter(
+            text_alignment_records__relations__tokens__text_part__in=textparts_queryset
+        ).distinct()
+
+
 class TextAlignmentNode(DjangoObjectType):
+    # @@@@ filter by the versions in a particular record
+    # @@@@ list versions
+    # @@@ renderer prop
     metadata = generic.GenericScalar()
 
     class Meta:
         model = TextAlignment
         interfaces = (relay.Node,)
-        filter_fields = ["name", "slug"]
+        filterset_class = TextAlignmentFilterSet
 
 
-class TextAlignmentChunkFilterSet(
+class TextAlignmentRecordFilterSet(
     TextPartsReferenceFilterMixin, django_filters.FilterSet
 ):
+    # @@@@ filter by the versions in a particular record
     reference = django_filters.CharFilter(method="reference_filter")
-    contains = django_filters.CharFilter(method="contains_reference_filter")
 
     class Meta:
-        model = TextAlignmentChunk
-        fields = [
-            "start",
-            "end",
-            "version__urn",
-            "idx",
-        ]
+        model = TextAlignmentRecord
+        fields = ["idx", "alignment", "alignment__slug"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        return queryset.filter(
-            Q(start__in=textparts_queryset) | Q(end__in=textparts_queryset)
+        return filter_alignment_records_by_textparts(textparts_queryset, queryset)
+
+
+# @@@ structure of these nested non-Django objects
+class TextAlignmentMetadata(dict):
+    def get_alignment(self, alignment_records):
+        if len(alignment_records):
+            return TextAlignment.objects.get(pk=alignment_records[0].alignment_id)
+
+    def get_passage_reference(self, version_urn, text_parts_list):
+        refs = [text_parts_list[0].ref]
+        last_ref = text_parts_list[-1].ref
+        if last_ref not in refs:
+            refs.append(last_ref)
+        refpart = "-".join(refs)
+        return f"{version_urn}{refpart}"
+
+    def generate_passage_reference(self, version_urn, tokens_qs):
+        tokens_list = list(tokens_qs.filter(text_part__urn__startswith=version_urn))
+        text_parts_list = list(
+            TextPart.objects.filter(tokens__in=tokens_list).distinct()
+        )
+        return {
+            "reference": self.get_passage_reference(version_urn, text_parts_list),
+            "start_idx": tokens_list[0].idx,
+            "end_idx": tokens_list[-1].idx,
+        }
+
+    @property
+    def passage_references(self):
+        # @@@ lhs vs rhs in play here?
+        references = []
+        alignment_records = list(self["alignment_records"])
+        if not alignment_records:
+            # @@@ revisit "empty" assumption
+            return references
+
+        tokens_qs = Token.objects.filter(
+            alignment_record_relations__record__in=alignment_records
+        )
+        alignment = self.get_alignment(alignment_records)
+        # # @@@ revisit passage assumption
+        # references.append(self["passage"].reference)
+        # @@@ revisit position assumption
+        version_urn, ref = extract_version_urn_and_ref(self["passage"].reference)
+        references.append(self.generate_passage_reference(version_urn, tokens_qs))
+        for version in alignment.versions.exclude(urn=version_urn):
+            references.append(self.generate_passage_reference(version.urn, tokens_qs))
+        return references
+
+
+class TextAlignmentMetadataNode(ObjectType):
+    passage_references = generic.GenericScalar(
+        description="References for the passages being aligned"
+    )
+
+    def resolve_passage_references(self, info, *args, **kwargs):
+        return self.passage_references
+
+
+class TextAlignmentConnection(Connection):
+    metadata = Field(TextAlignmentMetadataNode)
+
+    class Meta:
+        abstract = True
+
+    def resolve_metadata(self, info, *args, **kwargs):
+        return TextAlignmentMetadata(
+            **{"passage": info.context.passage, "alignment_records": self.iterable,}
         )
 
-    def contains_reference_filter(self, queryset, name, value):
-        textparts_queryset = self.get_lowest_textparts_queryset(value)
-        start = textparts_queryset.first()
-        end = textparts_queryset.last()
-        version = self.request.passage.version
-        return (
-            queryset.filter(version=version)
-            .filter(end__idx__gte=start.idx)
-            .filter(start__idx__lte=end.idx)
-        )
 
-
-class TextAlignmentChunkNode(DjangoObjectType):
+class TextAlignmentRecordNode(DjangoObjectType):
     items = generic.GenericScalar()
 
     class Meta:
-        model = TextAlignmentChunk
+        model = TextAlignmentRecord
         interfaces = (relay.Node,)
-        filterset_class = TextAlignmentChunkFilterSet
+        connection_class = TextAlignmentConnection
+        filterset_class = TextAlignmentRecordFilterSet
+
+
+class TextAlignmentRecordRelationNode(DjangoObjectType):
+    class Meta:
+        model = TextAlignmentRecordRelation
+        interfaces = (relay.Node,)
+        filter_fields = ["tokens__text_part__urn"]
 
 
 class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
@@ -448,8 +528,16 @@ class Query(ObjectType):
     # will only support querying by reference.
     passage_text_parts = LimitedConnectionField(PassageTextPartNode)
 
-    text_alignment_chunk = relay.Node.Field(TextAlignmentChunkNode)
-    text_alignment_chunks = LimitedConnectionField(TextAlignmentChunkNode)
+    text_alignment = relay.Node.Field(TextAlignmentNode)
+    text_alignments = LimitedConnectionField(TextAlignmentNode)
+
+    text_alignment_record = relay.Node.Field(TextAlignmentRecordNode)
+    text_alignment_records = LimitedConnectionField(TextAlignmentRecordNode)
+
+    text_alignment_record_relation = relay.Node.Field(TextAlignmentRecordRelationNode)
+    text_alignment_record_relations = LimitedConnectionField(
+        TextAlignmentRecordRelationNode
+    )
 
     text_annotation = relay.Node.Field(TextAnnotationNode)
     text_annotations = LimitedConnectionField(TextAnnotationNode)
