@@ -9,6 +9,7 @@ from graphene_django.utils import camelize
 
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
+from .hooks import hookset
 
 # from .models import Node as TextPart
 from .models import (
@@ -292,8 +293,7 @@ class VersionNode(AbstractTextPartNode):
     # should be to metadata (including ["key"] vs .get("key"))
     def resolve_access(obj, info, *args, **kwargs):
         request = info.context
-        # TODO: fix auth_request via a hookset
-        return auth_request(request, obj.urn)
+        return hookset.can_access_urn(request, obj.urn)
 
     def resolve_human_lang(obj, *args, **kwargs):
         lang = obj.metadata["lang"]

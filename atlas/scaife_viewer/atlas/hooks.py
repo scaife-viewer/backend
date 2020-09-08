@@ -6,6 +6,9 @@ class DefaultHookSet:
 
         return resolver_func()
 
+    def can_access_urn(self, request, urn):
+        return True
+
 
 class HookProxy:
     def __getattr__(self, attr):
