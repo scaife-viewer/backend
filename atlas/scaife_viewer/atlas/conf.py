@@ -28,6 +28,7 @@ class ATLASAppConf(AppConf):
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     DATA_MODEL_ID = base64.b64encode(b"2020-09-08-001\n").decode()
     DB_LABEL = "atlas"
+    DB_PATH = None
     HOOKSET = "scaife_viewer.atlas.hooks.DefaultHookSet"
 
     # required settings
