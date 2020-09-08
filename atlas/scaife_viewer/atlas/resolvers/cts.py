@@ -1,7 +1,5 @@
 import re
 
-from scaife_viewer.core.cts import text_inventory
-
 from .common import Library
 
 
@@ -13,11 +11,11 @@ def get_lang_value(value):
 
 
 class CTSCollectionResolver:
-    def __init__(self):
+    def __init__(self, text_inventory):
         self.text_groups = {}
         self.works = {}
         self.versions = {}
-        self.resolved = self.resolve_text_inventory()
+        self.resolved = self.resolve_text_inventory(text_inventory)
 
     def extract_text_group_metadata(self, text_group):
         """
@@ -155,20 +153,22 @@ class CTSCollectionResolver:
             self.works[work_metadata["urn"]] = work_metadata
             self.resolve_versions(work)
 
-    def resolve_text_inventory(self):
+    def resolve_text_inventory(self, text_inventory):
         """
         Resolves the library from `cts.TextInventory`.
 
         Since Node instances are ordered by their `path` value,
         `cts.collections.SORT_OVERRIDES` is respected by ATLAS.
         """
-        for text_group in text_inventory().text_groups():
+        for text_group in text_inventory.text_groups():
             text_group_metadata = self.extract_text_group_metadata(text_group)
             self.text_groups[text_group_metadata["urn"]] = text_group_metadata
             self.resolve_works(text_group)
         return self.text_groups, self.works, self.versions
 
 
-def resolve_cts_collection_library():
-    text_groups, works, versions = CTSCollectionResolver().resolved
+def resolve_cts_collection_library(text_inventory):
+    # TODO: Document text_inventory typing
+    # TODO: consider a hookset
+    text_groups, works, versions = CTSCollectionResolver(text_inventory).resolved
     return Library(text_groups, works, versions)
