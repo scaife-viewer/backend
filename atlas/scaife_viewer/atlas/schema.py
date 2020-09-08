@@ -297,9 +297,7 @@ class VersionNode(AbstractTextPartNode):
 
     def resolve_human_lang(obj, *args, **kwargs):
         lang = obj.metadata["lang"]
-        # @@@ make the language map decoupled from cts
-        # TODO: fix cts.constants
-        return cts.constants.LANGAUGE_MAP.get(lang, lang)
+        return hookset.get_human_lang(lang)
 
     def resolve_lang(obj, *args, **kwargs):
         return obj.metadata["lang"]
@@ -322,17 +320,12 @@ class VersionNode(AbstractTextPartNode):
         metadata = obj.metadata
         work = obj.get_parent()
         text_group = work.get_parent()
-        # @@@ backport lang map
-        lang_map = {
-            "eng": "English",
-            "grc": "Greek",
-        }
         metadata.update(
             {
                 "work_label": work.label,
                 "text_group_label": text_group.label,
                 "lang": metadata["lang"],
-                "human_lang": lang_map[metadata["lang"]],
+                "human_lang": hookset.get_human_lang(metadata["lang"]),
             }
         )
         return camelize(metadata)

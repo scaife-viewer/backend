@@ -1,3 +1,6 @@
+from . import constants
+
+
 class DefaultHookSet:
     def resolve_library(self):
         # TODO: Document included resolvers
@@ -8,6 +11,9 @@ class DefaultHookSet:
 
     def can_access_urn(self, request, urn):
         return True
+
+    def get_human_lang(self, value):
+        return constants.HUMAN_FRIENDLY_LANGUAGE_MAP.get(value, value)
 
 
 class HookProxy:
