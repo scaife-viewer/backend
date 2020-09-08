@@ -1,5 +1,8 @@
-# TODO: Document setting up ATLAS_DB_LABEL bits; possibly via appconf
-ATLAS_DB_LABEL = "atlas"
+from scaife_viewer.atlas.conf import ATLASAppConf
+
+
+atlas_conf = ATLASAppConf()
+ATLAS_DB_LABEL = atlas_conf.DB_LABEL
 
 
 class ATLASRouter:
@@ -8,11 +11,11 @@ class ATLASRouter:
     library application.
     """
 
-    route_app_labels = {"library"}
+    route_app_labels = {"scaife_viewer_atlas"}
 
     def db_for_read(self, model, **hints):
         """
-        Attempts to read library models go to ATLAS_DB_LABEL.
+        Attempts to read library models go to DB_LABEL.
         """
         if model._meta.app_label in self.route_app_labels:
             return ATLAS_DB_LABEL
@@ -20,7 +23,7 @@ class ATLASRouter:
 
     def db_for_write(self, model, **hints):
         """
-        Attempts to write library models go to ATLAS_DB_LABEL.
+        Attempts to write library models go to DB_LABEL.
         """
         if model._meta.app_label in self.route_app_labels:
             return ATLAS_DB_LABEL
@@ -40,7 +43,7 @@ class ATLASRouter:
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         """
-        Only add library apps to the ATLAS_DB_LABEL database.
+        Only add library apps to the DB_LABEL database.
 
         Do not add library apps to any other database.
         """

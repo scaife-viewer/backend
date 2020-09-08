@@ -27,6 +27,7 @@ class ATLASAppConf(AppConf):
     IN_MEMORY_PASSAGE_CHUNK_MAX = 2500
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     DATA_MODEL_ID = base64.b64encode(b"2020-09-08-001\n").decode()
+    DB_LABEL = "atlas"
     HOOKSET = "scaife_viewer.atlas.hooks.DefaultHookSet"
 
     # required settings
