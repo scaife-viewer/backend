@@ -1,6 +1,4 @@
-import json
 import logging
-import os
 import sys
 from collections import defaultdict
 
@@ -11,66 +9,13 @@ from tqdm import tqdm
 from treebeard.exceptions import PathOverflow
 
 from scaife_viewer.atlas import constants
-from scaife_viewer.atlas.conf import settings
 
+from ..hooks import hookset
 from ..models import Node
-from ..resolvers.cts import CTSCollectionResolver
 from ..urn import URN
 
 
 logger = logging.getLogger(__name__)
-
-LIBRARY_DATA_PATH = os.path.join(settings.SV_ATLAS_DATA_DIR, "library")
-
-
-class LibraryDataResolver:
-    def __init__(self, data_dir_path):
-        self.text_groups = {}
-        self.works = {}
-        self.versions = {}
-        self.resolved = self.resolve_data_dir_path(data_dir_path)
-
-    def populate_versions(self, dirpath, data):
-        for version in data:
-            version_part = version["urn"].rsplit(":", maxsplit=2)[1]
-
-            if version.get("format") == "cex":
-                extension = "cex"
-            else:
-                extension = "txt"
-
-            version_path = os.path.join(dirpath, f"{version_part}.{extension}")
-            if not os.path.exists(version_path):
-                raise FileNotFoundError(version_path)
-
-            self.versions[version["urn"]] = {
-                "format": extension,
-                "path": version_path,
-                **version,
-            }
-
-    def resolve_data_dir_path(self, data_dir_path):
-        for dirpath, dirnames, filenames in sorted(os.walk(data_dir_path)):
-            if "metadata.json" not in filenames:
-                continue
-
-            metadata = json.load(open(os.path.join(dirpath, "metadata.json")))
-            assert metadata["node_kind"] in ["textgroup", "work"]
-
-            if metadata["node_kind"] == "textgroup":
-                self.text_groups[metadata["urn"]] = metadata
-            elif metadata["node_kind"] == "work":
-                self.works[metadata["urn"]] = metadata
-                self.populate_versions(dirpath, metadata["versions"])
-
-        return self.text_groups, self.works, self.versions
-
-
-class Library:
-    def __init__(self, text_groups, works, versions):
-        self.text_groups = text_groups
-        self.works = works
-        self.versions = versions
 
 
 class CTSImporter:
@@ -338,13 +283,6 @@ class CTSImporter:
         logger.debug(f"{self.label}: {count} nodes.")
 
 
-def resolve_library():
-    # TODO: Customize library resolver class
-    # text_groups, works, versions = LibraryDataResolver(LIBRARY_DATA_PATH).resolved
-    text_groups, works, versions = CTSCollectionResolver().resolved
-    return Library(text_groups, works, versions)
-
-
 def get_first_value_for_language(values, lang, fallback=True):
     # TODO: When this is called, how would we pass a fallback?
     value = next(iter(filter(lambda x: x["lang"] == lang, values)), None)
@@ -360,7 +298,7 @@ def import_versions(reset=False):
     if reset:
         Node.objects.filter(kind="nid").delete()
 
-    library = resolve_library()
+    library = hookset.resolve_library()
 
     nodes = {}
     for _, version_data in tqdm(library.versions.items()):

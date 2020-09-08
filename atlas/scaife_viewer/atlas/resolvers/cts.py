@@ -2,6 +2,8 @@ import re
 
 from scaife_viewer.core.cts import text_inventory
 
+from .common import Library
+
 
 def get_lang_value(value):
     if re.match(r"^[a-z]+-[A-Z][a-z]+$", value):
@@ -165,3 +167,8 @@ class CTSCollectionResolver:
             self.text_groups[text_group_metadata["urn"]] = text_group_metadata
             self.resolve_works(text_group)
         return self.text_groups, self.works, self.versions
+
+
+def resolve_cts_collection_library():
+    text_groups, works, versions = CTSCollectionResolver().resolved
+    return Library(text_groups, works, versions)
