@@ -1,7 +1,7 @@
 from django.db.models import Q
 
 import django_filters
-from graphene import Connection, Field, ObjectType, String, relay
+from graphene import Boolean, Connection, Field, ObjectType, String, relay
 from graphene.types import generic
 from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
@@ -276,6 +276,7 @@ class WorkNode(AbstractTextPartNode):
 class VersionNode(AbstractTextPartNode):
     text_alignment_chunks = LimitedConnectionField(lambda: TextAlignmentChunkNode)
 
+    access = Boolean()
     description = String()
     lang = String()
     human_lang = String()
@@ -289,6 +290,11 @@ class VersionNode(AbstractTextPartNode):
 
     # TODO: Determine how tightly coupled these fields
     # should be to metadata (including ["key"] vs .get("key"))
+    def resolve_access(obj, info, *args, **kwargs):
+        request = info.context
+        # TODO: fix auth_request via a hookset
+        return auth_request(request, obj.urn)
+
     def resolve_human_lang(obj, *args, **kwargs):
         lang = obj.metadata["lang"]
         # @@@ make the language map decoupled from cts
