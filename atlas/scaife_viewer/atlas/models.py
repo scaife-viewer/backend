@@ -295,6 +295,9 @@ class AudioAnnotation(models.Model):
         self.text_parts.set(reference_objs)
 
 
+# TODO: Review https://docs.djangoproject.com/en/3.0/topics/db/multi-db/
+# to see if there are more settings we can expose for "mixed"
+# database backends
 class Node(MP_Node):
     # @@@ used to pivot siblings; may be possible if we hook into path field
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
@@ -307,6 +310,8 @@ class Node(MP_Node):
     # @@@ we may want to furthe de-norm label from metadata
     metadata = JSONField(default=dict, blank=True, null=True)
 
+    # TODO: standardize on ATLAS_CONFIG vs SCAIFE_VIEWER_ATLAS_CONFIG vs
+    # settings; consistency preferred
     alphabet = settings.NODE_ALPHABET
 
     def __str__(self):
