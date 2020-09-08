@@ -276,15 +276,42 @@ class WorkNode(AbstractTextPartNode):
 class VersionNode(AbstractTextPartNode):
     text_alignment_chunks = LimitedConnectionField(lambda: TextAlignmentChunkNode)
 
+    description = String()
+    lang = String()
+    human_lang = String()
+    kind = String()
+
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(kind="version").order_by("urn")
+        # TODO: set a default somewhere
+        # return queryset.filter(kind="version").order_by("urn")
+        return queryset.filter(kind="version").order_by("pk")
+
+    # TODO: Determine how tightly coupled these fields
+    # should be to metadata (including ["key"] vs .get("key"))
+    def resolve_human_lang(obj, *args, **kwargs):
+        lang = obj.metadata["lang"]
+        # @@@ make the language map decoupled from cts
+        # TODO: fix cts.constants
+        return cts.constants.LANGAUGE_MAP.get(lang, lang)
+
+    def resolve_lang(obj, *args, **kwargs):
+        return obj.metadata["lang"]
+
+    def resolve_description(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["description"]
+
+    def resolve_kind(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["kind"]
 
     # TODO: extract to AbstractTextPartNode
     def resolve_label(obj, *args, **kwargs):
         # @@@ consider a direct field or faster mapping
         return obj.metadata["label"]
 
+    # TODO: convert metadata to proper fields
     def resolve_metadata(obj, *args, **kwargs):
         metadata = obj.metadata
         work = obj.get_parent()
