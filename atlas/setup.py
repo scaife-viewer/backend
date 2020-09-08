@@ -37,6 +37,7 @@ setup(
         "django-jsonfield-backport==1.0.0",
         "graphene-django==2.6.0",
         "logfmt==0.4",
+        "tqdm>= 4.48.2,<5",
     ],
     tests_require=tests_require,
     extras_require={
