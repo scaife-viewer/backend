@@ -4,14 +4,14 @@ import os
 import sys
 from collections import defaultdict
 
-from django.conf import settings
 from django.db.models import Max
 from django.utils.translation import ugettext_noop
 
+from tqdm import tqdm
 from treebeard.exceptions import PathOverflow
 
 from scaife_viewer.atlas import constants
-from tqdm import tqdm
+from scaife_viewer.atlas.conf import settings
 
 from ..models import Node
 from ..resolvers.cts import CTSCollectionResolver
@@ -20,7 +20,7 @@ from ..urn import URN
 
 logger = logging.getLogger(__name__)
 
-LIBRARY_DATA_PATH = os.path.join(settings.ATLAS_CONFIG["DATA_DIR"], "library")
+LIBRARY_DATA_PATH = os.path.join(settings.SV_ATLAS_DATA_DIR, "library")
 
 
 class LibraryDataResolver:

@@ -1,13 +1,13 @@
 import csv
 import os
 
-from django.conf import settings
+from scaife_viewer.atlas.conf import settings
 
 from ..models import Node, Token
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "token-annotations"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "token-annotations"
 )
 
 

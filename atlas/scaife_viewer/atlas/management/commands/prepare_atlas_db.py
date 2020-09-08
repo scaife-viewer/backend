@@ -2,10 +2,10 @@
 import os
 import shutil
 
-from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
+from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.library.models import Node
 from scaife_viewer.cts import text_inventory
 

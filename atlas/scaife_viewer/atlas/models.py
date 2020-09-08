@@ -2,7 +2,6 @@ import io
 import re
 from collections import defaultdict
 
-from django.conf import settings
 from django.core import serializers
 from django.db import models
 
@@ -13,6 +12,7 @@ from sortedm2m.fields import SortedManyToManyField
 from treebeard.mp_tree import MP_Node
 
 from scaife_viewer.atlas import constants
+from scaife_viewer.atlas.conf import settings
 
 
 class TextAlignment(models.Model):
@@ -310,9 +310,7 @@ class Node(MP_Node):
     # @@@ we may want to furthe de-norm label from metadata
     metadata = JSONField(default=dict, blank=True, null=True)
 
-    # TODO: standardize on ATLAS_CONFIG vs SCAIFE_VIEWER_ATLAS_CONFIG vs
-    # settings; consistency preferred
-    alphabet = settings.NODE_ALPHABET
+    alphabet = settings.SV_ATLAS_NODE_ALPHABET
 
     def __str__(self):
         return f"{self.kind}: {self.urn}"

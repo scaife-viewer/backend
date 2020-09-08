@@ -27,6 +27,7 @@ setup(
     },
     test_suite="runtests.runtests",
     install_requires=[
+        "django_appconf>=1.0.4",
         "django-extensions>=2.2.6,<3",
         "django-filter>=2.3.0,<3",
         "django-sortedm2m>=2.0.0,<3",

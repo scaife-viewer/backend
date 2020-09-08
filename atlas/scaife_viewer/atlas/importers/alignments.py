@@ -3,12 +3,12 @@ import json
 import os
 import re
 
-from django.conf import settings
+from scaife_viewer.atlas.conf import settings
 
 from ..models import Node, TextAlignment, TextAlignmentChunk
 
 
-ALIGNMENTS_DATA_PATH = os.path.join(settings.ATLAS_CONFIG["DATA_DIR"], "alignments")
+ALIGNMENTS_DATA_PATH = os.path.join(settings.SV_ATLAS_DATA_DIR, "alignments")
 ALIGNMENTS_METADATA_PATH = os.path.join(ALIGNMENTS_DATA_PATH, "metadata.json")
 
 LINE_KIND_UNKNOWN = None

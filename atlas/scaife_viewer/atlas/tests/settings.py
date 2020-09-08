@@ -41,12 +41,4 @@ SITE_ID = 1
 ROOT_URLCONF = "scaife_viewer.atlas.tests.urls"
 SECRET_KEY = "notasecret"
 
-NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-
-# @@@ proper config
-ATLAS_CONFIG = dict(
-    IN_MEMORY_PASSAGE_CHUNK_MAX=int(
-        os.environ.get("ATLAS_IN_MEMORY_PASSAGE_CHUNK_MAX", 2500)
-    ),
-    DATA_DIR=os.path.join(PROJECT_ROOT, "data"),
-)
+SV_ATLAS_DATA_DIR = os.path.join(PROJECT_ROOT, "data")
