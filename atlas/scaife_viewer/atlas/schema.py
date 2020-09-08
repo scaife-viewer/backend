@@ -238,12 +238,52 @@ class AbstractTextPartNode(DjangoObjectType):
         return camelize(obj.metadata)
 
 
+class TextGroupNode(AbstractTextPartNode):
+    # @@@ work or version relations
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind="textgroup").order_by("pk")
+
+    # TODO: extract to AbstractTextPartNode
+    def resolve_label(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["label"]
+
+    def resolve_metadata(obj, *args, **kwargs):
+        metadata = obj.metadata
+        return camelize(metadata)
+
+
+class WorkNode(AbstractTextPartNode):
+    # @@@ apply a subfilter here?
+    versions = LimitedConnectionField(lambda: VersionNode)
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind="work").order_by("pk")
+
+    # TODO: extract to AbstractTextPartNode
+    def resolve_label(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["label"]
+
+    def resolve_metadata(obj, *args, **kwargs):
+        metadata = obj.metadata
+        return camelize(metadata)
+
+
 class VersionNode(AbstractTextPartNode):
     text_alignment_chunks = LimitedConnectionField(lambda: TextAlignmentChunkNode)
 
     @classmethod
     def get_queryset(cls, queryset, info):
         return queryset.filter(kind="version").order_by("urn")
+
+    # TODO: extract to AbstractTextPartNode
+    def resolve_label(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["label"]
 
     def resolve_metadata(obj, *args, **kwargs):
         metadata = obj.metadata
@@ -438,6 +478,12 @@ class NamedEntityNode(DjangoObjectType):
 
 
 class Query(ObjectType):
+    text_group = relay.Node.Field(TextGroupNode)
+    text_groups = LimitedConnectionField(TextGroupNode)
+
+    work = relay.Node.Field(WorkNode)
+    works = LimitedConnectionField(WorkNode)
+
     version = relay.Node.Field(VersionNode)
     versions = LimitedConnectionField(VersionNode)
 
