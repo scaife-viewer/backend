@@ -91,40 +91,20 @@ class CTSImporter:
     def get_urn_scheme(self, node_urn):
         return [*self.get_root_urn_scheme(node_urn), *self.citation_scheme]
 
-    # TODO: Move some metadata extraction out to our "resolvers"
-
-    # def get_textgroup_metadata(self):
-    #     metadata = self.library.text_groups[self.urn.up_to(URN.TEXTGROUP)]
-    #     return {"label": get_first_value_for_language(metadata["name"], "eng")}
-
     def get_text_group_metadata(self):
         text_group_urn = self.urn.up_to(self.urn.TEXTGROUP)
         metadata = self.library.text_groups[text_group_urn]
-        name = metadata["name"][0]
-        # TODO: allow additional passthrough from a `meta_` or `extra`
-        # key
-        return dict(label=name["value"], lang=name["lang"])
-
-    # def get_work_metadata(self):
-    #     metadata = self.library.works[self.urn.up_to(URN.WORK)]
-    #     return {"label": get_first_value_for_language(metadata["title"], "eng")}
+        label = get_first_value_for_language(metadata["name"], "eng")
+        # TODO: do we actually use `lang` yet?
+        extra = metadata.get("extra", {})
+        return dict(label=label, **extra)
 
     def get_work_metadata(self):
         work_urn = self.urn.up_to(self.urn.WORK)
         metadata = self.library.works[work_urn]
-        return dict(lang=metadata["lang"], label=metadata["title"][0]["value"])
-
-    # def get_version_metadata(self):
-    #     return {
-    #         # @@@ how much of the `metadata.json` do we
-    #         # "pass through" via GraphQL vs
-    #         # apply to particular node kinds in the heirarchy
-    #         "citation_scheme": self.citation_scheme,
-    #         "label": self.label,
-    #         "lang": self.version_data["lang"],
-    #         "first_passage_urn": self.version_data["first_passage_urn"],
-    #         "default_toc_urn": self.version_data.get("default_toc_urn"),
-    #     }
+        title = get_first_value_for_language(metadata["title"], "eng")
+        extra = metadata.get("extra", {})
+        return dict(label=title, lang=metadata["lang"], **extra)
 
     def get_version_metadata(self):
         default = {
@@ -132,19 +112,17 @@ class CTSImporter:
             # "pass through" via GraphQL vs
             # apply to particular node kinds in the heirarchy
             "citation_scheme": self.citation_scheme,
-            "work_title": self.label,
+            "label": self.label,
+            "lang": self.version_data["lang"],
             "first_passage_urn": self.version_data.get("first_passage_urn"),
             "default_toc_urn": self.version_data.get("default_toc_urn"),
         }
-        # @@@ label
-        # TODO: allow additional passthrough from a `meta_` or `extra`
-        # key
+        # TODO: how "universal" should these defaults be?
         default.update(
             dict(
-                label=self.version_data["label"][0]["value"],
                 description=self.version_data["description"][0]["value"],
-                lang=self.version_data["lang"],
                 kind=self.version_data["version_kind"],
+                **self.version_data.get("extra", {}),
             )
         )
         return default
