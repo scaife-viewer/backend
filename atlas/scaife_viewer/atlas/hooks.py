@@ -1,4 +1,5 @@
 from . import constants
+from .importers.versions import CTSImporter
 
 
 class DefaultHookSet:
@@ -14,6 +15,11 @@ class DefaultHookSet:
 
     def get_human_lang(self, value):
         return constants.HUMAN_FRIENDLY_LANGUAGE_MAP.get(value, value)
+
+    def get_importer_class(self):
+        from .importers.versions import CTSImporter  # noqa: avoids circular import
+
+        return CTSImporter
 
 
 class HookProxy:

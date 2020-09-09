@@ -101,9 +101,9 @@ class CTSImporter:
         text_group_urn = self.urn.up_to(self.urn.TEXTGROUP)
         metadata = self.library.text_groups[text_group_urn]
         name = metadata["name"][0]
-        return dict(
-            label=name["value"], lang=name["lang"], **(metadata.get("meta_") or {})
-        )
+        # TODO: allow additional passthrough from a `meta_` or `extra`
+        # key
+        return dict(label=name["value"], lang=name["lang"])
 
     # def get_work_metadata(self):
     #     metadata = self.library.works[self.urn.up_to(URN.WORK)]
@@ -137,14 +137,14 @@ class CTSImporter:
             "default_toc_urn": self.version_data.get("default_toc_urn"),
         }
         # @@@ label
+        # TODO: allow additional passthrough from a `meta_` or `extra`
+        # key
         default.update(
             dict(
                 label=self.version_data["label"][0]["value"],
                 description=self.version_data["description"][0]["value"],
                 lang=self.version_data["lang"],
                 kind=self.version_data["version_kind"],
-                tracking_title=self.version_data["tracking_title"],
-                image=self.version_data["image"],
             )
         )
         return default
@@ -300,7 +300,8 @@ def import_versions(reset=False):
 
     library = hookset.resolve_library()
 
+    importer_class = hookset.get_importer_class()
     nodes = {}
     for _, version_data in tqdm(library.versions.items()):
-        CTSImporter(library, version_data, nodes).apply()
+        importer_class(library, version_data, nodes).apply()
     print(f"{Node.objects.count()} total nodes on the tree.", file=sys.stderr)
