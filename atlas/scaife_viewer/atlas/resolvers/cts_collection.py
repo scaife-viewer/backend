@@ -1,5 +1,5 @@
-from .common import Library
 from ..hooks import hookset
+from .common import Library
 
 
 class CTSCollectionResolver:
