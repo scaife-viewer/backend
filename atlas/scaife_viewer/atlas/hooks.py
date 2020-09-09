@@ -1,14 +1,10 @@
 from . import constants
-from .importers.versions import CTSImporter
+from .resolvers.default import resolve_library
 
 
 class DefaultHookSet:
     def resolve_library(self):
-        # TODO: Document included resolvers
-        # from .resolvers.cts import resolve_cts_collection_library as resolver_func
-        from .resolvers.default import resolve_library as resolver_func
-
-        return resolver_func()
+        return resolve_library()
 
     def can_access_urn(self, request, urn):
         return True

@@ -164,8 +164,9 @@ class CTSCollectionResolver:
         return self.text_groups, self.works, self.versions
 
 
-def resolve_cts_collection_library(text_inventory):
-    # TODO: Document text_inventory typing
-    # TODO: consider a hookset
-    text_groups, works, versions = CTSCollectionResolver(text_inventory).resolved
+def resolve_cts_collection_library(text_inventory, resolver_class=None):
+    if resolver_class is None:
+        resolver_class = CTSCollectionResolver
+
+    text_groups, works, versions = resolver_class(text_inventory).resolved
     return Library(text_groups, works, versions)
