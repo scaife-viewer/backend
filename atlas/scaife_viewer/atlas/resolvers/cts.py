@@ -1,4 +1,5 @@
 from .common import Library
+from ..hooks import hookset
 
 
 class CTSCollectionResolver:
@@ -10,7 +11,7 @@ class CTSCollectionResolver:
 
     def resolve_versions(self, work):
         for version in work.texts():
-            version_metadata = version.get_atlas_metadata()
+            version_metadata = hookset.extract_cts_version_metadata(version)
             # version_urn is required within CTSImporter
             version_urn = version_metadata["urn"]
             # TODO: More validation around "path"
@@ -22,7 +23,7 @@ class CTSCollectionResolver:
             if work.urn.count(" ") > 0:
                 # @@@ defensive coding around bad URNs
                 continue
-            work_metadata = work.get_atlas_metadata()
+            work_metadata = hookset.extract_cts_work_metadata(work)
             work_urn = work_metadata.pop("urn")
             self.works[work_urn] = work_metadata
             self.resolve_versions(work)
@@ -35,7 +36,7 @@ class CTSCollectionResolver:
         `cts.collections.SORT_OVERRIDES` is respected by ATLAS.
         """
         for text_group in text_inventory.text_groups():
-            text_group_metadata = text_group.get_atlas_metadata()
+            text_group_metadata = hookset.extract_cts_text_group_metadata(text_group)
             tg_urn = text_group_metadata.pop("urn")
             self.text_groups[tg_urn] = text_group_metadata
             self.resolve_works(text_group)
