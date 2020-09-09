@@ -34,7 +34,6 @@ class CTSCollectionResolver:
             urn=f"{text_group.urn}:",
             node_kind="textgroup",
             name=[dict(lang="eng", value=str(text_group.label))],
-            meta_=text_group.structured_metadata(),
         )
 
     def extract_work_metadata(self, work):
@@ -112,8 +111,6 @@ class CTSCollectionResolver:
                 }
             ],
             lang=get_lang_value(version.metadata.lang),
-            tracking_title=str(version.tracking_title),
-            image=version.image,
         )
 
     def resolve_versions(self, work):
