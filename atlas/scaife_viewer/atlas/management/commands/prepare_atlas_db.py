@@ -41,15 +41,19 @@ class Command(BaseCommand):
         if db_path_exists:
             os.remove(database_path)
             self.stdout.write("--[Removed existing ATLAS database]--")
+        else:
+            db_dir = os.path.dirname(database_path)
+            os.makedirs(db_dir, exist_ok=True)
 
         db_label = settings.SV_ATLAS_DB_LABEL
         self.stdout.write(f'--[Running database migrations on "{db_label}"]--')
         call_command("migrate", database=db_label)
 
-        resolver_path = settings.CTS_RESOLVER_CACHE_LOCATION
-        if os.path.exists(resolver_path):
-            shutil.rmtree(resolver_path)
-            self.stdout.write("--[Removed existing CTS resolver cache]--")
+        if hasattr(settings, "CTS_RESOLVER_CACHE_LOCATION"):
+            resolver_path = settings.CTS_RESOLVER_CACHE_LOCATION
+            if os.path.exists(resolver_path):
+                shutil.rmtree(resolver_path)
+                self.stdout.write("--[Removed existing CTS resolver cache]--")
 
         self.stdout.write("--[Populating ATLAS db]--")
         importers.versions.import_versions()
