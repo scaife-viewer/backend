@@ -26,7 +26,6 @@ from .models import (
 from .passage import PassageMetadata, PassageSiblingMetadata
 from .utils import (
     extract_version_urn_and_ref,
-    filter_alignment_records_by_textparts,
     filter_via_ref_predicate,
     get_textparts_from_passage_reference,
 )
@@ -328,7 +327,11 @@ class TextAlignmentRecordFilterSet(
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        return filter_alignment_records_by_textparts(textparts_queryset, queryset)
+        # TODO: Refactor as a manager method
+        # TODO: Evaluate performance / consider a TextPart denorm on relations
+        return queryset.filter(
+            relations__tokens__text_part__in=textparts_queryset
+        ).distinct()
 
 
 # @@@ structure of these nested non-Django objects
@@ -396,7 +399,7 @@ class TextAlignmentConnection(Connection):
 
     def resolve_metadata(self, info, *args, **kwargs):
         return TextAlignmentMetadata(
-            **{"passage": info.context.passage, "alignment_records": self.iterable,}
+            **{"passage": info.context.passage, "alignment_records": self.iterable}
         )
 
 

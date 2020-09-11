@@ -2,8 +2,6 @@ from django.conf import settings
 from django.db.models import Max, Min, Q
 from django.utils.functional import cached_property
 
-from .models import TextAlignmentRecord
-
 
 class BaseSiblingChunker:
     def __init__(self, queryset, start_idx, chunk_length, queryset_values=None):
@@ -155,11 +153,3 @@ def get_textparts_from_passage_reference(passage_reference, version):
     _, ref = passage_reference.rsplit(":", maxsplit=1)
     predicate = build_textpart_predicate(queryset, ref, max_rank)
     return filter_via_ref_predicate(queryset, predicate)
-
-
-def filter_alignment_records_by_textparts(textparts_qs, records_qs=None):
-    if records_qs is None:
-        records_qs = TextAlignmentRecord.objects.all()
-    # @@@ review efficiency of this query
-    # @@@ move out to a manager method
-    return records_qs.filter(relations__tokens__text_part__in=textparts_qs).distinct()
