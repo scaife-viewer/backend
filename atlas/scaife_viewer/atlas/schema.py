@@ -292,21 +292,18 @@ class TextAlignmentFilterSet(TextPartsReferenceFilterMixin, django_filters.Filte
 
     class Meta:
         model = TextAlignment
-        fields = ["name", "slug"]
+        fields = ["label", "urn"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        # @@@ we may wish to further denorm relations to textparts
+        # TODO: we may wish to further denorm relations to textparts
         # OR query based on the version, rather than the passage reference
         return queryset.filter(
-            text_alignment_records__relations__tokens__text_part__in=textparts_queryset
+            records__relations__tokens__text_part__in=textparts_queryset
         ).distinct()
 
 
 class TextAlignmentNode(DjangoObjectType):
-    # @@@@ filter by the versions in a particular record
-    # @@@@ list versions
-    # @@@ renderer prop
     metadata = generic.GenericScalar()
 
     class Meta:
@@ -314,16 +311,22 @@ class TextAlignmentNode(DjangoObjectType):
         interfaces = (relay.Node,)
         filterset_class = TextAlignmentFilterSet
 
+    def resolve_metadata(obj, info, *args, **kwargs):
+        # TODO: make generic.GenericScalar derived class
+        # that automatically camelizes data
+        return camelize(obj.metadata)
+
+    # TODO: from metadata, handle renderer property hint
+
 
 class TextAlignmentRecordFilterSet(
     TextPartsReferenceFilterMixin, django_filters.FilterSet
 ):
-    # @@@@ filter by the versions in a particular record
     reference = django_filters.CharFilter(method="reference_filter")
 
     class Meta:
         model = TextAlignmentRecord
-        fields = ["idx", "alignment", "alignment__slug"]
+        fields = ["idx", "alignment", "alignment__urn"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
@@ -334,7 +337,7 @@ class TextAlignmentRecordFilterSet(
         ).distinct()
 
 
-# @@@ structure of these nested non-Django objects
+# TODO: Where do these nested non-Django objects live in the project?
 class TextAlignmentMetadata(dict):
     def get_alignment(self, alignment_records):
         if len(alignment_records):

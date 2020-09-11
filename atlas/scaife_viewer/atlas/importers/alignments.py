@@ -201,7 +201,7 @@ def _import_alignment(data):
     # @@@ stop-gap to maintain parity, dreadfully slow
     # @@@ can we bulk set many to many ?
     token_lookup = _build_token_lookup(version)
-    for chunk in alignment.text_alignment_records.all():
+    for chunk in alignment.records.all():
         ref = chunk.citation.split("-")[0]
         first_token = token_lookup[f"{ref}.1"]
         relation = TextAlignmentRecordRelation.objects.create(
@@ -309,20 +309,17 @@ def sentence_alignment_fresh_start():
 
 
 def process_cex(path):
+    # TODO: Better processing of the entire CEX file / CITE model is desired
     lookup = {}
     with open(path) as f:
         for line in f:
             if line.startswith("urn:cite2:ducat:alignments.temp:") and line.count(
                 "urn:cite2:cite:verbs.v1:aligns"
             ):
-                alignment_id, _, urn = line.strip().split("#")
-                lang = "greek" if urn.count("grc") else "english"
-                alignment = lookup.setdefault(
-                    alignment_id, {"greek": [], "english": []}
-                )
-                alignment[lang].append(urn)
-
-    alignments = list(lookup.values())
+                record_urn, _, citation_urn = line.strip().split("#")
+                lang = "greek" if citation_urn.count("grc") else "english"
+                alignment = lookup.setdefault(record_urn, {"greek": [], "english": []})
+                alignment[lang].append(citation_urn)
 
     def sort_textpart(urn):
         _, ref = urn.rsplit(":", maxsplit=1)
@@ -330,11 +327,11 @@ def process_cex(path):
         return (book, line, position)
 
     unique_alignments = set()
-    for alignment in alignments:
+    for record_urn, alignment in lookup.items():
         greek = sorted(alignment["greek"], key=sort_textpart)
         english = sorted(alignment["english"], key=sort_textpart)
         sort_key = sort_textpart(alignment["greek"][0])
-        unique_alignments.add((sort_key, tuple(greek), tuple(english)))
+        unique_alignments.add((sort_key, record_urn, tuple(greek), tuple(english)))
 
     unique_alignments = list(unique_alignments)
     alignments = sorted(unique_alignments, key=lambda x: x[0])
@@ -343,8 +340,8 @@ def process_cex(path):
     version_b = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-eng3:")
     slug_fragment = os.path.basename(path).rsplit(".")[-2].split("_")[0]
     alignment = TextAlignment(
-        name=f"Iliad {slug_fragment.title()} Alignment",
-        slug=f"iliad-{slug_fragment}-alignment",
+        label=f"Iliad {slug_fragment.title()} Alignment",
+        urn=f"urn:cite2:scaife-viewer:alignment:tlg0012.tlg001.perseus-grc2-{slug_fragment}-alignment",
     )
     alignment.save()
     alignment.versions.set([version_a, version_b])
@@ -359,18 +356,18 @@ def process_cex(path):
         return text_part_ref
 
     idx = 0
-    for sort_key, greek, english in alignments:
-        citation = ".".join([str(s) for s in sort_key])
-        record = TextAlignmentRecord(citation=citation, idx=idx, alignment=alignment)
+    # TODO: review how we might make use of sort key from CEX
+    # TODO: sorting versions from Ducat too, especially since Ducat doesn't have 'em
+    # maybe something for CITE tools?
+    for _, record_urn, greek, english in alignments:
+        record = TextAlignmentRecord(idx=idx, alignment=alignment, urn=record_urn)
         record.save()
         idx += 1
 
-        relation_a = TextAlignmentRecordRelation(
-            version=version_a, record=record, citation=citation,
-        )
+        relation_a = TextAlignmentRecordRelation(version=version_a, record=record,)
         relation_a.save()
-        # @@@ ve_ref would save us here quite a bit
         tokens = []
+        # TODO: Can we build up a veref map and validate?
         for urn in greek:
             ref = get_ref(urn)
             text_part_ref, position = ref.rsplit(".", maxsplit=1)
@@ -380,15 +377,10 @@ def process_cex(path):
             )
         relation_a.tokens.set(tokens)
 
-        relation_b = TextAlignmentRecordRelation(
-            # @@@ citation is backwards incompatible with prior data
-            version=version_b,
-            record=record,
-            citation=citation,
-        )
+        relation_b = TextAlignmentRecordRelation(version=version_b, record=record,)
         relation_b.save()
 
-        # @@@ ve_ref would save us here quite a bit
+        # TODO: veref map as above
         tokens = []
         for urn in english:
             ref = get_ref(urn)
@@ -398,6 +390,4 @@ def process_cex(path):
                 Token.objects.get(text_part__urn=text_part_urn, position=position)
             )
         relation_b.tokens.set(tokens)
-
-        record.items = list(record.denorm_relations())
-        record.save()
+        # TODO: review query counts here and some of our SQL hacks
