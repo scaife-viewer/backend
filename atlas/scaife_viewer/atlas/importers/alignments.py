@@ -2,9 +2,12 @@ import csv
 import json
 import os
 import re
+from collections import defaultdict
 
 from django.conf import settings
 from django.utils.text import slugify
+
+from scaife_viewer.atlas.urn import URN
 
 from ..models import (
     Node,
@@ -308,86 +311,133 @@ def sentence_alignment_fresh_start():
     relation_b.tokens.set(tokens)
 
 
-def process_cex(path):
+ANNOTATIONS_DATA_PATH = os.path.join(
+    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "text-alignments"
+)
+RAW_PATH = os.path.join(ANNOTATIONS_DATA_PATH, "raw")
+
+
+def get_paths():
+    if not os.path.exists(ANNOTATIONS_DATA_PATH):
+        return []
+    return [
+        os.path.join(ANNOTATIONS_DATA_PATH, f)
+        for f in os.listdir(ANNOTATIONS_DATA_PATH)
+        if f.endswith(".json")
+    ]
+
+
+def process_alignments(reset=False):
+    if reset:
+        TextAlignment.objects.all().delete()
+
+    alignments = []
+    # TODO: mapper from format to ingestor
+    # revisit raw / processed file handling
+    # as in Digital Sira
+    allowed_formats = ["ducat-cex"]
+    for path in get_paths():
+        try:
+            entries = json.load(open(path))
+        except Exception as e:
+            print(e)
+            continue
+        else:
+            for metadata_entry in entries:
+                format_ = metadata_entry.get("format", "unknown")
+                if format_ not in allowed_formats:
+                    raise NotImplementedError(
+                        f"Cannot parse annotation format: {format_}"
+                    )
+                process_cex(metadata_entry)
+
+
+def init_record(versions):
+    record = {}
+    for version in versions:
+        record[version] = []
+    return record
+
+
+def process_cex(metadata):
+    path = os.path.join(RAW_PATH, metadata["filename"])
+
+    # TODO: Read from metadata; document the format we desire
+    # Even the CEX file might need to be inbetween
     # TODO: Better processing of the entire CEX file / CITE model is desired
-    lookup = {}
+
+    lookup = defaultdict(lambda: init_record(versions))
+    versions = metadata["versions"]
     with open(path) as f:
         for line in f:
             if line.startswith("urn:cite2:ducat:alignments.temp:") and line.count(
                 "urn:cite2:cite:verbs.v1:aligns"
             ):
                 record_urn, _, citation_urn = line.strip().split("#")
-                lang = "greek" if citation_urn.count("grc") else "english"
-                alignment = lookup.setdefault(record_urn, {"greek": [], "english": []})
-                alignment[lang].append(citation_urn)
+                version_urn = URN(citation_urn).up_to(URN.VERSION)
+                record = lookup[record_urn]
+                record[version_urn].append(citation_urn)
 
     def sort_textpart(urn):
         _, ref = urn.rsplit(":", maxsplit=1)
         book, line, position = [int(i) for i in ref.split(".")]
         return (book, line, position)
 
+    # TODO: do we need "unique" alignments if we have keyed off of the record URN?
     unique_alignments = set()
-    for record_urn, alignment in lookup.items():
-        greek = sorted(alignment["greek"], key=sort_textpart)
-        english = sorted(alignment["english"], key=sort_textpart)
-        sort_key = sort_textpart(alignment["greek"][0])
-        unique_alignments.add((sort_key, record_urn, tuple(greek), tuple(english)))
+    for record_urn, data in lookup.items():
+        relations = []
+        for version in versions:
+            relation = sorted(data[version], key=sort_textpart)
+            relations.append(relation)
+        sort_key = sort_textpart(relations[0][0])
+        relations = [tuple(r) for r in relations]
+        unique_alignments.add((sort_key, record_urn, tuple(relations)))
 
     unique_alignments = list(unique_alignments)
     alignments = sorted(unique_alignments, key=lambda x: x[0])
 
-    version_a = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:")
-    version_b = Node.objects.get(urn="urn:cts:greekLit:tlg0012.tlg001.perseus-eng3:")
-    slug_fragment = os.path.basename(path).rsplit(".")[-2].split("_")[0]
-    alignment = TextAlignment(
-        label=f"Iliad {slug_fragment.title()} Alignment",
-        urn=f"urn:cite2:scaife-viewer:alignment:tlg0012.tlg001.perseus-grc2-{slug_fragment}-alignment",
-    )
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Create Alignment
+    # # # # # # # # # # # # # # # # # # # # # # # #
+
+    # TODO: ordering matters
+    version_objs = []
+    for version in versions:
+        version_objs.append(Node.objects.get(urn=version))
+
+    alignment = TextAlignment(label=metadata["label"], urn=metadata["urn"],)
     alignment.save()
-    alignment.versions.set([version_a, version_b])
+    alignment.versions.set(version_objs)
 
-    def get_ref(urn):
-        _, ref = urn.rsplit(":", maxsplit=1)
-        return ref
-
-    def get_textpart_ref(urn):
-        ref = get_ref(urn)
-        text_part_ref, position = ref.rsplit(".", maxsplit=1)
-        return text_part_ref
-
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Create Record and Relations
+    # # # # # # # # # # # # # # # # # # # # # # # #
     idx = 0
     # TODO: review how we might make use of sort key from CEX
     # TODO: sorting versions from Ducat too, especially since Ducat doesn't have 'em
     # maybe something for CITE tools?
-    for _, record_urn, greek, english in alignments:
+    for _, record_urn, relations in alignments:
         record = TextAlignmentRecord(idx=idx, alignment=alignment, urn=record_urn)
         record.save()
         idx += 1
-
-        relation_a = TextAlignmentRecordRelation(version=version_a, record=record,)
-        relation_a.save()
-        tokens = []
-        # TODO: Can we build up a veref map and validate?
-        for urn in greek:
-            ref = get_ref(urn)
-            text_part_ref, position = ref.rsplit(".", maxsplit=1)
-            text_part_urn = f"{version_a.urn}{text_part_ref}"
-            tokens.append(
-                Token.objects.get(text_part__urn=text_part_urn, position=position)
+        for version_obj, relation in zip(version_objs, relations):
+            relation_obj = TextAlignmentRecordRelation(
+                version=version_obj, record=record
             )
-        relation_a.tokens.set(tokens)
-
-        relation_b = TextAlignmentRecordRelation(version=version_b, record=record,)
-        relation_b.save()
-
-        # TODO: veref map as above
-        tokens = []
-        for urn in english:
-            ref = get_ref(urn)
-            text_part_ref, position = ref.rsplit(".", maxsplit=1)
-            text_part_urn = f"{version_b.urn}{text_part_ref}"
-            tokens.append(
-                Token.objects.get(text_part__urn=text_part_urn, position=position)
-            )
-        relation_b.tokens.set(tokens)
+            relation_obj.save()
+            tokens = []
+            # TODO: Can we build up a veref map and validate?
+            for entry in relation:
+                entry_urn = URN(entry)
+                ref = entry_urn.passage
+                # NOTE: this assumes we're always dealing with a tokenized exemplar, which
+                # may not be the case
+                text_part_ref, position = ref.rsplit(".", maxsplit=1)
+                text_part_urn = f"{version_obj.urn}{text_part_ref}"
+                # TODO: compound Q objects query to minimize round trips
+                tokens.append(
+                    Token.objects.get(text_part__urn=text_part_urn, position=position)
+                )
+            relation_obj.tokens.set(tokens)
         # TODO: review query counts here and some of our SQL hacks
