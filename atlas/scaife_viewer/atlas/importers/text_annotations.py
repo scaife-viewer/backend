@@ -13,25 +13,19 @@ from ..models import (
 ANNOTATIONS_DATA_PATH = os.path.join(
     settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "text-annotations"
 )
+SYNTAX_TREES_ANNOTATIONS_PATH = os.path.join(
+    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "syntax-trees"
+)
 
 
-def get_paths():
-    if not os.path.exists(ANNOTATIONS_DATA_PATH):
+def get_paths(path):
+    if not os.path.exists(path):
         return []
-    return [
-        os.path.join(ANNOTATIONS_DATA_PATH, f)
-        for f in os.listdir(ANNOTATIONS_DATA_PATH)
-        if f.endswith(".json")
-    ]
+    return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
-def _prepare_text_annotations(path, counters):
+def _prepare_text_annotations(path, counters, kind):
     data = json.load(open(path))
-    # @@@ we probably want a better metadata map,
-    # or want to map the ingestion pipelines a bit differently
-    kind = TEXT_ANNOTATION_KIND_SCHOLIA
-    if os.path.basename(path).startswith("syntax_trees"):
-        kind = TEXT_ANNOTATION_KIND_SYNTAX_TREE
     to_create = []
     for row in data:
         urn = row.pop("urn")
@@ -48,8 +42,20 @@ def import_text_annotations(reset=False):
 
     to_create = []
     counters = dict(idx=0)
-    for path in get_paths():
-        to_create.extend(_prepare_text_annotations(path, counters))
+
+    scholia_annotation_paths = get_paths(ANNOTATIONS_DATA_PATH)
+    for path in scholia_annotation_paths:
+        to_create.extend(
+            _prepare_text_annotations(path, counters, kind=TEXT_ANNOTATION_KIND_SCHOLIA)
+        )
+
+    syntax_tree_annotation_paths = get_paths(SYNTAX_TREES_ANNOTATIONS_PATH)
+    for path in syntax_tree_annotation_paths:
+        to_create.extend(
+            _prepare_text_annotations(
+                path, counters, kind=TEXT_ANNOTATION_KIND_SYNTAX_TREE
+            )
+        )
 
     created = len(TextAnnotation.objects.bulk_create(to_create, batch_size=500))
     print(f"Created text annotations [count={created}]")
