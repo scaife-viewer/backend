@@ -345,10 +345,6 @@ class TextAlignmentRecordFilterSet(
 # TODO: Where do these nested non-Django objects live in the project?
 # Saelor favors <app>/types and <app>/schema; may revisit as we hit 1k LOC here
 class TextAlignmentMetadata(dict):
-    def get_alignment(self, alignment_records):
-        if len(alignment_records):
-            return TextAlignment.objects.get(pk=alignment_records[0].alignment_id)
-
     def get_passage_reference(self, version_urn, text_parts_list):
         refs = [text_parts_list[0].ref]
         last_ref = text_parts_list[-1].ref
@@ -372,22 +368,24 @@ class TextAlignmentMetadata(dict):
 
     @property
     def passage_references(self):
-        # @@@ lhs vs rhs in play here?
         references = []
         alignment_records = list(self["alignment_records"])
         if not alignment_records:
-            # @@@ revisit "empty" assumption
             return references
 
         tokens_qs = Token.objects.filter(
             alignment_record_relations__record__in=alignment_records
         )
-        alignment = self.get_alignment(alignment_records)
-        # # @@@ revisit passage assumption
-        # references.append(self["passage"].reference)
-        # @@@ revisit position assumption
+
+        # TODO: What does the order look like when we "start"
+        # from the "middle" of a three-way alignment?
+        # As it is now, we will start with the supplied reference
+        # and then loop through the remaining, which could do weird
+        # things for the order of "versions"
         version_urn, ref = extract_version_urn_and_ref(self["passage"].reference)
         references.append(self.generate_passage_reference(version_urn, tokens_qs))
+
+        alignment = TextAlignment.objects.get(urn=self["alignment_urn"])
         for version in alignment.versions.exclude(urn=version_urn):
             references.append(self.generate_passage_reference(version.urn, tokens_qs))
         return references
@@ -408,9 +406,25 @@ class TextAlignmentConnection(Connection):
     class Meta:
         abstract = True
 
+    def get_alignment_urn(self, info):
+        NAME_ALIGNMENT_URN = "alignment_Urn"
+        for selection in info.operation.selection_set.selections:
+            for argument in selection.arguments:
+                if argument.name.value == NAME_ALIGNMENT_URN:
+                    return argument.value.value
+
+        raise Exception(
+            f"{NAME_ALIGNMENT_URN} argument is required to retrieve metadata"
+        )
+
     def resolve_metadata(self, info, *args, **kwargs):
+        alignment_urn = self.get_alignment_urn(info)
         return TextAlignmentMetadata(
-            **{"passage": info.context.passage, "alignment_records": self.iterable}
+            **{
+                "passage": info.context.passage,
+                "alignment_records": self.iterable,
+                "alignment_urn": alignment_urn,
+            }
         )
 
 
