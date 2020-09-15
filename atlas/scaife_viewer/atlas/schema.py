@@ -343,6 +343,7 @@ class TextAlignmentRecordFilterSet(
 
 
 # TODO: Where do these nested non-Django objects live in the project?
+# Saelor favors <app>/types and <app>/schema; may revisit as we hit 1k LOC here
 class TextAlignmentMetadata(dict):
     def get_alignment(self, alignment_records):
         if len(alignment_records):
@@ -357,7 +358,9 @@ class TextAlignmentMetadata(dict):
         return f"{version_urn}{refpart}"
 
     def generate_passage_reference(self, version_urn, tokens_qs):
-        tokens_list = list(tokens_qs.filter(text_part__urn__startswith=version_urn).order_by("idx"))
+        tokens_list = list(
+            tokens_qs.filter(text_part__urn__startswith=version_urn).order_by("idx")
+        )
         text_parts_list = list(
             TextPart.objects.filter(tokens__in=tokens_list).distinct()
         )
@@ -412,8 +415,6 @@ class TextAlignmentConnection(Connection):
 
 
 class TextAlignmentRecordNode(DjangoObjectType):
-    items = generic.GenericScalar()
-
     class Meta:
         model = TextAlignmentRecord
         interfaces = (relay.Node,)
