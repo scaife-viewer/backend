@@ -187,14 +187,19 @@ class TextPartFilterSet(django_filters.FilterSet):
         }
 
 
-def initialize_passage(request, reference):
-    # @@@ mimic how DataLoaders are using request == info.context
+def initialize_passage(gql_context, reference):
+    """
+    NOTE: graphene-django aliases request as info.context,
+    but django-filter is wired to work off of a request.
+
+    Where possible, we'll reference gql_context for consistency.
+    """
     from scaife_viewer.atlas.backports.scaife_viewer.cts import passage_heal
 
     passage, healed = passage_heal(reference)
-    request.passage = passage
+    gql_context.passage = passage
     if healed:
-        request.healed_passage_reference = passage.reference
+        gql_context.healed_passage_reference = passage.reference
     return passage.reference
 
 
