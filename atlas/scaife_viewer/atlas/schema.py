@@ -352,7 +352,7 @@ class TextAlignmentMetadata(dict):
         return f"{version_urn}{refpart}"
 
     def generate_passage_reference(self, version_urn, tokens_qs):
-        tokens_list = list(tokens_qs.filter(text_part__urn__startswith=version_urn))
+        tokens_list = list(tokens_qs.filter(text_part__urn__startswith=version_urn).order_by("idx"))
         text_parts_list = list(
             TextPart.objects.filter(tokens__in=tokens_list).distinct()
         )
