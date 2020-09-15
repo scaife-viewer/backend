@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from django.conf import settings
 
+from scaife_viewer.atlas.backports.scaife_viewer.cts.utils import natural_keys
 from scaife_viewer.atlas.urn import URN
 
 from ..models import (
@@ -52,21 +53,14 @@ def extract_alignment_record_relations(versions, path):
     return lookup
 
 
-# TODO: make this more generic
-def sort_textpart(urn):
-    _, ref = urn.rsplit(":", maxsplit=1)
-    book, line, position = [int(i) for i in ref.split(".")]
-    return (book, line, position)
-
-
 def build_sorted_records(versions, record_relations):
     records = []
     for record_urn, data in record_relations.items():
         relations = []
         for version in versions:
-            relation = sorted(data[version], key=sort_textpart)
+            relation = sorted(data[version], key=natural_keys)
             relations.append(relation)
-        sort_key = sort_textpart(relations[0][0])
+        sort_key = natural_keys(relations[0][0])
         relations = [tuple(r) for r in relations]
         records.append((sort_key, record_urn, tuple(relations)))
     records = sorted(records, key=lambda x: x[0])
