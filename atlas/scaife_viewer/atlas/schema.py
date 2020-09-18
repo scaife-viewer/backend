@@ -377,13 +377,13 @@ class TextAnnotationNode(AbstractTextAnnotationNode):
     # annotation
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SCHOLIA).order_by("urn")
+        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SCHOLIA)
 
 
 class SyntaxTreeNode(AbstractTextAnnotationNode):
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SYNTAX_TREE).order_by("urn")
+        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SYNTAX_TREE)
 
 
 class MetricalAnnotationNode(DjangoObjectType):
