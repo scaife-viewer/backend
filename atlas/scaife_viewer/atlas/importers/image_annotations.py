@@ -3,6 +3,7 @@ import json
 import os
 
 from django.conf import settings
+from django.db import transaction
 
 from ..models import (
     IMAGE_ANNOTATION_KIND_CANVAS,
@@ -31,7 +32,6 @@ def get_paths():
     ]
 
 
-# @@@ transaction candidate
 def _set_textparts(ia, references):
     text_parts = list(Node.objects.filter(urn__in=references))
     assert len(text_parts) == len(references)
@@ -46,7 +46,6 @@ def _set_textparts(ia, references):
     ia.text_parts.set(text_parts)
 
 
-# @@@ transaction candidate
 def _prepare_rois(ia, rois):
     for roi in rois:
         iroi = ImageROI(
@@ -67,24 +66,29 @@ def _prepare_rois(ia, rois):
 def _prepare_image_annotations(path, counters):
     data = json.load(open(path))
     created = []
-    for row in data:
-        ia = ImageAnnotation(
-            kind=IMAGE_ANNOTATION_KIND_CANVAS,
-            idx=counters["idx"],
-            urn=row["urn"],
-            data=row["data"],
-            # @@@ hard coded for now, but should change in the future
-            canvas_identifier=row["canvas_url"],
-            image_identifier=row["image_url"],
-        )
-        # not using bulk create because of text_parts relation
-        # @@@ transaction candidate
-        ia.save()
-        counters["idx"] += 1
-        _set_textparts(ia, row["references"])
-        _prepare_rois(ia, row["regions_of_interest"])
 
-        created.append(ia)
+    # NOTE: Incremental performance improvements were seen
+    # relying on a single SQLite transaction to wrap the many
+    # `filter` and `set` ORM operations within this loop
+    with transaction.atomic(savepoint=False):
+        for row in data:
+            ia = ImageAnnotation(
+                kind=IMAGE_ANNOTATION_KIND_CANVAS,
+                idx=counters["idx"],
+                urn=row["urn"],
+                data=row["data"],
+                # @@@ hard coded for now, but should change in the future
+                canvas_identifier=row["canvas_url"],
+                image_identifier=row["image_url"],
+            )
+            # not using bulk create because of text_parts relation
+            # @@@ transaction candidate
+            ia.save()
+            counters["idx"] += 1
+            _set_textparts(ia, row["references"])
+            _prepare_rois(ia, row["regions_of_interest"])
+
+            created.append(ia)
     return created
 
 
