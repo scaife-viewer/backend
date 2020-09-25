@@ -10,8 +10,12 @@ class AppConfig(BaseAppConfig):
     verbose_name = _("Scaife Viewer ATLAS")
 
 
-def tweak_sqlite(sender, connection, **kwargs):
-    """Enable integrity constraint with sqlite."""
+def tweak_sqlite_pragma(sender, connection, **kwargs):
+    """
+    Customize PRAGMA settings for SQLite
+    """
+    # TODO: Bind this only to the ATLAS database,
+    # rather than assuming any SQLite connection
     if connection.vendor == "sqlite":
         cursor = connection.cursor()
         cursor.execute("PRAGMA synchronous=OFF;")
@@ -19,4 +23,4 @@ def tweak_sqlite(sender, connection, **kwargs):
         cursor.execute("PRAGMA journal_mode=MEMORY;")
 
 
-connection_created.connect(tweak_sqlite)
+connection_created.connect(tweak_sqlite_pragma)
