@@ -1,3 +1,4 @@
+import itertools
 import json
 import os
 
@@ -11,6 +12,10 @@ from ..models import (
 )
 
 
+# TODO: Wire this up to an AppConf variables
+EXPAND_IMAGE_ANNOTATION_REFS = bool(
+    int(os.environ.get("EXPAND_IMAGE_ANNOTATION_REFS", 1))
+)
 ANNOTATIONS_DATA_PATH = os.path.join(
     settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "image-annotations"
 )
@@ -24,6 +29,21 @@ def get_paths():
         for f in os.listdir(ANNOTATIONS_DATA_PATH)
         if f.endswith(".json")
     ]
+
+
+# @@@ transaction candidate
+def _set_textparts(ia, references):
+    text_parts = list(Node.objects.filter(urn__in=references))
+    assert len(text_parts) == len(references)
+    if EXPAND_IMAGE_ANNOTATION_REFS:
+        # Link the annotation to all descendants of the retrieved text parts.
+        # NOTE: This may overlap with ROIs, but we decided to do it to
+        # improve the display of multiple folios per pagination chunk
+        # within the reader.
+        text_parts = set(
+            itertools.chain.from_iterable(tp.get_tree(tp) for tp in text_parts)
+        )
+    ia.text_parts.set(text_parts)
 
 
 # @@@ transaction candidate
@@ -61,10 +81,7 @@ def _prepare_image_annotations(path, counters):
         # @@@ transaction candidate
         ia.save()
         counters["idx"] += 1
-        # @@@ we could overload data with references and rois, but am choosing not to
-        text_parts = list(Node.objects.filter(urn__in=row["references"]))
-        assert len(text_parts) == len(row["references"])
-        ia.text_parts.set(text_parts)
+        _set_textparts(ia, row["references"])
         _prepare_rois(ia, row["regions_of_interest"])
 
         created.append(ia)
