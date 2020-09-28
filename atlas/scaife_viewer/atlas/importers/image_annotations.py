@@ -2,7 +2,6 @@ import json
 import os
 
 from django.conf import settings
-from django.db import transaction
 
 from ..models import (
     IMAGE_ANNOTATION_KIND_CANVAS,
@@ -70,7 +69,6 @@ def _prepare_image_annotations(path, counters):
     return created
 
 
-@transaction.atomic(savepoint=False)
 def import_image_annotations(reset=False):
     if reset:
         ImageAnnotation.objects.all().delete()

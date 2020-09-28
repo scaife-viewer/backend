@@ -4,7 +4,6 @@ import os
 import re
 
 from django.conf import settings
-from django.db import transaction
 
 from ..models import Node, TextAlignment, TextAlignmentChunk
 
@@ -181,7 +180,6 @@ def _import_alignment(data):
     assert created == chunks_created
 
 
-@transaction.atomic(savepoint=False)
 def import_alignments(reset=False):
     if reset:
         TextAlignment.objects.all().delete()

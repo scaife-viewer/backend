@@ -2,7 +2,6 @@ import csv
 import os
 
 from django.conf import settings
-from django.db import transaction
 
 import logfmt
 
@@ -67,7 +66,6 @@ def _apply_entities(path, lookup):
             named_entity.tokens.add(*tokens)
 
 
-@transaction.atomic(savepoint=False)
 def apply_named_entities(reset=True):
     if reset:
         NamedEntity.objects.all().delete()

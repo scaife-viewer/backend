@@ -2,7 +2,6 @@ import csv
 import os
 
 from django.conf import settings
-from django.db import transaction
 
 from ..models import Node, Token
 
@@ -57,7 +56,6 @@ def update_if_not_set(token, data, fields_to_update):
             fields_to_update.add(k)
 
 
-@transaction.atomic(savepoint=False)
 def update_version_tokens(version, lookup, refs):
     text_part_urns = [f"{version.urn}{ref}" for ref in refs]
     to_update = []
