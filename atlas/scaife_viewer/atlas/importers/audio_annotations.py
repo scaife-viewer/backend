@@ -2,6 +2,7 @@ import csv
 import os
 
 from django.conf import settings
+from django.db import transaction
 
 from ..models import AudioAnnotation
 
@@ -43,6 +44,7 @@ def _prepare_audio_annotations(path, counters):
     return to_create
 
 
+@transaction.atomic(savepoint=False)
 def import_audio_annotations(reset=False):
     if reset:
         AudioAnnotation.objects.all().delete()

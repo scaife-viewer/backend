@@ -2,6 +2,7 @@ import json
 import os
 
 from django.conf import settings
+from django.db import transaction
 
 from ..models import TEXT_ANNOTATION_KIND_SCHOLIA, TextAnnotation
 
@@ -38,7 +39,8 @@ def _prepare_text_annotations(path, counters):
     return to_create
 
 
-def import_text_annotations(reset=False):
+@transaction.atomic(savepoint=False)
+def import_text_annotations(reset=True):
     if reset:
         TextAnnotation.objects.all().delete()
 

@@ -2,6 +2,7 @@ import csv
 import os
 
 from django.conf import settings
+from django.db import transaction
 
 import logfmt
 
@@ -56,7 +57,6 @@ def get_standoff_paths():
 
 
 def _apply_entities(path, lookup):
-    # @@@ good transaction candidate
     with open(path, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -67,7 +67,8 @@ def _apply_entities(path, lookup):
             named_entity.tokens.add(*tokens)
 
 
-def apply_named_entities(reset=False):
+@transaction.atomic(savepoint=False)
+def apply_named_entities(reset=True):
     if reset:
         NamedEntity.objects.all().delete()
 

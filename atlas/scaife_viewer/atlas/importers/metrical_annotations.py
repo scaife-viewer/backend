@@ -2,6 +2,7 @@ import csv
 import os
 
 from django.conf import settings
+from django.db import transaction
 
 from ..models import MetricalAnnotation
 
@@ -144,7 +145,8 @@ class MetricalAnnotationProcessor:
             yield (line, foot_code, line_data)
 
 
-def import_metrical_annotations(reset=False):
+@transaction.atomic(savepoint=False)
+def import_metrical_annotations(reset=True):
     if reset:
         MetricalAnnotation.objects.all().delete()
     version_urn = "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:"

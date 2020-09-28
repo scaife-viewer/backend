@@ -2,6 +2,7 @@ import json
 import os
 
 from django.conf import settings
+from django.db import transaction
 
 from ..models import (
     IMAGE_ANNOTATION_KIND_CANVAS,
@@ -26,7 +27,6 @@ def get_paths():
     ]
 
 
-# @@@ transaction candidate
 def _prepare_rois(ia, rois):
     for roi in rois:
         iroi = ImageROI(
@@ -58,7 +58,6 @@ def _prepare_image_annotations(path, counters):
             image_identifier=row["image_url"],
         )
         # not using bulk create because of text_parts relation
-        # @@@ transaction candidate
         ia.save()
         counters["idx"] += 1
         # @@@ we could overload data with references and rois, but am choosing not to
@@ -71,6 +70,7 @@ def _prepare_image_annotations(path, counters):
     return created
 
 
+@transaction.atomic(savepoint=False)
 def import_image_annotations(reset=False):
     if reset:
         ImageAnnotation.objects.all().delete()
