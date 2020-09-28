@@ -12,6 +12,8 @@ from .compat import convert_jsonfield_to_string  # noqa
 
 # from .models import Node as TextPart
 from .models import (
+    TEXT_ANNOTATION_KIND_SCHOLIA,
+    TEXT_ANNOTATION_KIND_SYNTAX_TREE,
     AudioAnnotation,
     ImageAnnotation,
     MetricalAnnotation,
@@ -455,13 +457,39 @@ class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.Filt
         return queryset.filter(text_parts__in=textparts_queryset).distinct()
 
 
-class TextAnnotationNode(DjangoObjectType):
+class AbstractTextAnnotationNode(DjangoObjectType):
     data = generic.GenericScalar()
 
     class Meta:
-        model = TextAnnotation
-        interfaces = (relay.Node,)
-        filterset_class = TextAnnotationFilterSet
+        abstract = True
+
+    @classmethod
+    def __init_subclass_with_meta__(cls, **meta_options):
+        meta_options.update(
+            {
+                "model": TextAnnotation,
+                "interfaces": (relay.Node,),
+                "filterset_class": TextAnnotationFilterSet,
+            }
+        )
+        super().__init_subclass_with_meta__(**meta_options)
+
+    def resolve_data(obj, *args, **kwargs):
+        return camelize(obj.data)
+
+
+class TextAnnotationNode(AbstractTextAnnotationNode):
+    # TODO: Eventually rename this as a scholia
+    # annotation
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SCHOLIA)
+
+
+class SyntaxTreeNode(AbstractTextAnnotationNode):
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SYNTAX_TREE)
 
 
 class MetricalAnnotationNode(DjangoObjectType):
@@ -567,6 +595,9 @@ class Query(ObjectType):
 
     text_annotation = relay.Node.Field(TextAnnotationNode)
     text_annotations = LimitedConnectionField(TextAnnotationNode)
+
+    syntax_tree = relay.Node.Field(SyntaxTreeNode)
+    syntax_trees = LimitedConnectionField(SyntaxTreeNode)
 
     metrical_annotation = relay.Node.Field(MetricalAnnotationNode)
     metrical_annotations = LimitedConnectionField(MetricalAnnotationNode)
