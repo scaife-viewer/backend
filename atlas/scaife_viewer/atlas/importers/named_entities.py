@@ -66,7 +66,7 @@ def _apply_entities(path, lookup):
             named_entity.tokens.add(*tokens)
 
 
-def apply_named_entities(reset=True):
+def apply_named_entities(reset=False):
     if reset:
         NamedEntity.objects.all().delete()
 

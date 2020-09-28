@@ -144,7 +144,7 @@ class MetricalAnnotationProcessor:
             yield (line, foot_code, line_data)
 
 
-def import_metrical_annotations(reset=True):
+def import_metrical_annotations(reset=False):
     if reset:
         MetricalAnnotation.objects.all().delete()
     version_urn = "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:"

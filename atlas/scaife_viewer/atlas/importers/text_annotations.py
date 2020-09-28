@@ -38,7 +38,7 @@ def _prepare_text_annotations(path, counters):
     return to_create
 
 
-def import_text_annotations(reset=True):
+def import_text_annotations(reset=False):
     if reset:
         TextAnnotation.objects.all().delete()
 
