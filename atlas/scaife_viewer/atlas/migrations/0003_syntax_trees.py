@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("scaife_viewer_atlas", "0001_initial"),
+        ("scaife_viewer_atlas", "0002_text_alignment_records"),
     ]
 
     operations = [
