@@ -1,5 +1,7 @@
+import concurrent.futures
 import sys
 
+from .conf import settings
 from .models import Node, Token
 
 
@@ -22,5 +24,21 @@ def tokenize_text_parts(version_exemplar_urn, force=True):
 
 
 def tokenize_all_text_parts(reset=False):
-    for version_exemplar_node in Node.objects.filter(kind__in=["version", "exemplar"]):
-        tokenize_text_parts(version_exemplar_node.urn, force=reset)
+    exceptions = False
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=settings.SCAIFE_VIEWER_ATLAS_INGESTION_CONCURRENCY
+    ) as executor:
+        version_exemplar_nodes = Node.objects.filter(kind__in=["version", "exemplar"])
+        urn_futures = {
+            executor.submit(tokenize_text_parts, node.urn, force=reset): node.urn
+            for node in version_exemplar_nodes
+        }
+        for f in concurrent.futures.as_completed(urn_futures):
+            urn = urn_futures[f]
+            try:
+                f.result()
+            except Exception as exc:
+                exceptions = True
+                print("{} generated an exception: {}".format(urn, exc))
+    if exceptions:
+        raise AssertionError("Exceptions were encountered tokenizing textparts")
