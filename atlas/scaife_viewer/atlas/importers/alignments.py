@@ -1,189 +1,154 @@
-import csv
 import json
 import os
-import re
+from collections import defaultdict
 
 from django.conf import settings
 
-from ..models import Node, TextAlignment, TextAlignmentChunk
+from scaife_viewer.atlas.backports.scaife_viewer.cts.utils import natural_keys
+from scaife_viewer.atlas.urn import URN
+
+from ..models import (
+    Node,
+    TextAlignment,
+    TextAlignmentRecord,
+    TextAlignmentRecordRelation,
+    Token,
+)
 
 
-ALIGNMENTS_DATA_PATH = os.path.join(settings.ATLAS_CONFIG["DATA_DIR"], "alignments")
-ALIGNMENTS_METADATA_PATH = os.path.join(ALIGNMENTS_DATA_PATH, "metadata.json")
-
-LINE_KIND_UNKNOWN = None
-LINE_KIND_NEW = "new"
-LINE_KIND_CONTINUES = "continues"
-LINE_KIND_CONTINUATION = "continuation"
-
-CITATION_REFERENCE_REGEX = re.compile(r"\d+\.\d+")
-CONTENT_REFERENCE_REGEX = re.compile(r"\[\d+\.\d+\]")
-CONTENT_FOOTNOTE_REGEX = re.compile(r"\[\d+\]")
+ANNOTATIONS_DATA_PATH = os.path.join(
+    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "text-alignments"
+)
+RAW_PATH = os.path.join(ANNOTATIONS_DATA_PATH, "raw")
 
 
-def get_citation(greek_content):
-    """
-    Extracts citation from Greek content.
-
-    The `citation` field in the CSV contains inaccuracies,
-    so we'll build the citation field ourselves.
-    """
-    refs = CITATION_REFERENCE_REGEX.findall(greek_content)
-    start = refs[0]
-    end = refs[-1]
-    if start == end:
-        return start
-    else:
-        return "-".join([start, end])
+def get_paths():
+    if not os.path.exists(ANNOTATIONS_DATA_PATH):
+        return []
+    return [
+        os.path.join(ANNOTATIONS_DATA_PATH, f)
+        for f in os.listdir(ANNOTATIONS_DATA_PATH)
+        if f.endswith(".json")
+    ]
 
 
-def transform_greek_content(greek_content):
-    """
-    Removes reference headings and footnote markers from
-    the milestone's Greek content.
-    """
-    greek_content = CONTENT_FOOTNOTE_REGEX.sub("", greek_content)
-    references = CONTENT_REFERENCE_REGEX.findall(greek_content)
-    tokens = [v for v in greek_content.split(" ") if v]
-    content = []
-    for pos, reference in enumerate(references):
-        ref_idx = tokens.index(reference)
-        try:
-            next_idx = tokens.index(references[pos + 1])
-        except IndexError:
-            subset = tokens[ref_idx:]
-        else:
-            subset = tokens[ref_idx:next_idx]
-        ref_label = CITATION_REFERENCE_REGEX.findall(subset.pop(0))[0]
-        content.append((ref_label, " ".join(subset)))
-    return content
+def init_record(versions):
+    record = {}
+    for version in versions:
+        record[version] = []
+    return record
 
 
-def map_leaves_to_milestones(leaves_to_milestones_lu, milestone_id, pos, leaves):
-    """
-    Updates the `LEAVES_TO_MILESTONES` index with each
-    reference within a given citation.
-    """
-    for reference, text in leaves:
-        leaves_to_milestones_lu.setdefault(reference, []).append(pos)
-
-
-def get_alignment_milestones(path):
-    LEAVES_TO_MILESTONES = {}
-    ALIGNMENTS = []
-
+def extract_alignment_record_relations(versions, path):
+    lookup = defaultdict(lambda: init_record(versions))
     with open(path) as f:
-        reader = csv.reader(f)
-        # discard header row
-        next(reader)
-        for pos, row in enumerate(reader):
-            milestone_id = row[0]
-            greek_content = row[2]
-            # @@@ Can't use the citation field as-is due to discrepancies
-            # in the source material
-            # citation = row[1]
-            citation = get_citation(greek_content)
-            # @@@ `map_leaves_to_milestones` could return text extracted from leaves
-            # in a generator, but since the greek_content contains partial references.
-            # we end up needing to just extract it from the CSV data
-            cleaned_greek_content = transform_greek_content(greek_content)
-
-            # Map leaves to milestones
-            map_leaves_to_milestones(
-                LEAVES_TO_MILESTONES, milestone_id, pos, cleaned_greek_content
-            )
-
-            ALIGNMENTS.append(
-                {
-                    "id": milestone_id,
-                    "citation": citation,
-                    "greek_content": cleaned_greek_content,
-                    "english_content": [
-                        # @@@ continuation
-                        (citation, row[3], LINE_KIND_UNKNOWN)
-                    ],
-                }
-            )
-
-    for milestone_idx, alignment in enumerate(ALIGNMENTS):
-        for pos, entry in enumerate(alignment["greek_content"]):
-            offsets = LEAVES_TO_MILESTONES[entry[0]]
-            if [milestone_idx] == offsets:
-                alignment["greek_content"][pos] += (LINE_KIND_NEW,)
-            elif offsets[0] == milestone_idx:
-                alignment["greek_content"][pos] += (LINE_KIND_CONTINUES,)
-            else:
-                alignment["greek_content"][pos] += (LINE_KIND_CONTINUATION,)
-
-    return {"ALIGNMENTS": ALIGNMENTS, "LEAVES_TO_MILESTONES": LEAVES_TO_MILESTONES}
-
-
-def _alignment_chunk_obj(version, line_lookup, alignment, milestone, milestone_idx):
-    chunk_obj = TextAlignmentChunk(
-        citation=milestone["citation"],
-        idx=milestone_idx,
-        version=version,
-        alignment=alignment,
-        items=[milestone["greek_content"], milestone["english_content"]],
-    )
-    try:
-        start_ref, end_ref = milestone["citation"].split("-")
-    except ValueError:
-        start_ref = end_ref = milestone["citation"]
-    start_chapter, start_verse = [int(i) for i in start_ref.split(".")]
-    end_chapter, end_verse = [int(i) for i in end_ref.split(".")]
-
-    try:
-        chunk_obj.start = line_lookup[f"{start_chapter}.{start_verse}"]
-        chunk_obj.end = line_lookup[f"{end_chapter}.{end_verse}"]
-        return chunk_obj
-    except KeyError:
-        # greek version mismatch; could be others
-        print(
-            f"Skipping milestone due to line(s) not found.  [alignment.name={alignment.name} citation={milestone['citation']} milestone_id={milestone['id']}]"
-        )
-        return
-
-
-def _build_line_lookup(version):
-    lookup = {}
-    citation_scheme = version.metadata["citation_scheme"]
-    for line in version.get_descendants().filter(kind=citation_scheme[-1]):
-        lookup[line.ref] = line
+        for line in f:
+            if line.startswith("urn:cite2:ducat:alignments.temp:") and line.count(
+                "urn:cite2:cite:verbs.v1:aligns"
+            ):
+                record_urn, _, citation_urn = line.strip().split("#")
+                version_urn = URN(citation_urn).up_to(URN.VERSION)
+                record = lookup[record_urn]
+                record[version_urn].append(citation_urn)
     return lookup
 
 
-def _import_alignment(data):
-    full_content_path = os.path.join(ALIGNMENTS_DATA_PATH, data["content_path"])
-
-    milestones = get_alignment_milestones(full_content_path)
-    # the version urns in data need a trailing colon
-    version_urn = f'{data["version_urn"]}:'
-    version = Node.objects.get(urn=version_urn)
-    alignment, _ = TextAlignment.objects.update_or_create(
-        version=version,
-        name=data["metadata"]["name"],
-        defaults=dict(metadata=data["metadata"]),
-    )
-
-    chunks_created = 0
-    line_lookup = _build_line_lookup(version)
-    to_create = []
-    for milestone_idx, milestone in enumerate(milestones["ALIGNMENTS"]):
-        chunk = _alignment_chunk_obj(
-            version, line_lookup, alignment, milestone, milestone_idx
-        )
-        if chunk:
-            to_create.append(chunk)
-            chunks_created += 1
-    created = len(TextAlignmentChunk.objects.bulk_create(to_create, batch_size=500))
-    assert created == chunks_created
+def build_sorted_records(versions, record_relations):
+    records = []
+    for record_urn, data in record_relations.items():
+        relations = []
+        for version in versions:
+            relation = sorted(data[version], key=natural_keys)
+            relations.append(relation)
+        sort_key = natural_keys(relations[0][0])
+        relations = [tuple(r) for r in relations]
+        records.append((sort_key, record_urn, tuple(relations)))
+    records = sorted(records, key=lambda x: x[0])
+    return records
 
 
-def import_alignments(reset=False):
+def create_record_relations(record, version_objs, relations):
+    for version_obj, relation in zip(version_objs, relations):
+        relation_obj = TextAlignmentRecordRelation(version=version_obj, record=record)
+        relation_obj.save()
+        tokens = []
+        # TODO: Can we build up a veref map and validate?
+        for entry in relation:
+            entry_urn = URN(entry)
+            ref = entry_urn.passage
+            # NOTE: this assumes we're always dealing with a tokenized exemplar, which
+            # may not be the case
+            text_part_ref, position = ref.rsplit(".", maxsplit=1)
+            text_part_urn = f"{version_obj.urn}{text_part_ref}"
+            # TODO: compound Q objects query to minimize round trips
+            tokens.append(
+                Token.objects.get(text_part__urn=text_part_urn, position=position)
+            )
+        relation_obj.tokens.set(tokens)
+    # TODO: review query counts here and some of our SQL hacks
+
+
+def process_cex(metadata):
+
+    # TODO: Read from metadata; document the format we desire
+    # Even the CEX file might need to be inbetween
+    # TODO: Better processing of the entire CEX file / CITE model is desired
+    versions = metadata["versions"]
+    path = os.path.join(RAW_PATH, metadata["filename"])
+
+    record_relations = extract_alignment_record_relations(versions, path)
+
+    records = build_sorted_records(versions, record_relations)
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Create Alignment
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # TODO: ordering matters
+    version_objs = []
+    for version in versions:
+        version_objs.append(Node.objects.get(urn=version))
+
+    alignment = TextAlignment(label=metadata["label"], urn=metadata["urn"],)
+    alignment.save()
+    alignment.versions.set(version_objs)
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Create Record and Relations
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    idx = 0
+    # TODO: review how we might make use of sort key from CEX
+    # TODO: sorting versions from Ducat too, especially since Ducat doesn't have 'em
+    # maybe something for CITE tools?
+    for _, record_urn, relations in records:
+        record = TextAlignmentRecord(idx=idx, alignment=alignment, urn=record_urn)
+        record.save()
+        idx += 1
+
+        create_record_relations(record, version_objs, relations)
+
+
+def process_alignments(reset=False):
     if reset:
         TextAlignment.objects.all().delete()
 
-    alignments_metadata = json.load(open(ALIGNMENTS_METADATA_PATH))
-    for alignment_data in alignments_metadata["alignments"]:
-        _import_alignment(alignment_data)
+    # TODO: mapper from format to ingestor
+    # revisit raw / processed file handling
+    # as in Digital Sira
+    allowed_formats = ["ducat-cex"]
+    created_count = 0
+    for path in get_paths():
+        try:
+            entries = json.load(open(path))
+        except Exception as e:
+            print(e)
+            continue
+        else:
+            for metadata_entry in entries:
+                format_ = metadata_entry.get("format", "unknown")
+                if format_ not in allowed_formats:
+                    raise NotImplementedError(
+                        f"Cannot parse annotation format: {format_}"
+                    )
+                process_cex(metadata_entry)
+                created_count += 1
+    print(f"Alignments created: {created_count}")

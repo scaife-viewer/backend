@@ -26,7 +26,6 @@ def get_paths():
     ]
 
 
-# @@@ transaction candidate
 def _prepare_rois(ia, rois):
     for roi in rois:
         iroi = ImageROI(
@@ -58,7 +57,6 @@ def _prepare_image_annotations(path, counters):
             image_identifier=row["image_url"],
         )
         # not using bulk create because of text_parts relation
-        # @@@ transaction candidate
         ia.save()
         counters["idx"] += 1
         # @@@ we could overload data with references and rois, but am choosing not to
