@@ -476,6 +476,10 @@ class TextAlignmentConnection(Connection):
 
     def get_alignment_urn(self, info):
         NAME_ALIGNMENT_URN = "alignment_Urn"
+        aligmment_urn = info.variable_values.get("alignmentUrn")
+        if aligmment_urn:
+            return aligmment_urn
+
         for selection in info.operation.selection_set.selections:
             for argument in selection.arguments:
                 if argument.name.value == NAME_ALIGNMENT_URN:
