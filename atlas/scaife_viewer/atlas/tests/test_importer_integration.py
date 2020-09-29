@@ -1,9 +1,9 @@
 import copy
 from unittest import mock
 
-import pytest
 from treebeard.exceptions import PathOverflow
 
+import pytest
 from scaife_viewer.atlas.importers.versions import CTSImporter, Library
 from scaife_viewer.atlas.models import Node
 from scaife_viewer.atlas.tests import constants

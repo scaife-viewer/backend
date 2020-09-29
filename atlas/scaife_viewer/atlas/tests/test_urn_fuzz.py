@@ -1,5 +1,4 @@
 import hypothesis
-
 from scaife_viewer.atlas.tests.strategies import URNs
 from scaife_viewer.atlas.urn import URN
 

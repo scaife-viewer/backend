@@ -5,10 +5,10 @@ from collections import defaultdict
 from django.db.models import Max
 from django.utils.translation import ugettext_noop
 
+from tqdm import tqdm
 from treebeard.exceptions import PathOverflow
 
 from scaife_viewer.atlas import constants
-from tqdm import tqdm
 
 from ..hooks import hookset
 from ..models import Node
