@@ -53,3 +53,4 @@ class ATLASAppConf(AppConf):
         if value is None:
             msg = f"{self._meta.prefixed_name('DATA_DIR')} must be defined"
             raise ImproperlyConfigured(msg)
+        return value
