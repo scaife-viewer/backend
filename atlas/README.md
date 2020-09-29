@@ -66,3 +66,11 @@ For most smaller passages, the in-memory chunking is faster than using the datab
 Default: `"scaife_viewer.atlas.hooks.DefaultHookSet"`
 
 The path to a hookset that can be used to customize ATLAS functionality.
+
+## GraphQL Endpoint
+URL Name: `sv_atlas:graphql_endpoint`
+
+Primary GraphQL endpoint for `scaife-viewer-atlas` projects.
+
+When accessed [via a browser](https://github.com/graphql-python/graphene-django/blob/2e806384f60505a29745752bf9c477c71668f0fa/graphene_django/views.py#L154), delivers a [GraphiQL Playground](https://github.com/graphql/graphiql#graphiql) that can be used
+to explore ATLAS GraphQL fields.
