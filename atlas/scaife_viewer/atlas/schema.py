@@ -1,7 +1,7 @@
 from django.db.models import Q
 
 import django_filters
-from graphene import Connection, Field, ObjectType, String, relay
+from graphene import Boolean, Connection, Field, ObjectType, String, relay
 from graphene.types import generic
 from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
@@ -9,6 +9,7 @@ from graphene_django.utils import camelize
 
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
+from .hooks import hookset
 
 # from .models import Node as TextPart
 from .models import (
@@ -246,28 +247,93 @@ class AbstractTextPartNode(DjangoObjectType):
         return camelize(obj.metadata)
 
 
-class VersionNode(AbstractTextPartNode):
-    text_alignment_records = LimitedConnectionField(lambda: TextAlignmentRecordNode)
+class TextGroupNode(AbstractTextPartNode):
+    # @@@ work or version relations
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(kind="version").order_by("urn")
+        return queryset.filter(kind="textgroup").order_by("pk")
 
+    # TODO: extract to AbstractTextPartNode
+    def resolve_label(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["label"]
+
+    def resolve_metadata(obj, *args, **kwargs):
+        metadata = obj.metadata
+        return camelize(metadata)
+
+
+class WorkNode(AbstractTextPartNode):
+    # @@@ apply a subfilter here?
+    versions = LimitedConnectionField(lambda: VersionNode)
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind="work").order_by("pk")
+
+    # TODO: extract to AbstractTextPartNode
+    def resolve_label(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["label"]
+
+    def resolve_metadata(obj, *args, **kwargs):
+        metadata = obj.metadata
+        return camelize(metadata)
+
+
+class VersionNode(AbstractTextPartNode):
+    text_alignment_records = LimitedConnectionField(lambda: TextAlignmentRecordNode)
+
+    access = Boolean()
+    description = String()
+    lang = String()
+    human_lang = String()
+    kind = String()
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        # TODO: set a default somewhere
+        # return queryset.filter(kind="version").order_by("urn")
+        return queryset.filter(kind="version").order_by("pk")
+
+    # TODO: Determine how tightly coupled these fields
+    # should be to metadata (including ["key"] vs .get("key"))
+    def resolve_access(obj, info, *args, **kwargs):
+        request = info.context
+        return hookset.can_access_urn(request, obj.urn)
+
+    def resolve_human_lang(obj, *args, **kwargs):
+        lang = obj.metadata["lang"]
+        return hookset.get_human_lang(lang)
+
+    def resolve_lang(obj, *args, **kwargs):
+        return obj.metadata["lang"]
+
+    def resolve_description(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["description"]
+
+    def resolve_kind(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["kind"]
+
+    # TODO: extract to AbstractTextPartNode
+    def resolve_label(obj, *args, **kwargs):
+        # @@@ consider a direct field or faster mapping
+        return obj.metadata["label"]
+
+    # TODO: convert metadata to proper fields
     def resolve_metadata(obj, *args, **kwargs):
         metadata = obj.metadata
         work = obj.get_parent()
         text_group = work.get_parent()
-        # @@@ backport lang map
-        lang_map = {
-            "eng": "English",
-            "grc": "Greek",
-        }
         metadata.update(
             {
                 "work_label": work.label,
                 "text_group_label": text_group.label,
                 "lang": metadata["lang"],
-                "human_lang": lang_map[metadata["lang"]],
+                "human_lang": hookset.get_human_lang(metadata["lang"]),
             }
         )
         return camelize(metadata)
@@ -572,6 +638,12 @@ class NamedEntityNode(DjangoObjectType):
 
 
 class Query(ObjectType):
+    text_group = relay.Node.Field(TextGroupNode)
+    text_groups = LimitedConnectionField(TextGroupNode)
+
+    work = relay.Node.Field(WorkNode)
+    works = LimitedConnectionField(WorkNode)
+
     version = relay.Node.Field(VersionNode)
     versions = LimitedConnectionField(VersionNode)
 

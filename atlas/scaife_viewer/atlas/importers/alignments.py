@@ -2,9 +2,8 @@ import json
 import os
 from collections import defaultdict
 
-from django.conf import settings
-
 from scaife_viewer.atlas.backports.scaife_viewer.cts.utils import natural_keys
+from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.urn import URN
 
 from ..models import (
@@ -17,7 +16,7 @@ from ..models import (
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "text-alignments"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "text-alignments"
 )
 RAW_PATH = os.path.join(ANNOTATIONS_DATA_PATH, "raw")
 

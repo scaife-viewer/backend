@@ -2,7 +2,6 @@ import io
 import re
 from collections import defaultdict
 
-from django.conf import settings
 from django.core import serializers
 from django.db import models
 
@@ -13,6 +12,7 @@ from sortedm2m.fields import SortedManyToManyField
 from treebeard.mp_tree import MP_Node
 
 from scaife_viewer.atlas import constants
+from scaife_viewer.atlas.conf import settings
 
 
 class TextAlignment(models.Model):
@@ -302,6 +302,9 @@ class AudioAnnotation(models.Model):
         self.text_parts.set(reference_objs)
 
 
+# TODO: Review https://docs.djangoproject.com/en/3.0/topics/db/multi-db/
+# to see if there are more settings we can expose for "mixed"
+# database backends
 class Node(MP_Node):
     # @@@ used to pivot siblings; may be possible if we hook into path field
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
@@ -314,7 +317,7 @@ class Node(MP_Node):
     # @@@ we may want to furthe de-norm label from metadata
     metadata = JSONField(default=dict, blank=True, null=True)
 
-    alphabet = settings.NODE_ALPHABET
+    alphabet = settings.SV_ATLAS_NODE_ALPHABET
 
     def __str__(self):
         return f"{self.kind}: {self.urn}"

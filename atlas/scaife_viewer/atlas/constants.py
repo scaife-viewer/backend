@@ -81,3 +81,13 @@ NAMED_ENTITY_KINDS = [
     (NAMED_ENTITY_KIND_PERSON, "Person"),
     (NAMED_ENTITY_KIND_PLACE, "Place"),
 ]
+
+HUMAN_FRIENDLY_LANGUAGE_MAP = {
+    "eng": "English",
+    "fa": "Farsi",
+    "fre": "French",
+    "ger": "German",
+    "grc": "Greek",
+    "heb": "Hebrew",
+    "lat": "Latin",
+}

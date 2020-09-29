@@ -1,7 +1,7 @@
 import csv
 import os
 
-from django.conf import settings
+from scaife_viewer.atlas.conf import settings
 
 from ..models import AudioAnnotation
 
@@ -10,7 +10,7 @@ from ..models import AudioAnnotation
 COPYRIGHT_FRAGMENT = "© 2016 David Chamberlain under CC BY 4.0 License, https://creativecommons.org/licenses/by/4.0/"
 
 ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "audio-annotations"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "audio-annotations"
 )
 
 CITE_IDENTIFIER = "urn:cite2:exploreHomer:audio.v1:"

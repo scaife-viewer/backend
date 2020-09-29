@@ -26,7 +26,7 @@ def tokenize_text_parts(version_exemplar_urn, force=True):
 def tokenize_all_text_parts(reset=False):
     exceptions = False
     with concurrent.futures.ProcessPoolExecutor(
-        max_workers=settings.SCAIFE_VIEWER_ATLAS_INGESTION_CONCURRENCY
+        max_workers=settings.SV_ATLAS_INGESTION_CONCURRENCY
     ) as executor:
         version_exemplar_nodes = Node.objects.filter(kind__in=["version", "exemplar"])
         urn_futures = {
