@@ -17,7 +17,7 @@ from ..models import (
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "text-alignments"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "text-alignments"
 )
 RAW_PATH = os.path.join(ANNOTATIONS_DATA_PATH, "raw")
 

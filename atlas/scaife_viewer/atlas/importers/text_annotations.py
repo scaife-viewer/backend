@@ -14,7 +14,7 @@ ANNOTATIONS_DATA_PATH = os.path.join(
     settings.SV_ATLAS_DATA_DIR, "annotations", "text-annotations"
 )
 SYNTAX_TREES_ANNOTATIONS_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "syntax-trees"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "syntax-trees"
 )
 
 
