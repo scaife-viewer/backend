@@ -14,7 +14,6 @@ class CTSCollectionResolver:
             version_metadata = hookset.extract_cts_version_metadata(version)
             # version_urn is required within CTSImporter
             version_urn = version_metadata["urn"]
-            # TODO: More validation around "path"
             version_metadata["path"] = None
             self.versions[version_urn] = version_metadata
 
