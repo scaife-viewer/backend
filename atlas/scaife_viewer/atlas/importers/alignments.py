@@ -2,9 +2,8 @@ import json
 import os
 from collections import defaultdict
 
-from scaife_viewer.atlas.conf import settings
-
 from scaife_viewer.atlas.backports.scaife_viewer.cts.utils import natural_keys
+from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.urn import URN
 
 from ..models import (
