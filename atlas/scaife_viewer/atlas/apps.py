@@ -1,4 +1,5 @@
 from django.apps import AppConfig as BaseAppConfig
+from django.conf import settings
 from django.db.backends.signals import connection_created
 from django.utils.translation import ugettext_lazy as _
 
@@ -14,9 +15,7 @@ def tweak_sqlite_pragma(sender, connection, **kwargs):
     """
     Customize PRAGMA settings for SQLite
     """
-    # TODO: Bind this only to the ATLAS database,
-    # rather than assuming any SQLite connection
-    if connection.vendor == "sqlite":
+    if connection.vendor == "sqlite" and connection.alias == settings.SV_ATLAS_DB_LABEL:
         cursor = connection.cursor()
         cursor.execute("PRAGMA synchronous=OFF;")
         cursor.execute("PRAGMA cache_size=100000;")
