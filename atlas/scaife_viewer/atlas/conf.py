@@ -24,27 +24,32 @@ def load_path_attr(path):
 
 
 class ATLASAppConf(AppConf):
-    # `INGESTION_CONCURRENCY` defaults to number of processors
-    # as reported by multiprocessing.cpu_count()
-    INGESTION_CONCURRENCY = None
-
-    IN_MEMORY_PASSAGE_CHUNK_MAX = 2500
-    NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    # `DATA_MODEL_ID` should be incremented when BI schema changes are made
-    # to ATLAS models.
-    # Site developers can use the value of this setting to help inform
-    # that ATLAS content must be re-ingested when schema changes occur
+    # Data model
+    DATA_DIR = None
     DATA_MODEL_ID = base64.b64encode(b"2020-09-08-001\n").decode()
+    INGESTION_CONCURRENCY = None
+    NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+    # GraphQL settings
+    IN_MEMORY_PASSAGE_CHUNK_MAX = 2500
+
+    # Database settings
     DB_LABEL = "atlas"
     DB_PATH = None
-    HOOKSET = "scaife_viewer.atlas.hooks.DefaultHookSet"
 
-    # required settings
-    # DATA_DIR
+    # Other
+    HOOKSET = "scaife_viewer.atlas.hooks.DefaultHookSet"
 
     class Meta:
         prefix = "sv_atlas"
-        required = ["DATA_DIR"]
 
     def configure_hookset(self, value):
         return load_path_attr(value)()
+
+    def configure_data_dir(self, value):
+        # NOTE: We've chosen an explicit `configure` method
+        # vs making `DATA_DIR` a required field so we can check
+        # that DATA_DIR is a non-None value.
+        if value is None:
+            msg = f"{self._meta.prefixed_name('DATA_DIR')} must be defined"
+            raise ImproperlyConfigured(msg)
