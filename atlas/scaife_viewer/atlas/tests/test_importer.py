@@ -1,7 +1,8 @@
 import copy
 from unittest import mock
 
-from scaife_viewer.atlas.importers.versions import CTSImporter, Library
+from scaife_viewer.atlas.importers.versions import CTSImporter
+from scaife_viewer.atlas.resolvers.common import Library
 from scaife_viewer.atlas.tests import constants
 from scaife_viewer.atlas.urn import URN
 
@@ -26,7 +27,7 @@ def test_destructure():
         {
             "kind": "work",
             "urn": "urn:cts:greekLit:tlg0012.tlg001:",
-            "metadata": {"label": "Iliad"},
+            "metadata": {"label": "Iliad", "lang": "grc"},
         },
         {
             "kind": "version",
@@ -71,7 +72,7 @@ def test_destructure_alphanumeric():
         {
             "kind": "work",
             "urn": "urn:cts:greekLit:tlg0012.tlg001:",
-            "metadata": {"label": "Iliad"},
+            "metadata": {"label": "Iliad", "lang": "grc"},
         },
         {
             "kind": "version",
@@ -136,7 +137,7 @@ def test_importer(mock_node, mock_generate, mock_open):
             {
                 "kind": "work",
                 "urn": "urn:cts:greekLit:tlg0012.tlg001:",
-                "metadata": {"label": "Iliad"},
+                "metadata": {"label": "Iliad", "lang": "grc"},
                 "idx": 0,
             },
             "urn:cts:greekLit:tlg0012:",
@@ -151,6 +152,8 @@ def test_importer(mock_node, mock_generate, mock_open):
                     "label": "Iliad, Homeri Opera",
                     "lang": "grc",
                     "first_passage_urn": "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.1-1.7",
+                    "description": "Homer, creator; Monro, D. B. (David Binning), 1836-1905, creator; Monro, D. B. (David Binning), 1836-1905, editor; Allen, Thomas W. (Thomas William), b. 1862, editor",
+                    "kind": "edition",
                     "default_toc_urn": None,
                 },
                 "idx": 0,
@@ -292,7 +295,7 @@ def test_importer_with_exemplar(mock_node, mock_generate, mock_open):
             {
                 "kind": "work",
                 "urn": "urn:cts:greekLit:tlg0012.tlg001:",
-                "metadata": {"label": "Iliad"},
+                "metadata": {"label": "Iliad", "lang": "grc"},
                 "idx": 0,
             },
             "urn:cts:greekLit:tlg0012:",
@@ -307,6 +310,8 @@ def test_importer_with_exemplar(mock_node, mock_generate, mock_open):
                     "label": "Iliad, Homeri Opera",
                     "lang": "grc",
                     "first_passage_urn": "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.1-1.7",
+                    "description": "Homer, creator; Monro, D. B. (David Binning), 1836-1905, creator; Monro, D. B. (David Binning), 1836-1905, editor; Allen, Thomas W. (Thomas William), b. 1862, editor",
+                    "kind": "edition",
                     "default_toc_urn": None,
                 },
                 "idx": 0,

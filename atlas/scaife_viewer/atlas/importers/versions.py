@@ -171,7 +171,7 @@ class CTSImporter:
             return self.add_child_bulk(parent, node_data)
         return self.add_child(parent, node_data)
 
-    def destructure_urn(self, node_urn, tokens, extract_text_parts):
+    def destructure_urn(self, node_urn, tokens, extract_text_parts=True):
         node_data = []
         for kind in self.get_urn_scheme(node_urn):
             data = {"kind": kind}
@@ -221,7 +221,9 @@ class CTSImporter:
 
     def generate_branch(self, line, extract_text_parts=True):
         node_urn, tokens = self.extract_urn_and_tokens(line)
-        branch_data = self.destructure_urn(node_urn, tokens, extract_text_parts)
+        branch_data = self.destructure_urn(
+            node_urn, tokens, extract_text_parts=extract_text_parts
+        )
         for idx, node_data in enumerate(branch_data):
             node = self.nodes.get(node_data["urn"])
             if node is None:

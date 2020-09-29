@@ -1,6 +1,7 @@
 from collections import OrderedDict
 
 import pytest
+
 from scaife_viewer.atlas.models import Node
 from scaife_viewer.atlas.tests import constants
 

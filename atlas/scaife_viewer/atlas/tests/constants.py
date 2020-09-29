@@ -70,6 +70,8 @@ VERSION_METADATA = {
     "label": "Iliad, Homeri Opera",
     "lang": "grc",
     "first_passage_urn": "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.1-1.7",
+    "description": "Homer, creator; Monro, D. B. (David Binning), 1836-1905, creator; Monro, D. B. (David Binning), 1836-1905, editor; Allen, Thomas W. (Thomas William), b. 1862, editor",
+    "kind": "edition",
     "default_toc_urn": None,
 }
 LIBRARY_DATA = {

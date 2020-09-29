@@ -1,6 +1,7 @@
 from unittest import mock
 
 import pytest
+
 from scaife_viewer.atlas.urn import URN
 
 
