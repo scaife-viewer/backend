@@ -30,6 +30,10 @@ class ATLASAppConf(AppConf):
 
     IN_MEMORY_PASSAGE_CHUNK_MAX = 2500
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    # `DATA_MODEL_ID` should be incremented when BI schema changes are made
+    # to ATLAS models.
+    # Site developers can use the value of this setting to help inform
+    # that ATLAS content must be re-ingested when schema changes occur
     DATA_MODEL_ID = base64.b64encode(b"2020-09-08-001\n").decode()
     DB_LABEL = "atlas"
     DB_PATH = None
