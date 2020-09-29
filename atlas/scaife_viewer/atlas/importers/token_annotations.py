@@ -70,8 +70,12 @@ def update_version_tokens(version, lookup, refs):
         update_if_not_set(token, data, fields_to_update)
         to_update.append(token)
 
+    # NOTE: With the PRAGMA directives from SQLite, it ends up being faster to use
+    # multiple UPDATE statements within a single transaction rather than use Django's
+    # built-in bulk update mechanism
     if fields_to_update and to_update:
-        Token.objects.bulk_update(to_update, fields=fields_to_update, batch_size=500)
+        for token in to_update:
+            token.save(update_fields=fields_to_update)
     return len(to_update)
 
 

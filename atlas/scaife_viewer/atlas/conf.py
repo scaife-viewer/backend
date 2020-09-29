@@ -24,6 +24,10 @@ def load_path_attr(path):
 
 
 class ATLASAppConf(AppConf):
+    # `INGESTION_CONCURRENCY` defaults to number of processors
+    # as reported by multiprocessing.cpu_count()
+    INGESTION_CONCURRENCY = None
+
     IN_MEMORY_PASSAGE_CHUNK_MAX = 2500
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     DATA_MODEL_ID = base64.b64encode(b"2020-09-08-001\n").decode()
