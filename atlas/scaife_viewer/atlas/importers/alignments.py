@@ -59,10 +59,19 @@ def build_sorted_records(versions, record_relations):
         for version in versions:
             relation = sorted(data[version], key=natural_keys)
             relations.append(relation)
-        sort_key = natural_keys(relations[0][0])
+        # FIXME: Sort key assumes that each relation has tokens
+        # or at least the first does
+        try:
+            sort_key = natural_keys(relations[0][0])
+        except Exception as excep:
+            sort_key = None
         relations = [tuple(r) for r in relations]
         records.append((sort_key, record_urn, tuple(relations)))
-    records = sorted(records, key=lambda x: x[0])
+    try:
+        records = sorted(records, key=lambda x: x[0])
+    except Exception as excep:
+        # FIXME: Handle missing sort key
+        records = records
     return records
 
 
