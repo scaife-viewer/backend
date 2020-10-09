@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.utils.functional import cached_property
 
 import django_filters
 from graphene import Boolean, Connection, Field, ObjectType, String, relay
@@ -486,6 +487,10 @@ class TextAlignmentMetadata(dict):
             "end_idx": tokens_list[-1].idx,
         }
 
+    @cached_property
+    def alignment(self):
+        return TextAlignment.objects.get(urn=self["alignment_urn"])
+
     @property
     def passage_references(self):
         references = []
@@ -505,19 +510,32 @@ class TextAlignmentMetadata(dict):
         version_urn, ref = extract_version_urn_and_ref(self["passage"].reference)
         references.append(self.generate_passage_reference(version_urn, tokens_qs))
 
-        alignment = TextAlignment.objects.get(urn=self["alignment_urn"])
-        for version in alignment.versions.exclude(urn=version_urn):
+        for version in self.alignment.versions.exclude(urn=version_urn):
             references.append(self.generate_passage_reference(version.urn, tokens_qs))
         return references
+
+    @property
+    def display_hint(self):
+        # TODO: Proper enum here
+        # textParts
+        # records
+        # other
+        if self.alignment.urn.contains("word"):
+            return "textParts"
+        return "records"
 
 
 class TextAlignmentMetadataNode(ObjectType):
     passage_references = generic.GenericScalar(
         description="References for the passages being aligned"
     )
+    display_hint = String()
 
     def resolve_passage_references(self, info, *args, **kwargs):
         return self.passage_references
+
+    def resolve_display_hint(self, info, *args, **kwargs):
+        return self.display_hint
 
 
 class TextAlignmentConnection(Connection):
