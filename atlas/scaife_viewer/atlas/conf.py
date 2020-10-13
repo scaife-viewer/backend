@@ -30,6 +30,9 @@ class ATLASAppConf(AppConf):
     INGESTION_CONCURRENCY = None
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
+    # Annotations
+    EXPAND_IMAGE_ANNOTATION_REFS = True
+
     # GraphQL settings
     IN_MEMORY_PASSAGE_CHUNK_MAX = 2500
 

@@ -52,6 +52,24 @@ Default: `None`
 
 The path to the SQLite database referenced by `DB_LABEL`.
 
+### Annotations
+
+**EXPAND_IMAGE_ANNOTATION_REFS**
+
+Default: `True`
+
+Sets the text part relation to _all_ text parts within a passage reference (descendants within the passage reference).
+
+_Example_:
+- Reference is `1-2`
+- Text parts `1.1, 1.2, ... 2.999` are linked to the annotation within ATLAS
+
+When `False`, applies annotations _only_ to the text parts
+specified in the passage reference.
+
+_Example_:
+- Reference is `1-2`
+- Text parts `1, 2` are linked to the annotation within ATLAS, but _not_ any children / descendants
 
 ### GraphQL
 

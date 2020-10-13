@@ -1,3 +1,4 @@
+import itertools
 import json
 import os
 
@@ -26,6 +27,20 @@ def get_paths():
     ]
 
 
+def _set_textparts(ia, references):
+    text_parts = list(Node.objects.filter(urn__in=references))
+    assert len(text_parts) == len(references)
+    if settings.SV_ATLAS_EXPAND_IMAGE_ANNOTATION_REFS:
+        # Link the annotation to all descendants of the retrieved text parts.
+        # NOTE: This may overlap with ROIs, but we decided to do it to
+        # improve the display of multiple folios per pagination chunk
+        # within the reader.
+        text_parts = set(
+            itertools.chain.from_iterable(tp.get_tree(tp) for tp in text_parts)
+        )
+    ia.text_parts.set(text_parts)
+
+
 def _prepare_rois(ia, rois):
     for roi in rois:
         iroi = ImageROI(
@@ -46,6 +61,7 @@ def _prepare_rois(ia, rois):
 def _prepare_image_annotations(path, counters):
     data = json.load(open(path))
     created = []
+
     for row in data:
         ia = ImageAnnotation(
             kind=IMAGE_ANNOTATION_KIND_CANVAS,
@@ -59,10 +75,7 @@ def _prepare_image_annotations(path, counters):
         # not using bulk create because of text_parts relation
         ia.save()
         counters["idx"] += 1
-        # @@@ we could overload data with references and rois, but am choosing not to
-        text_parts = list(Node.objects.filter(urn__in=row["references"]))
-        assert len(text_parts) == len(row["references"])
-        ia.text_parts.set(text_parts)
+        _set_textparts(ia, row["references"])
         _prepare_rois(ia, row["regions_of_interest"])
 
         created.append(ia)
