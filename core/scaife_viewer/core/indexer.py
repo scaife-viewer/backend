@@ -9,6 +9,7 @@ from django.conf import settings
 import dask.bag
 import elasticsearch
 import elasticsearch.helpers
+
 from anytree.iterators import PreOrderIter
 
 from . import cts
