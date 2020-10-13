@@ -14,10 +14,6 @@ from ..models import (
 )
 
 
-# TODO: Wire this up to an AppConf variables
-EXPAND_IMAGE_ANNOTATION_REFS = bool(
-    int(os.environ.get("EXPAND_IMAGE_ANNOTATION_REFS", 1))
-)
 ANNOTATIONS_DATA_PATH = os.path.join(
     settings.SV_ATLAS_DATA_DIR, "annotations", "image-annotations"
 )
@@ -36,7 +32,7 @@ def get_paths():
 def _set_textparts(ia, references):
     text_parts = list(Node.objects.filter(urn__in=references))
     assert len(text_parts) == len(references)
-    if EXPAND_IMAGE_ANNOTATION_REFS:
+    if settings.SV_ATLAS_EXPAND_IMAGE_ANNOTATION_REFS:
         # Link the annotation to all descendants of the retrieved text parts.
         # NOTE: This may overlap with ROIs, but we decided to do it to
         # improve the display of multiple folios per pagination chunk
