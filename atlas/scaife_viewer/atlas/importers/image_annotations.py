@@ -2,8 +2,6 @@ import itertools
 import json
 import os
 
-from django.db import transaction
-
 from scaife_viewer.atlas.conf import settings
 
 from ..models import (
@@ -64,28 +62,23 @@ def _prepare_image_annotations(path, counters):
     data = json.load(open(path))
     created = []
 
-    # NOTE: Incremental performance improvements were seen
-    # relying on a single SQLite transaction to wrap the many
-    # `filter` and `set` ORM operations within this loop
-    with transaction.atomic(savepoint=False):
-        for row in data:
-            ia = ImageAnnotation(
-                kind=IMAGE_ANNOTATION_KIND_CANVAS,
-                idx=counters["idx"],
-                urn=row["urn"],
-                data=row["data"],
-                # @@@ hard coded for now, but should change in the future
-                canvas_identifier=row["canvas_url"],
-                image_identifier=row["image_url"],
-            )
-            # not using bulk create because of text_parts relation
-            # @@@ transaction candidate
-            ia.save()
-            counters["idx"] += 1
-            _set_textparts(ia, row["references"])
-            _prepare_rois(ia, row["regions_of_interest"])
+    for row in data:
+        ia = ImageAnnotation(
+            kind=IMAGE_ANNOTATION_KIND_CANVAS,
+            idx=counters["idx"],
+            urn=row["urn"],
+            data=row["data"],
+            # @@@ hard coded for now, but should change in the future
+            canvas_identifier=row["canvas_url"],
+            image_identifier=row["image_url"],
+        )
+        # not using bulk create because of text_parts relation
+        ia.save()
+        counters["idx"] += 1
+        _set_textparts(ia, row["references"])
+        _prepare_rois(ia, row["regions_of_interest"])
 
-            created.append(ia)
+        created.append(ia)
     return created
 
 
