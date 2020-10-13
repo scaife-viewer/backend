@@ -1,6 +1,7 @@
-from django.conf import settings
 from django.db.models import Max, Min, Q
 from django.utils.functional import cached_property
+
+from scaife_viewer.atlas.conf import settings
 
 
 class BaseSiblingChunker:
@@ -85,7 +86,7 @@ class SQLSiblingChunker(BaseSiblingChunker):
 
 
 def get_chunker(queryset, start_idx, chunk_length, **kwargs):
-    if chunk_length < settings.ATLAS_CONFIG["IN_MEMORY_PASSAGE_CHUNK_MAX"]:
+    if chunk_length < settings.SV_ATLAS_IN_MEMORY_PASSAGE_CHUNK_MAX:
         return InMemorySiblingChunker(queryset, start_idx, chunk_length, **kwargs)
     return SQLSiblingChunker(queryset, start_idx, chunk_length, **kwargs)
 

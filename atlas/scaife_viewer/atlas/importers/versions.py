@@ -1,71 +1,21 @@
-import json
-import os
+import logging
 import sys
 from collections import defaultdict
 
-from django.conf import settings
 from django.db.models import Max
 from django.utils.translation import ugettext_noop
 
+from tqdm import tqdm
 from treebeard.exceptions import PathOverflow
 
 from scaife_viewer.atlas import constants
 
+from ..hooks import hookset
 from ..models import Node
 from ..urn import URN
 
 
-LIBRARY_DATA_PATH = os.path.join(settings.ATLAS_CONFIG["DATA_DIR"], "library")
-
-
-class LibraryDataResolver:
-    def __init__(self, data_dir_path):
-        self.text_groups = {}
-        self.works = {}
-        self.versions = {}
-        self.resolved = self.resolve_data_dir_path(data_dir_path)
-
-    def populate_versions(self, dirpath, data):
-        for version in data:
-            version_part = version["urn"].rsplit(":", maxsplit=2)[1]
-
-            if version.get("format") == "cex":
-                extension = "cex"
-            else:
-                extension = "txt"
-
-            version_path = os.path.join(dirpath, f"{version_part}.{extension}")
-            if not os.path.exists(version_path):
-                raise FileNotFoundError(version_path)
-
-            self.versions[version["urn"]] = {
-                "format": extension,
-                "path": version_path,
-                **version,
-            }
-
-    def resolve_data_dir_path(self, data_dir_path):
-        for dirpath, dirnames, filenames in sorted(os.walk(data_dir_path)):
-            if "metadata.json" not in filenames:
-                continue
-
-            metadata = json.load(open(os.path.join(dirpath, "metadata.json")))
-            assert metadata["node_kind"] in ["textgroup", "work"]
-
-            if metadata["node_kind"] == "textgroup":
-                self.text_groups[metadata["urn"]] = metadata
-            elif metadata["node_kind"] == "work":
-                self.works[metadata["urn"]] = metadata
-                self.populate_versions(dirpath, metadata["versions"])
-
-        return self.text_groups, self.works, self.versions
-
-
-class Library:
-    def __init__(self, text_groups, works, versions):
-        self.text_groups = text_groups
-        self.works = works
-        self.versions = versions
+logger = logging.getLogger(__name__)
 
 
 class CTSImporter:
@@ -81,9 +31,17 @@ class CTSImporter:
         self.library = library
         self.version_data = version_data
         self.nodes = nodes
+        # TODO: Decouple "version_data" further
         self.urn = URN(self.version_data["urn"].strip())
         self.work_urn = self.urn.up_to(self.urn.WORK)
-        self.label = get_first_value_for_language(version_data["label"], "eng")
+
+        try:
+            label = get_first_value_for_language(version_data["label"], "eng")
+        except ValueError:
+            # TODO: Do we need this or can we support a fallback value above?
+            label = self.work_urn
+        self.label = label
+
         self.citation_scheme = self.version_data["citation_scheme"]
         self.idx_lookup = defaultdict(int)
 
@@ -133,25 +91,41 @@ class CTSImporter:
     def get_urn_scheme(self, node_urn):
         return [*self.get_root_urn_scheme(node_urn), *self.citation_scheme]
 
-    def get_textgroup_metadata(self, urn):
-        metadata = self.library.text_groups[urn.up_to(URN.TEXTGROUP)]
-        return {"label": get_first_value_for_language(metadata["name"], "eng")}
+    def get_text_group_metadata(self):
+        text_group_urn = self.urn.up_to(self.urn.TEXTGROUP)
+        metadata = self.library.text_groups[text_group_urn]
+        label = get_first_value_for_language(metadata["name"], "eng")
+        # TODO: do we actually use `lang` yet?
+        extra = metadata.get("extra", {})
+        return dict(label=label, **extra)
 
-    def get_work_metadata(self, urn):
-        metadata = self.library.works[urn.up_to(URN.WORK)]
-        return {"label": get_first_value_for_language(metadata["title"], "eng")}
+    def get_work_metadata(self):
+        work_urn = self.urn.up_to(self.urn.WORK)
+        metadata = self.library.works[work_urn]
+        title = get_first_value_for_language(metadata["title"], "eng")
+        extra = metadata.get("extra", {})
+        return dict(label=title, lang=metadata["lang"], **extra)
 
     def get_version_metadata(self):
-        return {
+        default = {
             # @@@ how much of the `metadata.json` do we
             # "pass through" via GraphQL vs
             # apply to particular node kinds in the heirarchy
             "citation_scheme": self.citation_scheme,
             "label": self.label,
             "lang": self.version_data["lang"],
-            "first_passage_urn": self.version_data["first_passage_urn"],
+            "first_passage_urn": self.version_data.get("first_passage_urn"),
             "default_toc_urn": self.version_data.get("default_toc_urn"),
         }
+        # TODO: how "universal" should these defaults be?
+        default.update(
+            dict(
+                description=self.version_data["description"][0]["value"],
+                kind=self.version_data["version_kind"],
+                **self.version_data.get("extra", {}),
+            )
+        )
+        return default
 
     def add_child_bulk(self, parent, node_data):
         # @@@ forked version of `Node._inc_path`
@@ -197,20 +171,32 @@ class CTSImporter:
             return self.add_child_bulk(parent, node_data)
         return self.add_child(parent, node_data)
 
-    def destructure_urn(self, node_urn, tokens):
+    def destructure_urn(self, node_urn, tokens, extract_text_parts=True):
         node_data = []
         for kind in self.get_urn_scheme(node_urn):
             data = {"kind": kind}
 
-            if kind not in self.citation_scheme:
+            # TODO: Determine when we're dealing with a passage reference portion vs
+            # work part of the urn.
+            # May be done with parts of `get_urn_scheme`
+            # And maybe the "presence" / absence of tokens could help slightly too
+            # @@@ duplicate; we might need a cts_ prefix for work, for example
+            urn_is_work_part = (
+                kind not in self.citation_scheme or kind == "work" and not tokens
+            )
+            if urn_is_work_part:
                 data.update({"urn": self.get_partial_urn(kind, node_urn)})
                 if kind == "textgroup":
-                    data.update({"metadata": self.get_textgroup_metadata(node_urn)})
+                    data.update({"metadata": self.get_text_group_metadata()})
                 elif kind == "work":
-                    data.update({"metadata": self.get_work_metadata(node_urn)})
+                    data.update({"metadata": self.get_work_metadata()})
                 elif kind == "version":
                     data.update({"metadata": self.get_version_metadata()})
+                # TODO: Handle exemplars
             else:
+                if not extract_text_parts:
+                    continue
+
                 ref_index = self.citation_scheme.index(kind)
                 ref = ".".join(node_urn.passage_nodes[: ref_index + 1])
                 urn = f"{node_urn.up_to(node_urn.NO_PASSAGE)}{ref}"
@@ -223,16 +209,21 @@ class CTSImporter:
         return node_data
 
     def extract_urn_and_tokens(self, line):
-        if self.format == "cex":
+        if not line:
+            tokens = ""
+            urn = f"{self.urn}"
+        elif self.format == "cex":
             urn, tokens = line.strip().split("#", maxsplit=1)
         else:
             ref, tokens = line.strip().split(maxsplit=1)
             urn = f"{self.urn}{ref}"
         return URN(urn), tokens
 
-    def generate_branch(self, line):
+    def generate_branch(self, line, extract_text_parts=True):
         node_urn, tokens = self.extract_urn_and_tokens(line)
-        branch_data = self.destructure_urn(node_urn, tokens)
+        branch_data = self.destructure_urn(
+            node_urn, tokens, extract_text_parts=extract_text_parts
+        )
         for idx, node_data in enumerate(branch_data):
             node = self.nodes.get(node_data["urn"])
             if node is None:
@@ -261,20 +252,19 @@ class CTSImporter:
 
     def apply(self):
         full_content_path = self.library.versions[self.urn.absolute]["path"]
-        with open(full_content_path, "r") as f:
-            for line in f:
-                self.generate_branch(line)
+        if full_content_path:
+            with open(full_content_path, "r") as f:
+                for line in f:
+                    self.generate_branch(line)
+        else:
+            self.generate_branch("", extract_text_parts=False)
 
         count = self.finalize()
-        print(f"{self.label}: {count} nodes.", file=sys.stderr)
-
-
-def resolve_library():
-    text_groups, works, versions = LibraryDataResolver(LIBRARY_DATA_PATH).resolved
-    return Library(text_groups, works, versions)
+        logger.debug(f"{self.label}: {count} nodes.")
 
 
 def get_first_value_for_language(values, lang, fallback=True):
+    # TODO: When this is called, how would we pass a fallback?
     value = next(iter(filter(lambda x: x["lang"] == lang, values)), None)
     if value is None:
         if fallback:
@@ -288,9 +278,10 @@ def import_versions(reset=False):
     if reset:
         Node.objects.filter(kind="nid").delete()
 
-    library = resolve_library()
+    library = hookset.resolve_library()
 
+    importer_class = hookset.get_importer_class()
     nodes = {}
-    for _, version_data in library.versions.items():
-        CTSImporter(library, version_data, nodes).apply()
+    for _, version_data in tqdm(library.versions.items()):
+        importer_class(library, version_data, nodes).apply()
     print(f"{Node.objects.count()} total nodes on the tree.", file=sys.stderr)

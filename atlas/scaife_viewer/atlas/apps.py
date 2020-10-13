@@ -1,4 +1,5 @@
 from django.apps import AppConfig as BaseAppConfig
+from django.conf import settings
 from django.db.backends.signals import connection_created
 from django.utils.translation import ugettext_lazy as _
 
@@ -10,13 +11,15 @@ class AppConfig(BaseAppConfig):
     verbose_name = _("Scaife Viewer ATLAS")
 
 
-def tweak_sqlite(sender, connection, **kwargs):
-    """Enable integrity constraint with sqlite."""
-    if connection.vendor == "sqlite":
+def tweak_sqlite_pragma(sender, connection, **kwargs):
+    """
+    Customize PRAGMA settings for SQLite
+    """
+    if connection.vendor == "sqlite" and connection.alias == settings.SV_ATLAS_DB_LABEL:
         cursor = connection.cursor()
         cursor.execute("PRAGMA synchronous=OFF;")
         cursor.execute("PRAGMA cache_size=100000;")
         cursor.execute("PRAGMA journal_mode=MEMORY;")
 
 
-connection_created.connect(tweak_sqlite)
+connection_created.connect(tweak_sqlite_pragma)

@@ -1,14 +1,13 @@
 import csv
 import os
 
-from django.conf import settings
-from django.db import transaction
+from scaife_viewer.atlas.conf import settings
 
 from ..models import Node, Token
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "token-annotations"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "token-annotations"
 )
 
 
@@ -71,26 +70,12 @@ def update_version_tokens(version, lookup, refs):
         update_if_not_set(token, data, fields_to_update)
         to_update.append(token)
 
-    # @@@ a better transaction atomic wrapper here maybe?
-    print("preparing for bulk update")
-    print(len(to_update))
+    # NOTE: With the PRAGMA directives from SQLite, it ends up being faster to use
+    # multiple UPDATE statements within a single transaction rather than use Django's
+    # built-in bulk update mechanism
     if fields_to_update and to_update:
-        import time
-
-        start = time.time()
-
-        # # BULK_SIZE = int(900 / int(len(fields_to_update)))
-        BULK_SIZE = 10000
-        for i in range(0, len(to_update), BULK_SIZE):
-            subset = to_update[i : i + BULK_SIZE]
-            with transaction.atomic(savepoint=False):
-                for token in subset:
-                    token.save(update_fields=fields_to_update)
-        # Token.objects.bulk_update(to_update, fields=fields_to_update, batch_size=500)
-
-        end = time.time()
-        print(end - start)
-
+        for token in to_update:
+            token.save(update_fields=fields_to_update)
     return len(to_update)
 
 

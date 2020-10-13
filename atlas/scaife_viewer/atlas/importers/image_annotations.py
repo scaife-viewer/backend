@@ -2,8 +2,9 @@ import itertools
 import json
 import os
 
-from django.conf import settings
 from django.db import transaction
+
+from scaife_viewer.atlas.conf import settings
 
 from ..models import (
     IMAGE_ANNOTATION_KIND_CANVAS,
@@ -18,7 +19,7 @@ EXPAND_IMAGE_ANNOTATION_REFS = bool(
     int(os.environ.get("EXPAND_IMAGE_ANNOTATION_REFS", 1))
 )
 ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "image-annotations"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "image-annotations"
 )
 
 

@@ -1,15 +1,15 @@
 import csv
 import os
 
-from django.conf import settings
-
 import logfmt
+
+from scaife_viewer.atlas.conf import settings
 
 from ..models import NamedEntity, Node
 
 
 NAMED_ENTITIES_DATA_PATH = os.path.join(
-    settings.ATLAS_CONFIG["DATA_DIR"], "annotations", "named-entities"
+    settings.SV_ATLAS_DATA_DIR, "annotations", "named-entities"
 )
 ENTITIES_DIR = os.path.join(NAMED_ENTITIES_DATA_PATH, "processed", "entities")
 STANDOFF_DIR = os.path.join(NAMED_ENTITIES_DATA_PATH, "processed", "standoff")
@@ -56,7 +56,6 @@ def get_standoff_paths():
 
 
 def _apply_entities(path, lookup):
-    # @@@ good transaction candidate
     with open(path, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
