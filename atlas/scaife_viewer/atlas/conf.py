@@ -1,4 +1,3 @@
-import base64
 import importlib
 
 from django.conf import settings  # noqa
@@ -26,7 +25,6 @@ def load_path_attr(path):
 class ATLASAppConf(AppConf):
     # Data model
     DATA_DIR = None
-    DATA_MODEL_ID = base64.b64encode(b"2020-09-08-001\n").decode()
     INGESTION_CONCURRENCY = None
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
