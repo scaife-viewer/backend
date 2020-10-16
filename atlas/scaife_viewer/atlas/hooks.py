@@ -48,6 +48,9 @@ class DefaultHookSet:
         return dict(
             urn=f"{ensure_trailing_colon(version.urn)}",
             version_kind=version.kind,
+            # TODO: Other ways to expose this on `Library`
+            # TODO: Ensure we don't hit weird MRO stuff here
+            textpart_metadata=self.extract_cts_textpart_metadata(version),
             first_passage_urn=str(version.first_passage().urn),
             citation_scheme=[c.name for c in version.metadata.citation],
             label=[
@@ -66,6 +69,19 @@ class DefaultHookSet:
             ],
             lang=version.lang,
         )
+
+    def extract_cts_textpart_metadata(self, version):
+        version_urn = ensure_trailing_colon(version.urn)
+        # TODO: define this on cts.Text?
+        metadata = {}
+        toc = version.toc()
+        for ref_node in toc.num_resolver.glob(toc.root, "*"):
+            ref = ref_node.num
+            textpart_urn = f"{version_urn}{ref}"
+            metadata[textpart_urn] = {
+                "first_passage_urn": next(toc.chunks(ref_node), None).urn,
+            }
+        return metadata
 
 
 class HookProxy:

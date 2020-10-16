@@ -48,6 +48,8 @@ class CTSImporter:
         self.nodes_to_create = []
         self.node_last_child_lookup = defaultdict()
         self.format = version_data.get("format", "txt")
+        # TODO: Provide a better interface here
+        self.textpart_metadata = self.version_data.get("textpart_metadata")
 
     @staticmethod
     def add_root(data):
@@ -127,6 +129,9 @@ class CTSImporter:
         )
         return default
 
+    def get_textpart_metadata(self, urn):
+        return self.textpart_metadata.get(urn) or {}
+
     def add_child_bulk(self, parent, node_data):
         # @@@ forked version of `Node._inc_path`
         # https://github.com/django-treebeard/django-treebeard/blob/master/treebeard/mp_tree.py#L1121
@@ -194,15 +199,19 @@ class CTSImporter:
                     data.update({"metadata": self.get_version_metadata()})
                 # TODO: Handle exemplars
             else:
-                if not extract_text_parts:
+                if not extract_text_parts and not self.textpart_metadata:
                     continue
 
                 ref_index = self.citation_scheme.index(kind)
                 ref = ".".join(node_urn.passage_nodes[: ref_index + 1])
                 urn = f"{node_urn.up_to(node_urn.NO_PASSAGE)}{ref}"
-                data.update({"urn": urn, "ref": ref, "rank": ref_index + 1})
+                rank = ref_index + 1
+                data.update({"urn": urn, "ref": ref, "rank": rank})
                 if kind == self.citation_scheme[-1]:
                     data.update({"text_content": tokens})
+                if rank == 1:
+                    # TODO: Additive metadata, other ranks
+                    data.update({"metadata": self.get_textpart_metadata(urn)})
 
             node_data.append(data)
 
@@ -215,7 +224,13 @@ class CTSImporter:
         elif self.format == "cex":
             urn, tokens = line.strip().split("#", maxsplit=1)
         else:
-            ref, tokens = line.strip().split(maxsplit=1)
+            try:
+                ref, tokens = line.strip().split(maxsplit=1)
+            except ValueError:
+                # FIXME: Likely refactor this for when we won't have any tokens
+                # (like textpart metadata)
+                ref = line
+                tokens = ""
             urn = f"{self.urn}{ref}"
         return URN(urn), tokens
 
@@ -256,6 +271,12 @@ class CTSImporter:
             with open(full_content_path, "r") as f:
                 for line in f:
                     self.generate_branch(line)
+        # TODO: Better organize this conditional
+        elif self.textpart_metadata:
+            for urn in self.textpart_metadata.keys():
+                # TODO: Revisit URN utility here
+                _, ref = urn.rsplit(":", maxsplit=1)
+                self.generate_branch(ref, extract_text_parts=False)
         else:
             self.generate_branch("", extract_text_parts=False)
 
