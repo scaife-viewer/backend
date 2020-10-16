@@ -48,7 +48,7 @@ class DefaultHookSet:
         return dict(
             urn=f"{ensure_trailing_colon(version.urn)}",
             version_kind=version.kind,
-            # TODO: provide first_passage_urn
+            first_passage_urn=str(version.first_passage().urn),
             citation_scheme=[c.name for c in version.metadata.citation],
             label=[
                 {
