@@ -116,16 +116,42 @@ class Passage:
         return getattr(self, "_next_objects")
 
 
-class PassageSiblingMetadata:
+class SelectedTextPartsMixin:
+    # TODO: LRU cache or some other memoization, especially for text overview
+    @staticmethod
+    def get_text_parts_in_range(text_parts, start, end, field_name="idx"):
+        for text_part in text_parts:
+            if text_part[field_name] >= start and text_part[field_name] <= end:
+                yield text_part
+
+    @property
+    def selected(self):
+        return list(
+            self.get_text_parts_in_range(
+                self.all, self.boundary_start, self.boundary_end
+            )
+        )
+
+    @property
+    def boundary_start(self):
+        raise NotImplementedError
+
+    @property
+    def boundary_end(self):
+        raise NotImplementedError
+
+
+class PassageSiblingMetadata(SelectedTextPartsMixin):
     def __init__(self, passage):
         self.passage = passage
 
-    # TODO: Refactor for variable depths
-    @staticmethod
-    def get_siblings_in_range(siblings, start, end, field_name="idx"):
-        for sibling in siblings:
-            if sibling[field_name] >= start and sibling[field_name] <= end:
-                yield sibling
+    @property
+    def boundary_start(self):
+        return self.passage.start.idx
+
+    @property
+    def boundary_end(self):
+        return self.passage.end.idx
 
     @property
     def all(self):
@@ -140,18 +166,10 @@ class PassageSiblingMetadata:
         return data
 
     @property
-    def selected(self):
-        return list(
-            self.get_siblings_in_range(
-                self.all, self.passage.start.idx, self.passage.end.idx
-            )
-        )
-
-    @property
     def previous(self):
         if self.passage.previous_objects:
             return list(
-                self.get_siblings_in_range(
+                self.get_text_parts_in_range(
                     self.all,
                     self.passage.previous_objects[0]["idx"],
                     self.passage.previous_objects[-1]["idx"],
@@ -163,7 +181,7 @@ class PassageSiblingMetadata:
     def next(self):
         if self.passage.next_objects:
             return list(
-                self.get_siblings_in_range(
+                self.get_text_parts_in_range(
                     self.all,
                     self.passage.next_objects[0]["idx"],
                     self.passage.next_objects[-1]["idx"],
