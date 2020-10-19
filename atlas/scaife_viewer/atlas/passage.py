@@ -190,6 +190,41 @@ class PassageSiblingMetadata(SelectedTextPartsMixin):
         return []
 
 
+class PassageOverviewMetadata(SelectedTextPartsMixin):
+    def __init__(self, passage):
+        self.passage = passage
+
+    @property
+    def all(self):
+        data = []
+        for tp in self.passage.version.get_children().values(
+            "ref", "urn", "idx", "metadata"
+        ):
+            lcp = tp["ref"]  # NOTE: only true for "top-level" text parts
+            # TODO: Determine if we have a better "edge" for `all`
+            first_passage_urn = tp.get("metadata", {}).get(
+                "first_passage_urn", tp["urn"]
+            )
+            data.append({"lcp": lcp, "urn": first_passage_urn, "idx": tp["idx"]})
+        return data
+
+    @staticmethod
+    def highest_boundary(node):
+        if node.rank == 1:
+            return node
+        return node.get_ancestors().filter(rank=1).first()
+
+    @property
+    def boundary_start(self):
+        return self.highest_boundary(self.passage.start).idx
+
+    @property
+    def boundary_end(self):
+        if self.passage.start.idx == self.passage.end.idx:
+            return self.boundary_start
+        return self.highest_boundary(self.passage.end).idx
+
+
 class PassageMetadata:
     def __init__(self, passage):
         self.passage = passage

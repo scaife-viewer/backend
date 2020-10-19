@@ -26,7 +26,11 @@ from .models import (
     TextAnnotation,
     Token,
 )
-from .passage import PassageMetadata, PassageSiblingMetadata
+from .passage import (
+    PassageMetadata,
+    PassageOverviewMetadata,
+    PassageSiblingMetadata,
+)
 from .utils import (
     extract_version_urn_and_ref,
     filter_via_ref_predicate,
@@ -76,6 +80,28 @@ class LimitedConnectionField(DjangoFilterConnectionField):
         )
 
 
+class PassageOverviewNode(ObjectType):
+    all_top_level = generic.GenericScalar(
+        name="all", description="Inclusive list of top-level text parts for a passage"
+    )
+    selected = generic.GenericScalar(
+        description="Only the selected top-level objects for a given passage"
+    )
+
+    class Meta:
+        description = (
+            "Provides lists of top-level text part objects for a given passage"
+        )
+
+    @staticmethod
+    def resolve_all_top_level(obj, info, **kwargs):
+        return obj.all
+
+    @staticmethod
+    def resolve_selected(obj, info, **kwargs):
+        return obj.selected
+
+
 class PassageSiblingsNode(ObjectType):
     # @@@ dry for resolving scalars
     all_siblings = generic.GenericScalar(
@@ -108,6 +134,7 @@ class PassageSiblingsNode(ObjectType):
 class PassageMetadataNode(ObjectType):
     human_reference = String()
     ancestors = generic.GenericScalar()
+    overview = Field(PassageOverviewNode)
     siblings = Field(PassageSiblingsNode)
     children = generic.GenericScalar()
     next_passage = String(description="Next passage reference")
@@ -127,6 +154,12 @@ class PassageMetadataNode(ObjectType):
         passage = info.context.passage
         if passage.next_objects:
             return self.generate_passage_urn(passage.version, passage.next_objects)
+
+    def resolve_overview(self, info, *args, **kwargs):
+        passage = info.context.passage
+        # TODO: Review overview / ancestors / siblings implementation
+        passage = info.context.passage
+        return PassageOverviewMetadata(passage)
 
     def resolve_ancestors(self, info, *args, **kwargs):
         passage = info.context.passage
