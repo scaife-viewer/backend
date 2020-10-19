@@ -340,7 +340,8 @@ class VersionNode(AbstractTextPartNode):
 
 
 class TextPartNode(AbstractTextPartNode):
-    pass
+    # TODO: Determine if this is used in TOW
+    lowest_citable_part = String()
 
 
 class PassageTextPartNode(DjangoObjectType):

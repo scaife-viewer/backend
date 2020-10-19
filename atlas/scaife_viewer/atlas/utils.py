@@ -140,8 +140,16 @@ def filter_via_ref_predicate(queryset, predicate):
     # might work too, but having `idx` also allows us to do simple integer math
     # as-needed.
     if queryset.exists():
-        subquery = queryset.filter(predicate).aggregate(min=Min("idx"), max=Max("idx"))
-        queryset = queryset.filter(idx__gte=subquery["min"], idx__lte=subquery["max"])
+        try:
+            subquery = queryset.filter(predicate).aggregate(
+                min=Min("idx"), max=Max("idx")
+            )
+            queryset = queryset.filter(
+                idx__gte=subquery["min"], idx__lte=subquery["max"]
+            )
+        except Exception:
+            # TODO: Handle SV 1 where not all text parts are ingested
+            return queryset.none()
     return queryset
 
 

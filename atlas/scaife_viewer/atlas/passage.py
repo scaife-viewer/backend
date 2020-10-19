@@ -120,6 +120,7 @@ class PassageSiblingMetadata:
     def __init__(self, passage):
         self.passage = passage
 
+    # TODO: Refactor for variable depths
     @staticmethod
     def get_siblings_in_range(siblings, start, end, field_name="idx"):
         for sibling in siblings:
