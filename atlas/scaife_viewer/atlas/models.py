@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from django.core import serializers
 from django.db import models
+from django.utils.functional import cached_property
 
 # @@@ optional for Django 3.1+
 from django_jsonfield_backport.models import JSONField
@@ -602,3 +603,16 @@ class AttributionRecord(models.Model):
     urns = models.ManyToManyField(
         "scaife_viewer_atlas.Node", related_name="attribution_records"
     )
+
+    @cached_property
+    def name(self):
+        """
+        Provides a shortcut for the person / organization related to
+        the record
+        """
+        parts = []
+        if self.person:
+            parts.append(self.person.name)
+        if self.organization:
+            parts.append(self.organization.name)
+        return ", ".join(parts)

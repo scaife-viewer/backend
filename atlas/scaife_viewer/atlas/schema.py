@@ -718,16 +718,6 @@ class AttributionRecordNode(DjangoObjectType):
     def get_queryset(cls, queryset, info):
         return queryset.select_related("person", "organization")
 
-    @staticmethod
-    def resolve_name(obj, info, **kwargs):
-        # TODO: refactor as model method `name`
-        parts = []
-        if obj.person:
-            parts.append(obj.person.name)
-        if obj.organization:
-            parts.append(obj.organization.name)
-        return ", ".join(parts)
-
 
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
