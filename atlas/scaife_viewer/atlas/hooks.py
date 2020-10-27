@@ -45,13 +45,29 @@ class DefaultHookSet:
         )
 
     def extract_cts_version_metadata(self, version):
+        # TODO: Add logging and improve fallback
+        urn = str(version.urn)
+
+        # FIXME: better internal logging / exception raising
+        try:
+            first_passage_urn = str(version.first_passage().urn)
+        except Exception:
+            print(f'Could not extract first_passage_urn [urn="{urn}"]')
+            first_passage_urn = None
+
+        try:
+            textpart_metadata = self.extract_cts_textpart_metadata(version)
+        except Exception:
+            print(f'Could not extract textpart_metadata [urn="{urn}"]')
+            textpart_metadata = {}
+
         return dict(
             urn=f"{ensure_trailing_colon(version.urn)}",
             version_kind=version.kind,
             # TODO: Other ways to expose this on `Library`
             # TODO: Ensure we don't hit weird MRO stuff here
-            textpart_metadata=self.extract_cts_textpart_metadata(version),
-            first_passage_urn=str(version.first_passage().urn),
+            textpart_metadata=textpart_metadata,
+            first_passage_urn=first_passage_urn,
             citation_scheme=[c.name for c in version.metadata.citation],
             label=[
                 {
