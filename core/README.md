@@ -6,7 +6,14 @@ This package was extracted from
 ## Settings
 
 ### ALLOW_TRAILING_COLON
+
 Default: `False`
 
 When `False`, to maintain compatability with the MyCapitain resolver,
 the trailing colon will be stripped from URNs.
+
+### HOOKSET
+
+Default: `"scaife_viewer.core.hooks.DefaultHookSet"`
+
+The path to a hookset that can be used to customize package functionality.
