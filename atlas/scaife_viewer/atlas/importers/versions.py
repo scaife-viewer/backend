@@ -298,9 +298,11 @@ def get_first_value_for_language(values, lang, fallback=True):
 def import_versions(reset=False):
     if reset:
         Node.objects.filter(kind="nid").delete()
-
+    # TODO: Wire up logging
+    print("Resolving library")
     library = hookset.resolve_library()
 
+    print("Importing nodes into ATLAS")
     importer_class = hookset.get_importer_class()
     nodes = {}
     for _, version_data in tqdm(library.versions.items()):
