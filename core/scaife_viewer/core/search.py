@@ -4,10 +4,9 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils.functional import SimpleLazyObject
 
+import regex
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan as scanner
-
-import regex
 
 from . import cts
 

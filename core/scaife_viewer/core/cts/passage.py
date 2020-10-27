@@ -5,12 +5,11 @@ from functools import lru_cache
 
 from django.conf import settings
 
+import anytree
+import regex
 from lxml import etree
 from MyCapytain.common.constants import Mimetypes
 from MyCapytain.common.reference import Reference
-
-import anytree
-import regex
 
 from .capitains import default_resolver
 from .reference import URN
