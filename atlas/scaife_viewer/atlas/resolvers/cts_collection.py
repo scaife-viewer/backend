@@ -49,7 +49,9 @@ class CTSCollectionResolver:
         texts_count = self.calculate_texts_count(text_groups)
         with tqdm(total=texts_count) as self.progress_bar:
             for text_group in text_groups:
-                text_group_metadata = hookset.extract_cts_text_group_metadata(text_group)
+                text_group_metadata = hookset.extract_cts_text_group_metadata(
+                    text_group
+                )
                 tg_urn = text_group_metadata.pop("urn")
                 self.text_groups[tg_urn] = text_group_metadata
                 self.resolve_works(text_group)
