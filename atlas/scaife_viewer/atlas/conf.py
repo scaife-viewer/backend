@@ -26,6 +26,7 @@ class ATLASAppConf(AppConf):
     # Data model
     DATA_DIR = None
     INGESTION_CONCURRENCY = None
+    # TODO: Review alphabet in light of SQLite case-sensitivity
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
     # Annotations
