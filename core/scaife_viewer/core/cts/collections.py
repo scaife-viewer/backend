@@ -1,5 +1,4 @@
 from functools import lru_cache, partial
-from operator import attrgetter
 
 from django.conf import settings
 
@@ -7,6 +6,7 @@ from MyCapytain.common.constants import RDF_NAMESPACES
 from MyCapytain.resources.collections.cts import XmlCtsTextInventoryMetadata
 from MyCapytain.resources.prototypes.cts import inventory as cts
 
+from ..hooks import hookset
 from .capitains import default_resolver
 from .passage import Passage
 from .reference import URN
@@ -41,11 +41,14 @@ class TextInventory:
         return f"<cts.TextInventory at {hex(id(self))}>"
 
     def text_groups(self):
-        for urn in sorted(self.metadata.textgroups.keys()):
+        text_group_urns = self.metadata.textgroups.keys()
+        text_groups = []
+        for urn in text_group_urns:
             text_group = TextGroup(urn, self.metadata.textgroups[urn])
             if next(text_group.works(), None) is None:
                 continue
-            yield text_group
+            text_groups.append(text_group)
+        yield from hookset.sort_text_groups(text_groups)
 
 
 class Collection:
@@ -84,11 +87,13 @@ class TextGroup(Collection):
 
     def works(self):
         children = self.metadata.works
-        for urn in sorted(children.keys()):
+        works = []
+        for urn in children.keys():
             work = Work(urn, children[urn])
             if next(work.texts(), None) is None:
                 continue
-            yield work
+            works.append(work)
+        yield from hookset.sort_works(works)
 
     def as_json(self, **kwargs) -> dict:
         return {
@@ -116,7 +121,7 @@ class Work(Collection):
             if metadata.citation is None:
                 continue
             texts.append(resolve_collection(metadata.TYPE_URI)(urn, metadata))
-        yield from sorted(texts, key=attrgetter("kind", "label"))
+        yield from hookset.sort_texts(texts)
 
     def as_json(self, **kwargs) -> dict:
         return {
