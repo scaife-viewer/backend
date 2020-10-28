@@ -13,6 +13,7 @@ from scaife_viewer.atlas import constants
 from ..hooks import hookset
 from ..models import Node
 from ..urn import URN
+from ..utils import get_lowest_citable_depth
 
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class CTSImporter:
         self.label = label
 
         self.citation_scheme = self.version_data["citation_scheme"]
+        self.lowest_citable_depth = get_lowest_citable_depth(self.citation_scheme)
         self.idx_lookup = defaultdict(int)
 
         self.nodes_to_create = []
@@ -75,15 +77,19 @@ class CTSImporter:
     def get_parent_urn(idx, branch_data):
         return branch_data[idx - 1]["urn"] if idx else None
 
-    def get_node_idx(self, kind):
-        idx = self.idx_lookup[kind]
-        self.idx_lookup[kind] += 1
+    def get_node_idx(self, node_data):
+        key = node_data["kind"]
+        rank = node_data.get("rank")
+        if rank:
+            key = f"{rank}_{key}"
+        idx = self.idx_lookup[key]
+        self.idx_lookup[key] += 1
         return idx
 
-    def get_partial_urn(self, kind, node_urn):
+    def get_partial_urn(self, workpart_kind, node_urn):
         scheme = self.get_root_urn_scheme(node_urn)
         kind_map = {kind: getattr(URN, kind.upper()) for kind in scheme}
-        return node_urn.up_to(kind_map[kind])
+        return node_urn.up_to(kind_map[workpart_kind])
 
     def get_root_urn_scheme(self, node_urn):
         if node_urn.has_exemplar:
@@ -176,20 +182,18 @@ class CTSImporter:
             return self.add_child_bulk(parent, node_data)
         return self.add_child(parent, node_data)
 
+    @staticmethod
+    def is_workpart(value):
+        # TODO: Support exemplars
+        return value <= constants.CTS_URN_DEPTHS["version"]
+
     def destructure_urn(self, node_urn, tokens, extract_text_parts=True):
         node_data = []
-        for kind in self.get_urn_scheme(node_urn):
+        for pos, kind in enumerate(self.get_urn_scheme(node_urn)):
+            depth = pos + 1
             data = {"kind": kind}
-
-            # TODO: Determine when we're dealing with a passage reference portion vs
-            # work part of the urn.
-            # May be done with parts of `get_urn_scheme`
-            # And maybe the "presence" / absence of tokens could help slightly too
-            # @@@ duplicate; we might need a cts_ prefix for work, for example
-            urn_is_work_part = (
-                kind not in self.citation_scheme or kind == "work" and not tokens
-            )
-            if urn_is_work_part:
+            is_workpart = self.is_workpart(depth)
+            if is_workpart:
                 data.update({"urn": self.get_partial_urn(kind, node_urn)})
                 if kind == "textgroup":
                     data.update({"metadata": self.get_text_group_metadata()})
@@ -207,7 +211,8 @@ class CTSImporter:
                 urn = f"{node_urn.up_to(node_urn.NO_PASSAGE)}{ref}"
                 rank = ref_index + 1
                 data.update({"urn": urn, "ref": ref, "rank": rank})
-                if kind == self.citation_scheme[-1]:
+
+                if depth == self.lowest_citable_depth:
                     data.update({"text_content": tokens})
                 if rank == 1:
                     # TODO: Additive metadata, other ranks
@@ -242,7 +247,7 @@ class CTSImporter:
         for idx, node_data in enumerate(branch_data):
             node = self.nodes.get(node_data["urn"])
             if node is None:
-                node_data.update({"idx": self.get_node_idx(node_data["kind"])})
+                node_data.update({"idx": self.get_node_idx(node_data)})
                 parent_urn = self.get_parent_urn(idx, branch_data)
                 node = self.generate_node(idx, node_data, parent_urn)
                 self.nodes[node_data["urn"]] = node
