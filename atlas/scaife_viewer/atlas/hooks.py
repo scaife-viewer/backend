@@ -65,7 +65,6 @@ class DefaultHookSet:
             urn=f"{ensure_trailing_colon(version.urn)}",
             version_kind=version.kind,
             # TODO: Other ways to expose this on `Library`
-            # TODO: Ensure we don't hit weird MRO stuff here
             textpart_metadata=textpart_metadata,
             first_passage_urn=first_passage_urn,
             citation_scheme=[c.name for c in version.metadata.citation],

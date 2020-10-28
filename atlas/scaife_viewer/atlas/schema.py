@@ -374,7 +374,6 @@ class VersionNode(AbstractTextPartNode):
 
 
 class TextPartNode(AbstractTextPartNode):
-    # TODO: Determine if this is used in TOW
     lowest_citable_part = String()
 
 

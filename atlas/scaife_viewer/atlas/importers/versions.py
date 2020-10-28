@@ -276,10 +276,11 @@ class CTSImporter:
             with open(full_content_path, "r") as f:
                 for line in f:
                     self.generate_branch(line)
-        # TODO: Better organize this conditional
         elif self.textpart_metadata:
+            # NOTE: This allows SV 1 readers to ingest text parts
+            # without needing to also ingest text_content or tokens
             for urn in self.textpart_metadata.keys():
-                # TODO: Revisit URN utility here
+                # TODO: Using the proper URN class here
                 _, ref = urn.rsplit(":", maxsplit=1)
                 self.generate_branch(ref, extract_text_parts=False)
         else:
