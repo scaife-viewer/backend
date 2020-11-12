@@ -192,6 +192,14 @@ class Indexer:
         short_key = morphology.short_keys.get(str(passage.text.urn))
         if short_key is None:
             return ""
+
+        token_limit = 50000
+        limit_exceeded = len(tokens) > token_limit
+        if limit_exceeded:
+            print(
+                f"more than {token_limit} tokens detected [urn={passage.urn}] [count={len(tokens)}]"
+            )
+
         thibault = [token["w"] for token in tokens]
         giuseppe = []
         text = morphology.text.get((short_key, str(passage.reference)))
@@ -202,9 +210,13 @@ class Indexer:
             form = morphology.forms[int(form_key) - 1]
             giuseppe.append((form.form, form.lemma))
         missing = chr(0xFFFD)
-        return " ".join(
+        content = " ".join(
             [{None: missing}.get(w, w) for w in align_text(thibault, giuseppe)]
         )
+        if limit_exceeded:
+            print(f"lemma content generated [urn={passage.urn}]")
+
+        return content
 
     def passage_to_doc(self, passage, sort_idx, tokens, word_stats, lemma_content):
         urn = str(passage.urn)
