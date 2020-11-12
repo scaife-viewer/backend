@@ -161,7 +161,7 @@ class Indexer:
             leaves = PreOrderIter(toc.root, filter_=attrgetter("is_leaf"))
             for i, node in enumerate(leaves):
                 passages.append(
-                    SortedPassage(urn=f"{text.urn}:{node.reference}", sort_idx=i)
+                    SortedPassage(urn=f"{text.urn}:{node.reference}", sort_idx=i,)
                 )
         return passages
 
