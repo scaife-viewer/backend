@@ -1,3 +1,4 @@
+import hashlib
 import json
 import multiprocessing
 import os
@@ -7,11 +8,14 @@ from operator import attrgetter
 from typing import Iterable, List, NamedTuple
 
 from django.conf import settings
+from django.utils.functional import SimpleLazyObject
 
 import dask.bag
 import elasticsearch
 import elasticsearch.helpers
 from anytree.iterators import PreOrderIter
+
+from redis import BlockingConnectionPool, Redis
 
 from . import cts
 from .morphology import Morphology
@@ -23,6 +27,15 @@ DASK_CONFIG_NUM_WORKERS = int(
     os.environ.get("DASK_CONFIG_NUM_WORKERS", multiprocessing.cpu_count() - 1)
 )
 LEMMA_CONTENT = bool(int(os.environ.get("LEMMA_CONTENT", 0)))
+RAW_CONTENT = bool(int(os.environ.get("RAW_CONTENT", 0)))
+INDEXER_KV_STORE_URL = os.environ.get("INDEXER_KV_STORE_URL", "redis://localhost")
+
+
+def get_redis_pool():
+    return BlockingConnectionPool(max_connections=256).from_url(INDEXER_KV_STORE_URL)
+
+
+redis_pool = SimpleLazyObject(get_redis_pool)
 
 
 def compute_kwargs(**params):
@@ -239,13 +252,55 @@ class Indexer:
 
         return content
 
+    def generate_passage_sha(self, passage):
+        summer = hashlib.md5()
+        summer.update(passage.content.encode("utf-8"))
+        return summer.hexdigest()
+
+    def retrieve_lemma_content_from_kv_store(self, passage):
+        client = Redis(connection_pool=redis_pool)
+        key = f"value:{self.generate_passage_sha(passage)}"
+        response = client.get(key)
+        if response:
+            return response.decode("utf-8")
+
+    def push_lemma_content_to_kv_store(self, passage, lemma_content, urn=None):
+        if urn is None:
+            urn = str(passage.urn)
+
+        passage_sha = self.generate_passage_sha(passage)
+        client = Redis(connection_pool=redis_pool)
+        pipe = client.pipeline()
+        lemma_prefix = "lemmas"
+        lemma_sha_key = f"{lemma_prefix}:{urn}"
+        pipe.set(lemma_sha_key, passage_sha)
+        pipe.set(f"{lemma_prefix}:urn:{passage_sha}", urn)
+        pipe.set(f"{lemma_prefix}:value:{passage_sha}", lemma_content)
+        pipe.execute()
+
+    def push_content_to_kv_store(self, passage, content, urn=None):
+        if urn is None:
+            urn = str(passage.urn)
+
+        client = Redis(connection_pool=redis_pool)
+        client.set(urn, content)
+
+    def get_lemma_content(self, passage, tokens):
+        data = self.retrieve_lemma_content_from_kv_store(passage)
+        if data is None:
+            data = self.lemma_content(passage, tokens)
+            self.push_lemma_content_to_kv_store(passage, data)
+        return data
+
     def passage_to_doc(self, passage, sort_idx, tokens, word_stats, lemma_content):
         urn = str(passage.urn)
         language, word_count = word_stats
         if lemma_content:
-            lc = self.lemma_content(passage, tokens)
+            lc = self.get_lemma_content(passage, tokens)
             return {"urn": urn, "lemma_content": lc}
         else:
+            if RAW_CONTENT:
+                self.push_content_to_kv_store(passage, passage.content)
             return {
                 "urn": urn,
                 "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
