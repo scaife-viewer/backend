@@ -125,6 +125,7 @@ class Indexer:
         from raven.contrib.django.raven_compat.models import client as sentry
 
         words = []
+        result = None
         for p in chunk:
             urn = p.urn
             try:
@@ -146,7 +147,10 @@ class Indexer:
                 sentry.captureException()
                 raise
             if not self.dry_run:
-                self.pusher.push(doc)
+                result = self.pusher.push(doc)
+
+        self.pusher.finalize(result, self.dry_run)
+
         return words
 
     def count_words(self, tokens) -> int:
@@ -236,6 +240,15 @@ class DirectPusher:
         elasticsearch.helpers.bulk(self.es, docs)
         self.docs.clear()
 
+    def finalize(self, result, dry_run):
+        if dry_run:
+            return
+
+        # we need to ensure the deque is cleared if less than
+        # `chunk_size`
+        self.commit_docs()
+        print("Committing documents to ElasticSearch")
+
     def __getstate__(self):
         s = self.__dict__.copy()
         if "_es" in s:
@@ -260,7 +273,22 @@ class PubSubPusher:
         return self._publisher
 
     def push(self, doc):
-        self.publisher.publish(self.topic_path, json.dumps(doc).encode("utf-8"))
+        """
+        Returns a Future
+
+        https://github.com/googleapis/google-cloud-python/blob/master/pubsub/docs/publisher/index.rst#futures
+        """
+        return self.publisher.publish(self.topic_path, json.dumps(doc).encode("utf-8"))
+
+    def finalize(self, future, dry_run):
+        if dry_run:
+            return
+
+        if future and not future.done():
+            print("Publishing messages to PubSub")
+            # Block until the last message has been published
+            # https://github.com/googleapis/google-cloud-python/blob/69ec9fea1026c00642ca55ca18110b7ef5a09675/pubsub/docs/publisher/index.rst#futures
+            future.result()
 
     def __getstate__(self):
         s = self.__dict__.copy()
