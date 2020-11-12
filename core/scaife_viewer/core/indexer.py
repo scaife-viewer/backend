@@ -13,6 +13,7 @@ from anytree.iterators import PreOrderIter
 
 from . import cts
 from .morphology import Morphology
+from .search import default_es_client_config
 
 
 morphology = None
@@ -216,11 +217,7 @@ class DirectPusher:
     @property
     def es(self):
         if not hasattr(self, "_es"):
-            self._es = elasticsearch.Elasticsearch(
-                hosts=settings.ELASTICSEARCH_HOSTS,
-                sniff_on_start=settings.ELASTICSEARCH_SNIFF_ON_START,
-                sniff_on_connection_fail=settings.ELASTICSEARCH_SNIFF_ON_CONNECTION_FAIL,
-            )
+            self._es = elasticsearch.Elasticsearch(**default_es_client_config())
         return self._es
 
     @property
