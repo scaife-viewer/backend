@@ -18,7 +18,7 @@ setup(
     author_email="jtauber+scaife@jtauber.com",
     description="Scaife Viewer Backend :: Core Functionality",
     name="scaife-viewer-core",
-    version="0.1-a3",
+    version="0.1-a4",
     url="https://github.com/scaife-viewer/backend/",
     license="MIT",
     packages=find_packages(),
