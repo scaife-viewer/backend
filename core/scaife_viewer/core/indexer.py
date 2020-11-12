@@ -258,6 +258,7 @@ class Indexer:
                 "reference": str(passage.reference),
                 "sort_idx": sort_idx,
                 "content": " ".join([token["w"] for token in tokens]),
+                "raw_content": passage.content,
                 "language": language,
                 "word_count": word_count,
             }
