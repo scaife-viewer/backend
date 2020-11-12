@@ -17,3 +17,11 @@ the trailing colon will be stripped from URNs.
 Default: `"scaife_viewer.core.hooks.DefaultHookSet"`
 
 The path to a hookset that can be used to customize package functionality.
+
+
+### USE_CLOUD_INDEXER
+
+Default: `False`
+
+When `True`, sets GCE-specific metadata for the search index management
+command
