@@ -153,8 +153,11 @@ class Indexer:
             try:
                 # tokenized once and passed around as an optimization
                 tokens = passage.tokenize(whitespace=False)
-                words.append((str(passage.text.lang), self.count_words(tokens)))
-                doc = self.passage_to_doc(passage, p.sort_idx, tokens)
+                stats = (str(passage.text.lang), self.count_words(tokens))
+                words.append(stats)
+                doc = self.passage_to_doc(
+                    passage, p.sort_idx, tokens, stats
+                )
             except MemoryError:
                 return words
             except Exception:
@@ -194,7 +197,8 @@ class Indexer:
             [{None: missing}.get(w, w) for w in align_text(thibault, giuseppe)]
         )
 
-    def passage_to_doc(self, passage, sort_idx, tokens):
+    def passage_to_doc(self, passage, sort_idx, tokens, word_stats):
+        language, word_count = word_stats
         return {
             "urn": str(passage.urn),
             "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
@@ -208,6 +212,8 @@ class Indexer:
             "sort_idx": sort_idx,
             "lemma_content": self.lemma_content(passage, tokens),
             "content": " ".join([token["w"] for token in tokens]),
+            "language": language,
+            "word_count": word_count,
         }
 
 
