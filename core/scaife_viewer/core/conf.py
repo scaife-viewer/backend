@@ -28,6 +28,9 @@ class CoreAppConf(AppConf):
     # Other
     HOOKSET = "scaife_viewer.core.hooks.DefaultHookSet"
 
+    # Search Indexing
+    USE_CLOUD_INDEXER = False
+
     class Meta:
         prefix = "scaife_viewer_core"
 
