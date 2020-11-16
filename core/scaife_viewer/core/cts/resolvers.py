@@ -1,5 +1,7 @@
 import glob
+import json
 import os
+from collections import defaultdict
 from functools import lru_cache
 
 from MyCapytain.common.reference import URN
@@ -79,9 +81,20 @@ class LocalResolver(CtsCapitainsLocalResolver):
             self.logger.warning(f"{metadata.path} caused an error: {e}")
         return metadata
 
+    def extract_sv_metadata(self, folder):
+        metadata_path = os.path.join(folder, ".scaife-viewer.json")
+        try:
+            return json.load(open(metadata_path))
+        except FileNotFoundError:
+            return {}
+
     def parse(self, resource):
         to_remove = []
+        repo_urn_lookup = defaultdict()
         for folder in resource:
+            repo_metadata = self.extract_sv_metadata(folder)
+            repo_metadata["texts"] = []
+
             text_group_paths = glob.glob(f"{folder}/data/*/__cts__.xml")
             for text_group_path in text_group_paths:
                 try:
@@ -96,13 +109,21 @@ class LocalResolver(CtsCapitainsLocalResolver):
                             self.process_text(
                                 text_urn, os.path.dirname(work_path), to_remove
                             )
+                            repo_metadata["texts"].append(text_urn)
                 except UndispatchedTextError as e:
                     self.logger.warning(f"Error dispatching {text_group_path}: {e}")
                     if self.RAISE_ON_UNDISPATCHED:
                         raise
                 except Exception as e:
                     self.logger.warning(f"Error while handling {text_group_path}: {e}")
+
+            if repo_metadata.get("repo"):
+                repo_urn_lookup[repo_metadata["repo"]] = repo_metadata
+
         self.clean_inventory(to_remove)
+
+        corpus_metadata = list(repo_urn_lookup.values())
+        self.write_corpus_metadata(corpus_metadata)
 
     def clean_inventory(self, to_remove):
         for metadata in self.inventory.descendants:
@@ -122,3 +143,11 @@ class LocalResolver(CtsCapitainsLocalResolver):
         metadata = self.inventory[str(urn)]
         text = self.load_text(metadata.path)
         return text, metadata
+
+    def write_corpus_metadata(self, data):
+        from django.conf import settings
+
+        corpus_metadata_path = os.path.join(
+            settings.CTS_LOCAL_DATA_PATH, ".scaife-viewer.json"
+        )
+        json.dump(data, open(corpus_metadata_path, "w"), indent=2)
