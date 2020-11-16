@@ -57,3 +57,7 @@ class Command(BaseCommand):
 
         self.stdout.write("--[Populating ATLAS db]--")
         importers.versions.import_versions()
+
+        # TODO: make this pipeline more configurable
+        self.stdout.write("--[Applying repo metadata]--")
+        importers.repo_metadata.import_repo_metadata(reset=True)
