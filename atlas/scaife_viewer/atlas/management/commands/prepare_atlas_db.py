@@ -1,11 +1,13 @@
 import os
 import shutil
+from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from scaife_viewer.atlas.conf import settings
+from scaife_viewer.atlas.data_model import VERSION
 
 from ... import importers
 
@@ -24,13 +26,7 @@ class Command(BaseCommand):
             help="Forces the ATLAS management command to run",
         )
 
-    def handle(self, *args, **options):
-        database_path = settings.SV_ATLAS_DB_PATH
-
-        if database_path is None:
-            msg = "The SV_ATLAS_DB_PATH setting is missing and is required for this management command to work."
-            raise ImproperlyConfigured(msg)
-
+    def do_db_prep(self, database_path, *args, **options):
         db_path_exists = os.path.exists(database_path)
 
         reset_data = options.get("force") or not db_path_exists
@@ -54,6 +50,32 @@ class Command(BaseCommand):
             if os.path.exists(resolver_path):
                 shutil.rmtree(resolver_path)
                 self.stdout.write("--[Removed existing CTS resolver cache]--")
-
         self.stdout.write("--[Populating ATLAS db]--")
         importers.versions.import_versions()
+
+    def handle(self, *args, **options):
+        database_path = settings.SV_ATLAS_DB_PATH
+
+        if database_path is None:
+            msg = "The SV_ATLAS_DB_PATH setting is missing and is required for this management command to work."
+            raise ImproperlyConfigured(msg)
+
+        workfile = os.path.join(Path(database_path).parent, f"atlas-{VERSION}-workfile")
+        if not options.get("force") and os.path.exists(workfile):
+            # we assume that another instance of the command is already running
+            raise CommandError(f"ATLAS workfile exists: {workfile}")
+
+        # open / create the workfile
+        open(workfile, "w")
+        try:
+            self.do_db_prep(database_path, *args, **options)
+        except Exception as e:
+            # if we encounter an exception, we should not keep
+            # the ATLAS database around
+            if os.path.exists(database_path):
+                self.stderr.write(f"Removing {os.path.basename(database_path)}")
+                os.unlink(database_path)
+            raise e
+        finally:
+            if os.path.exists(workfile):
+                os.unlink(workfile)
