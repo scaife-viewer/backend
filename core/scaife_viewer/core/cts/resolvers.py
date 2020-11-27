@@ -7,7 +7,11 @@ from functools import lru_cache
 from django.core.cache import caches
 
 from MyCapytain.common.reference import URN
-from MyCapytain.errors import InvalidURN, UndispatchedTextError
+from MyCapytain.errors import (
+    InvalidURN,
+    UndispatchedTextError,
+    UnknownCollection,
+)
 from MyCapytain.resolvers.cts.local import CtsCapitainsLocalResolver
 from MyCapytain.resources.collections.cts import (
     XmlCtsCitation,
@@ -20,12 +24,23 @@ cache = caches["cts_resolver"]
 
 
 class LocalResolver(CtsCapitainsLocalResolver):
+    RAISE_ON_UNKNOWN_COLLECTION = False
+
     def process_text_group(self, path):
         with open(path) as f:
             metadata = XmlCtsTextgroupMetadata.parse(resource=f)
         urn = str(metadata.urn)
-        if urn in self.inventory:
-            self.inventory[urn].update(metadata)
+        if urn in self.inventory["default"].textgroups:
+            try:
+                self.inventory[urn].update(metadata)
+            except UnknownCollection as e:
+                if self.RAISE_ON_UNKNOWN_COLLECTION:
+                    raise e
+                self.logger.warning(f"Unknown text group: {e}")
+                try:
+                    self.dispatcher.dispatch(metadata, path=path)
+                except Exception:
+                    pass
         else:
             self.dispatcher.dispatch(metadata, path=path)
         return metadata
@@ -33,12 +48,15 @@ class LocalResolver(CtsCapitainsLocalResolver):
     def process_work(self, text_group_metadata, path):
         text_group_urn = str(text_group_metadata.urn)
         with open(path) as f:
-            metadata = XmlCtsWorkMetadata.parse(
-                resource=f, parent=self.inventory[text_group_urn]
-            )
+            metadata = XmlCtsWorkMetadata.parse(resource=f, parent=text_group_metadata,)
         work_urn = str(metadata.urn)
-        if work_urn in self.inventory[text_group_urn].works:
-            self.inventory[work_urn].update(metadata)
+        if work_urn in text_group_metadata.works:
+            try:
+                self.inventory[work_urn].update(metadata)
+            except UnknownCollection as e:
+                if self.RAISE_ON_UNKNOWN_COLLECTION:
+                    raise e
+                self.logger.warning(f"Unknown work: {e}")
         return metadata
 
     @lru_cache()
@@ -50,7 +68,15 @@ class LocalResolver(CtsCapitainsLocalResolver):
     def process_text(self, urn, base_path, to_remove=None):
         if to_remove is None:
             to_remove = []
-        metadata = self.inventory[urn]
+        try:
+            metadata = self.inventory[urn]
+        except UnknownCollection as e:
+            if self.RAISE_ON_UNKNOWN_COLLECTION:
+                raise e
+            self.logger.warning(f"Unknown text: {e}")
+            # NOTE: Don't try and continue processing the text
+            return
+
         metadata.path = os.path.join(
             base_path,
             "{text_group}.{work}.{version}.xml".format(
@@ -73,17 +99,16 @@ class LocalResolver(CtsCapitainsLocalResolver):
                 cites.append(XmlCtsCitation(**ckwargs))
             metadata.citation = cites[-1]
             self.logger.info(f"{metadata.path} has been parsed")
-            if metadata.citation.is_set():
-                self.texts.append(metadata)
-            else:
+            if not metadata.citation.is_set():
                 to_remove.append(urn)
                 self.logger.warning(f"{metadata.path} has no passages")
         except FileNotFoundError:
             to_remove.append(urn)
             self.logger.warning(f"{metadata.path} does not exist")
         except Exception as e:
+            # FIXME: Improve exception handling
             to_remove.append(urn)
-            self.logger.warning(f"{metadata.path} caused an error: {e}")
+            self.logger.warning(f"Unable to parse {metadata.path}: {e}")
         return metadata
 
     def extract_sv_metadata(self, folder):
@@ -106,11 +131,11 @@ class LocalResolver(CtsCapitainsLocalResolver):
             repo_metadata = self.extract_sv_metadata(folder)
             repo_metadata["texts"] = []
 
-            text_group_paths = glob.glob(f"{folder}/data/*/__cts__.xml")
+            text_group_paths = glob.iglob(f"{folder}/data/*/__cts__.xml")
             for text_group_path in text_group_paths:
                 try:
                     text_group_metadata = self.process_text_group(text_group_path)
-                    for work_path in glob.glob(
+                    for work_path in glob.iglob(
                         f"{os.path.dirname(text_group_path)}/*/__cts__.xml"
                     ):
                         work_metadata = self.process_work(
@@ -131,8 +156,10 @@ class LocalResolver(CtsCapitainsLocalResolver):
             if repo_metadata.get("repo"):
                 repo_urn_lookup[repo_metadata["repo"]] = repo_metadata
 
-        self.clean_inventory(to_remove)
+        # TODO: pass by reference or not
+        to_remove = self.clean_inventory(to_remove)
 
+        # TODO: remove metadata entries that are not in inventory
         corpus_metadata = list(repo_urn_lookup.values())
         self.write_corpus_metadata(corpus_metadata)
 
@@ -142,12 +169,30 @@ class LocalResolver(CtsCapitainsLocalResolver):
         return self.parse_from_cache(resource)
 
     def clean_inventory(self, to_remove):
-        for metadata in self.inventory.descendants:
-            if not metadata.readable and not metadata.readableDescendants:
-                to_remove.append(metadata.urn)
+        textgroups = self.inventory["default"].textgroups
+        for tg_urn, text_group in textgroups.items():
+            text_group_readable = False
+            for work_urn, work in text_group.works.items():
+                work_readable = False
+                for text_urn, text in work.texts.items():
+                    if text.readable:
+                        work_readable = True
+                    else:
+                        to_remove.append(text_urn)
+                if work_readable:
+                    text_group_readable = True
+                else:
+                    to_remove.append(work_urn)
+            if not text_group_readable:
+                to_remove.append(tg_urn)
         for urn in to_remove:
-            if urn in self.inventory:
+            try:
                 del self.inventory[urn]
+            except UnknownCollection:
+                pass
+            else:
+                self.logger.warning(f"Removed urn: {urn}")
+        return to_remove
 
     def __getText__(self, urn):
         if not isinstance(urn, URN):
