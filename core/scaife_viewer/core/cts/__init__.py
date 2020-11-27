@@ -32,10 +32,6 @@ def collection(urn: str) -> Collection:
     return resolve_collection(metadata.TYPE_URI)(URN(urn), metadata)
 
 
-def _has_subreference(reference):
-    return reference.parsed[0][2] is not None
-
-
 def _passage_urn_objs(urn: str):
     try:
         urn = URN(urn)
@@ -44,9 +40,7 @@ def _passage_urn_objs(urn: str):
     if urn.reference is None:
         raise InvalidPassageReference("URN must contain a reference")
     reference = urn.reference
-    if _has_subreference(reference.start) or (
-        reference.end and _has_subreference(reference.end)
-    ):
+    if reference.start.subreference or (reference.end and reference.end.subreference):
         raise InvalidPassageReference(
             "URN must not contain a start or end subreference"
         )

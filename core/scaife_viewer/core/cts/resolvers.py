@@ -39,7 +39,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
     @lru_cache()
     def load_text(self, path):
         with open(path) as f:
-            text = self.TEXT_CLASS(resource=self.xmlparse(f))
+            text = self.CLASSES["text"](resource=self.xmlparse(f))
         return text
 
     def process_text(self, urn, base_path, to_remove=None):
@@ -68,7 +68,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
                 cites.append(XmlCtsCitation(**ckwargs))
             metadata.citation = cites[-1]
             self.logger.info(f"{metadata.path} has been parsed")
-            if not metadata.citation.isEmpty():
+            if metadata.citation.is_set():
                 self.texts.append(metadata)
             else:
                 to_remove.append(urn)
