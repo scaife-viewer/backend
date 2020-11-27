@@ -156,11 +156,11 @@ class LocalResolver(CtsCapitainsLocalResolver):
             if repo_metadata.get("repo"):
                 repo_urn_lookup[repo_metadata["repo"]] = repo_metadata
 
-        # TODO: pass by reference or not
         to_remove = self.clean_inventory(to_remove)
 
-        # TODO: remove metadata entries that are not in inventory
-        corpus_metadata = list(repo_urn_lookup.values())
+        corpus_metadata = self.clean_corpus_metadata(
+            repo_urn_lookup.values(), to_remove
+        )
         self.write_corpus_metadata(corpus_metadata)
 
         cache.set("ti", self.inventory, None)
@@ -193,6 +193,19 @@ class LocalResolver(CtsCapitainsLocalResolver):
             else:
                 self.logger.warning(f"Removed urn: {urn}")
         return to_remove
+
+    def clean_corpus_metadata(self, entries, to_remove):
+        to_remove_set = set(to_remove)
+        cleaned = []
+        for entry in entries:
+            valid_texts = []
+            for text in entry["texts"]:
+                if text in to_remove_set:
+                    continue
+                valid_texts.append(text)
+            entry["texts"] = valid_texts
+            cleaned.append(entry)
+        return cleaned
 
     def __getText__(self, urn):
         if not isinstance(urn, URN):
