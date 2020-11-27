@@ -4,6 +4,8 @@ import os
 from collections import defaultdict
 from functools import lru_cache
 
+from django.core.cache import caches
+
 from MyCapytain.common.reference import URN
 from MyCapytain.errors import InvalidURN, UndispatchedTextError
 from MyCapytain.resolvers.cts.local import CtsCapitainsLocalResolver
@@ -12,6 +14,9 @@ from MyCapytain.resources.collections.cts import (
     XmlCtsTextgroupMetadata,
     XmlCtsWorkMetadata,
 )
+
+
+cache = caches["cts_resolver"]
 
 
 class LocalResolver(CtsCapitainsLocalResolver):
@@ -88,7 +93,13 @@ class LocalResolver(CtsCapitainsLocalResolver):
         except FileNotFoundError:
             return {}
 
-    def parse(self, resource):
+    def parse_from_cache(self, resource):
+        """
+        Get or set CTS inventory from a cache.
+        """
+        if cache.get("ti"):
+            self.inventory = cache.get("ti")
+            return
         to_remove = []
         repo_urn_lookup = defaultdict()
         for folder in resource:
@@ -124,6 +135,11 @@ class LocalResolver(CtsCapitainsLocalResolver):
 
         corpus_metadata = list(repo_urn_lookup.values())
         self.write_corpus_metadata(corpus_metadata)
+
+        cache.set("ti", self.inventory, None)
+
+    def parse(self, resource):
+        return self.parse_from_cache(resource)
 
     def clean_inventory(self, to_remove):
         for metadata in self.inventory.descendants:
