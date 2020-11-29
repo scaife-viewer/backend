@@ -18,6 +18,12 @@ Default: `"scaife_viewer.core.hooks.DefaultHookSet"`
 
 The path to a hookset that can be used to customize package functionality.
 
+**RESOLVER_CACHE_LABEL**
+
+Default: `"cts-resolver"`
+
+The label to use for the cache backend that holds cached resolver data
+
 
 ### USE_CLOUD_INDEXER
 
