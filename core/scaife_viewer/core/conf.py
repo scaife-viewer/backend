@@ -31,6 +31,9 @@ class CoreAppConf(AppConf):
     # Search Indexing
     USE_CLOUD_INDEXER = False
 
+    # Resolver cache settings
+    RESOLVER_CACHE_LABEL = "cts-resolver"
+
     class Meta:
         prefix = "scaife_viewer_core"
 

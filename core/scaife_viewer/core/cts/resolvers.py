@@ -19,8 +19,10 @@ from MyCapytain.resources.collections.cts import (
     XmlCtsWorkMetadata,
 )
 
+from scaife_viewer.core.conf import settings
 
-cache = caches["cts_resolver"]
+
+cache = caches[settings.SCAIFE_VIEWER_CORE_RESOLVER_CACHE_LABEL]
 
 
 class LocalResolver(CtsCapitainsLocalResolver):
