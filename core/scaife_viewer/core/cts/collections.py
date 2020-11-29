@@ -173,7 +173,7 @@ class Text(Collection):
     @lru_cache()
     def toc(self):
         citation = self.metadata.citation
-        depth = len(citation)
+        depth = citation.depth
         tree = RefTree(self.urn, citation)
         try:
             reffs = default_resolver().getReffs(self.urn, level=depth)
