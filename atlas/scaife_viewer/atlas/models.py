@@ -402,6 +402,20 @@ class Node(MP_Node):
             return Node.objects.none()
         return version.get_descendants().filter(rank=self.rank)
 
+    def get_descendants(self):
+        # NOTE: This overrides `get_descendants` to avoid checking
+        # `self.is_leaf`; current bulk ingestion into ATLAS
+        # does not populate numchild.
+        # TODO: populate numchild and remove override
+        parent = self
+        return (
+            self.__class__.objects.filter(
+                path__startswith=parent.path, depth__gte=parent.depth
+            )
+            .order_by("path")
+            .exclude(pk=parent.pk)
+        )
+
 
 class Token(models.Model):
     text_part = models.ForeignKey(
