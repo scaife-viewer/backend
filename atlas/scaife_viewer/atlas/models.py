@@ -416,6 +416,17 @@ class Node(MP_Node):
             .exclude(pk=parent.pk)
         )
 
+    def get_children(self):
+        # NOTE: This overrides `get_children` to avoid checking
+        # `self.is_leaf`; current bulk ingestion into ATLAS
+        # does not populate numchild.
+        # TODO: populate numchild and remove override
+
+        return self.__class__.objects.filter(
+            depth=self.depth + 1,
+            path__range=self._get_children_path_interval(self.path),
+        ).order_by("path")
+
 
 class Token(models.Model):
     text_part = models.ForeignKey(
