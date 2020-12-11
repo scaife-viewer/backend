@@ -536,3 +536,52 @@ class NamedEntity(models.Model):
 
     def __str__(self):
         return f"{self.urn} :: {self.title }"
+
+
+class Dictionary(models.Model):
+    """
+    A dictionary model.
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:dictionaries.atlas_v1"
+    )
+
+    def __str__(self):
+        return self.label
+
+
+class DictionaryEntry(models.Model):
+    headword = models.CharField(max_length=255)
+
+    idx = models.IntegerField(help_text="0-based index")
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:entries.atlas_v1"
+    )
+
+    dictionary = models.ForeignKey(
+        "scaife_viewer_atlas.Dictionary",
+        related_name="entries",
+        on_delete=models.CASCADE,
+    )
+
+
+class Sense(MP_Node):
+    label = models.CharField(blank=True, null=True, max_length=255)
+    definition = models.CharField(blank=True, null=True, max_length=255)
+
+    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:senses.atlas_v1"
+    )
+
+    entry = models.ForeignKey(
+        "scaife_viewer_atlas.DictionaryEntry",
+        related_name="senses",
+        on_delete=models.CASCADE,
+    )
+    citations = SortedManyToManyField("scaife_viewer_atlas.Node", related_name="senses")
