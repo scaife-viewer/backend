@@ -693,13 +693,27 @@ class DictionaryEntryNode(DjangoObjectType):
         filter_fields = ["urn"]
 
 
+class SenseFilterSet(django_filters.FilterSet):
+    class Meta:
+        model = Sense
+        fields = {
+            "urn": ["exact", "startswith"],
+            "entry": ["exact"],
+            "entry__urn": ["exact"],
+            "depth": ["exact", "gt", "lt", "gte", "lte"],
+            "path": ["exact", "startswith"],
+        }
+
+
 class SenseNode(DjangoObjectType):
     citations = LimitedConnectionField(TextPartNode)
+    # TODO: Implement subsenses or descendants either as a top-level
+    # field or combining path, depth and URN filters
 
     class Meta:
         model = Sense
         interfaces = (relay.Node,)
-        filter_fields = ["urn"]
+        filterset_class = SenseFilterSet
 
 
 class Query(ObjectType):
