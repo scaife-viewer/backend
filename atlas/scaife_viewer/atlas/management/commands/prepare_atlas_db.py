@@ -25,6 +25,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Forces the ATLAS management command to run",
         )
+        parser.add_argument(
+            "--keep-resolver-cache",
+            action="store_true",
+            help="Keeps CTS resolver cache in place",
+        )
 
     def do_db_prep(self, database_path, *args, **options):
         db_path_exists = os.path.exists(database_path)
@@ -45,7 +50,9 @@ class Command(BaseCommand):
         self.stdout.write(f'--[Running database migrations on "{db_label}"]--')
         call_command("migrate", database=db_label)
 
-        if hasattr(settings, "CTS_RESOLVER_CACHE_LOCATION"):
+        if hasattr(settings, "CTS_RESOLVER_CACHE_LOCATION") and not options.get(
+            "keep_resolver_cache"
+        ):
             resolver_path = settings.CTS_RESOLVER_CACHE_LOCATION
             if os.path.exists(resolver_path):
                 shutil.rmtree(resolver_path)
