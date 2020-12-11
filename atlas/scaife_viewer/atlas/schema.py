@@ -17,10 +17,13 @@ from .models import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
     AudioAnnotation,
+    Dictionary,
+    DictionaryEntry,
     ImageAnnotation,
     MetricalAnnotation,
     NamedEntity,
     Node,
+    Sense,
     TextAlignment,
     TextAlignmentRecord,
     TextAlignmentRecordRelation,
@@ -676,6 +679,29 @@ class NamedEntityNode(DjangoObjectType):
         filterset_class = NamedEntityFilterSet
 
 
+class DictionaryNode(DjangoObjectType):
+    class Meta:
+        model = Dictionary
+        interfaces = (relay.Node,)
+        filter_fields = ["urn"]
+
+
+class DictionaryEntryNode(DjangoObjectType):
+    class Meta:
+        model = DictionaryEntry
+        interfaces = (relay.Node,)
+        filter_fields = ["urn"]
+
+
+class SenseNode(DjangoObjectType):
+    citations = LimitedConnectionField(TextPartNode)
+
+    class Meta:
+        model = Sense
+        interfaces = (relay.Node,)
+        filter_fields = ["urn"]
+
+
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
     text_groups = LimitedConnectionField(TextGroupNode)
@@ -726,6 +752,15 @@ class Query(ObjectType):
 
     named_entity = relay.Node.Field(NamedEntityNode)
     named_entities = LimitedConnectionField(NamedEntityNode)
+
+    dictionary = relay.Node.Field(DictionaryNode)
+    dictionaries = LimitedConnectionField(DictionaryNode)
+
+    dictionary_entry = relay.Node.Field(DictionaryEntryNode)
+    dictionary_entries = LimitedConnectionField(DictionaryEntryNode)
+
+    sense = relay.Node.Field(SenseNode)
+    senses = LimitedConnectionField(SenseNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
