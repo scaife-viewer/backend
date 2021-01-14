@@ -17,6 +17,7 @@ from .models import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
     AudioAnnotation,
+    Citation,
     Dictionary,
     DictionaryEntry,
     ImageAnnotation,
@@ -687,6 +688,8 @@ class DictionaryNode(DjangoObjectType):
 
 
 class DictionaryEntryNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
     class Meta:
         model = DictionaryEntry
         interfaces = (relay.Node,)
@@ -706,7 +709,6 @@ class SenseFilterSet(django_filters.FilterSet):
 
 
 class SenseNode(DjangoObjectType):
-    citations = LimitedConnectionField(TextPartNode)
     # TODO: Implement subsenses or descendants either as a top-level
     # field or combining path, depth and URN filters
 
@@ -714,6 +716,16 @@ class SenseNode(DjangoObjectType):
         model = Sense
         interfaces = (relay.Node,)
         filterset_class = SenseFilterSet
+
+
+class CitationNode(DjangoObjectType):
+    text_parts = LimitedConnectionField(TextPartNode)
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = Citation
+        interfaces = (relay.Node,)
+        filter_fields = ["text_parts__urn"]
 
 
 class Query(ObjectType):
@@ -775,6 +787,9 @@ class Query(ObjectType):
 
     sense = relay.Node.Field(SenseNode)
     senses = LimitedConnectionField(SenseNode)
+
+    citation = relay.Node.Field(CitationNode)
+    citations = LimitedConnectionField(CitationNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(

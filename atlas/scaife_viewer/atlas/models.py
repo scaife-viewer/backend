@@ -544,6 +544,7 @@ class Dictionary(models.Model):
     """
 
     label = models.CharField(blank=True, null=True, max_length=255)
+    data = JSONField(default=dict, blank=True)
 
     urn = models.CharField(
         max_length=255, unique=True, help_text="urn:cite2:<site>:dictionaries.atlas_v1"
@@ -555,6 +556,7 @@ class Dictionary(models.Model):
 
 class DictionaryEntry(models.Model):
     headword = models.CharField(max_length=255)
+    data = JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index")
     urn = models.CharField(
@@ -584,4 +586,19 @@ class Sense(MP_Node):
         related_name="senses",
         on_delete=models.CASCADE,
     )
-    citations = SortedManyToManyField("scaife_viewer_atlas.Node", related_name="senses")
+
+
+class Citation(models.Model):
+    label = models.CharField(blank=True, null=True, max_length=255)
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:citations.atlas_v1"
+    )
+    sense = models.ForeignKey(
+        "scaife_viewer_atlas.Sense", related_name="citations", on_delete=models.CASCADE,
+    )
+    data = JSONField(default=dict, blank=True)
+    # TODO: There may be additional optimizations we can do on the text part / citation relation
+    text_parts = SortedManyToManyField(
+        "scaife_viewer_atlas.Node", related_name="sense_citations"
+    )

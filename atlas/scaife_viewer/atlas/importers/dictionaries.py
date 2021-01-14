@@ -2,8 +2,9 @@ import json
 import os
 
 from scaife_viewer.atlas.conf import settings
+from scaife_viewer.atlas.urn import URN
 
-from ..models import Dictionary, DictionaryEntry, Node, Sense
+from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
@@ -19,30 +20,50 @@ def get_paths(path):
     return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
-def _resolve_citations(citations):
-    urns = []
+def _resolve_citations(sense, citations):
+    created = []
+    idx = 0
     for citation in citations:
-        workpart, ref = citation.split(":")
-        version_obj = Node.objects.filter(
-            kind="version", urn__contains=workpart
-        ).first()
-        citation_urn = f"{version_obj.urn}{ref.split('.')[0]}"
-        try:
-            urns.append(
-                Node.objects.filter(urn=f"{version_obj.urn}{ref.split('.')[0]}").get()
-            )
-        except Node.DoesNotExist:
-            print(f"{citation_urn} not found")
-    return list(set(urns))
+        text_part = None
+        urn = citation.get("urn")
+        if urn:
+            urn = URN(urn)
+            # TODO: skip a step
+            version_urn = urn.up_to(URN.VERSION)
+            version_obj = Node.objects.filter(kind="version", urn=version_urn,).first()
+            try:
+                text_part = (
+                    version_obj.get_descendants()
+                    .filter(ref=urn.passage.split(".")[0])
+                    .get()
+                )
+            except Node.DoesNotExist:
+                print(f"{urn} not found")
+        citation_obj = Citation.objects.create(
+            label=citation["content"],
+            sense=sense,
+            data=citation,
+            # TODO: proper URNs
+            urn=f"{sense.id}-{idx}",
+        )
+        idx += 1
+        if text_part:
+            citation_obj.text_parts.add(text_part)
+        created.append(citation_obj)
+    return created
 
 
-def _create_dictionaries(path, counters, kind):
+def _create_dictionaries(path):
     data = json.load(open(path))
     dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
     s_idx = 0
     for e_idx, e in enumerate(data["entries"]):
         entry = DictionaryEntry.objects.create(
-            headword=e["headword"], idx=e_idx, urn=e["urn"], dictionary=dictionary
+            headword=e["headword"],
+            idx=e_idx,
+            urn=e["urn"],
+            dictionary=dictionary,
+            data=e["data"],
         )
         for s in e["senses"]:
             sense = Sense.add_root(
@@ -52,7 +73,7 @@ def _create_dictionaries(path, counters, kind):
                 urn=s["urn"],
                 entry=entry,
             )
-            sense.citations.set(_resolve_citations(s.get("citations", [])))
+            _resolve_citations(sense, s.get("citations", []))
             s_idx += 1
             for ss in s.get("subsenses", []):
                 subsense = sense.add_child(
@@ -62,7 +83,7 @@ def _create_dictionaries(path, counters, kind):
                     urn=ss["urn"],
                     entry=entry,
                 )
-                subsense.citations.set(_resolve_citations(ss.get("citations", [])))
+                _resolve_citations(subsense, ss.get("citations", []))
                 s_idx += 1
 
 
