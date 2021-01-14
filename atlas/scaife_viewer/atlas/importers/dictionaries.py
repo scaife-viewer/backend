@@ -53,6 +53,30 @@ def _resolve_citations(sense, citations):
     return created
 
 
+def _process_sense(entry, s, idx, parent=None):
+    if parent is None:
+        obj = Sense.add_root(
+            label=s["label"],
+            definition=s["definition"],
+            idx=idx,
+            urn=s["urn"],
+            entry=entry,
+        )
+    else:
+        obj = parent.add_child(
+            label=s["label"],
+            definition=s["definition"],
+            idx=idx,
+            urn=s["urn"],
+            entry=entry,
+        )
+    _resolve_citations(obj, s.get("citations", []))
+    idx += 1
+
+    for ss in s.get("subsenses", []):
+        _process_sense(entry, ss, idx, parent=obj)
+
+
 def _create_dictionaries(path):
     data = json.load(open(path))
     dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
@@ -65,26 +89,8 @@ def _create_dictionaries(path):
             dictionary=dictionary,
             data=e["data"],
         )
-        for s in e["senses"]:
-            sense = Sense.add_root(
-                label=s["label"],
-                definition=s["definition"],
-                idx=s_idx,
-                urn=s["urn"],
-                entry=entry,
-            )
-            _resolve_citations(sense, s.get("citations", []))
-            s_idx += 1
-            for ss in s.get("subsenses", []):
-                subsense = sense.add_child(
-                    label=ss["label"],
-                    definition=ss["definition"],
-                    idx=s_idx,
-                    urn=ss["urn"],
-                    entry=entry,
-                )
-                _resolve_citations(subsense, ss.get("citations", []))
-                s_idx += 1
+        for sense in e["senses"]:
+            _process_sense(entry, sense, s_idx, parent=None)
 
 
 def import_dictionaries(reset=False):
