@@ -687,16 +687,33 @@ class DictionaryNode(DjangoObjectType):
         filter_fields = ["urn"]
 
 
+class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = DictionaryEntry
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        # TODO: ORDERING?
+        return queryset.filter(
+            senses__citations__text_parts__in=textparts_queryset
+        ).distinct()
+
+
 class DictionaryEntryNode(DjangoObjectType):
     data = generic.GenericScalar()
 
     class Meta:
         model = DictionaryEntry
         interfaces = (relay.Node,)
-        filter_fields = ["urn"]
+        filterset_class = DictionaryEntryFilterSet
 
 
-class SenseFilterSet(django_filters.FilterSet):
+class SenseFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
     class Meta:
         model = Sense
         fields = {
@@ -706,6 +723,12 @@ class SenseFilterSet(django_filters.FilterSet):
             "depth": ["exact", "gt", "lt", "gte", "lte"],
             "path": ["exact", "startswith"],
         }
+
+    # TODO: refactor as a mixin
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        # TODO: ORDERING?
+        return queryset.filter(citations__text_parts__in=textparts_queryset).distinct()
 
 
 class SenseNode(DjangoObjectType):
@@ -718,6 +741,22 @@ class SenseNode(DjangoObjectType):
         filterset_class = SenseFilterSet
 
 
+class CitationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = Citation
+        fields = {
+            "text_parts__urn": ["exact"],
+        }
+
+    # TODO: refactor as a mixin
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        # TODO: ORDERING?
+        return queryset.filter(text_parts__in=textparts_queryset).distinct()
+
+
 class CitationNode(DjangoObjectType):
     text_parts = LimitedConnectionField(TextPartNode)
     data = generic.GenericScalar()
@@ -725,7 +764,7 @@ class CitationNode(DjangoObjectType):
     class Meta:
         model = Citation
         interfaces = (relay.Node,)
-        filter_fields = ["text_parts__urn"]
+        filterset_class = CitationFilterSet
 
 
 class Query(ObjectType):
