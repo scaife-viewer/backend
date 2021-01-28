@@ -8,6 +8,8 @@ import os
 import re
 from collections import Counter, defaultdict
 
+import yaml
+
 from scaife_viewer.atlas import constants
 from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.models import Node
@@ -114,55 +116,98 @@ def build_attributions_lookup():
     return lookup
 
 
-def prepare_attributions_annotation(lookup):
+def get_weight(promoted_roles, role):
+    if role in promoted_roles:
+        return -1
+    return 0
+
+
+def get_attributions_config():
+    # @@@
+    config_file_path = "/Users/jwegner/Data/development/repos/scaife-viewer/backend/atlas/scaife_viewer/atlas/extractors/.scaife-config.yml"
+    with open(config_file_path) as f:
+        data = yaml.load(f.read())
+    return data.get("attributions")
+
+
+def get_substitutions(config):
+    substitutions = {}
+    for record in config.get("substitutions", []):
+        match = record["match"]
+        name_key = tuple([n for n in match.get("names", []) if n])
+        org_key = tuple(e for e in match.get("orgs", []) if e)
+        compound_key = (match["role"], name_key, org_key)
+        substitutions[compound_key] = record["data"]
+    return substitutions
+
+
+# TODO: Shorten this function body
+def prepare_attributions_annotation(config, lookup):
+    substitutions = get_substitutions(config)
+    promoted_roles = set(config.get("promoted", []))
+
     attributions = []
     for urn, data in lookup.items():
+        attr_set = []
         for row in data:
             # @@@ getlist type functionality for persons and organizations
-            role = row[1]
+            role = row[1][0]
             person = None
             organization = None
             orgs = [o.strip() for o in row[2] if o.strip]
             names = [n.strip() for n in row[0] + row[3] if n.strip]
-            if not names and orgs:
+            weight = get_weight(promoted_roles, role)
+
+            remap_key = (role, tuple(names), tuple(orgs))
+            if remap_key in substitutions:
+                for replacement in substitutions[remap_key]:
+                    record = dict(data=dict(references=[urn], weight=weight))
+                    record.update(replacement)
+                    attr_set.append(record)
+                continue
+            elif not names and orgs:
                 for org in orgs:
                     record = dict(
-                        role=role[0],
+                        role=role,
                         person=None,
                         organization=dict(name=org),
-                        data=dict(references=[urn]),
+                        data=dict(references=[urn], weight=weight),
                     )
-                    attributions.append(record)
+                    attr_set.append(record)
                 continue
-            elif len(names) == len(row[2]):
+            elif len(names) == len(orgs):
                 for name, org in zip(names, orgs):
                     record = dict(
-                        role=role[0],
+                        role=role,
                         person=dict(name=name),
                         organization=dict(name=org),
-                        data=dict(references=[urn]),
+                        data=dict(references=[urn], weight=weight),
                     )
-                    attributions.append(record)
+                    attr_set.append(record)
             else:
                 for org in orgs:
                     record = dict(
-                        role=role[0],
+                        role=role,
                         person=None,
                         organization=dict(name=org),
-                        data=dict(references=[urn]),
+                        data=dict(references=[urn], weight=weight),
                     )
-                    attributions.append(record)
+                    attr_set.append(record)
                 for name in names:
                     person = {
                         "name": name,
                     }
                     record = dict(
-                        role=role[0],
+                        role=role,
                         person=person,
                         organization=organization,
-                        data=dict(references=[urn]),
+                        data=dict(references=[urn], weight=weight),
                     )
-                    attributions.append(record)
+                    attr_set.append(record)
+        attr_set = sorted(attr_set, key=lambda x: x.get("data", {}).get("weight", 0))
+        for record in attr_set:
+            record["data"].pop("weight")
+        attributions.extend(attr_set)
     return attributions
 
 
@@ -211,7 +256,8 @@ def extract_attributions():
     # TODO: write lookup to temp dir
     lookup = build_attributions_lookup()
 
-    attributions = prepare_attributions_annotation(lookup)
+    config = get_attributions_config()
+    attributions = prepare_attributions_annotation(config, lookup)
     write_annotations(attributions)
 
     stats = generate_attribution_stats(attributions)
