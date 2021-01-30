@@ -761,6 +761,20 @@ class CitationNode(DjangoObjectType):
     text_parts = LimitedConnectionField(TextPartNode)
     data = generic.GenericScalar()
 
+    ref = String()
+    quote = String()
+    passage_urn = String()
+
+    def resolve_ref(obj, info, **kwargs):
+        return obj.data.get("ref", "")
+
+    def resolve_quote(obj, info, **kwargs):
+        return obj.data.get("quote", "")
+
+    def resolve_passage_urn(obj, info, **kwargs):
+        # TODO: Do further validation to ensure we can resolve this
+        return obj.data.get("urn", "")
+
     class Meta:
         model = Citation
         interfaces = (relay.Node,)
