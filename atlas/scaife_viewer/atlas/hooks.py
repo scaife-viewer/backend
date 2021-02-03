@@ -2,6 +2,10 @@ from . import constants
 from .resolvers.default import resolve_library
 
 
+# TODO: Make this a config level option
+INGEST_TO_LOWEST_CITABLE_NODES = True
+
+
 def ensure_trailing_colon(urn):
     if not urn.endswith(":"):
         return f"{urn}:"
@@ -92,11 +96,15 @@ class DefaultHookSet:
         metadata = {}
         toc = version.toc()
         for ref_node in toc.num_resolver.glob(toc.root, "*"):
-            ref = ref_node.num
-            textpart_urn = f"{version_urn}{ref}"
+            textpart_urn = f"{version_urn}{ref_node}"
             metadata[textpart_urn] = {
                 "first_passage_urn": next(toc.chunks(ref_node), None).urn,
             }
+
+            if INGEST_TO_LOWEST_CITABLE_NODES:
+                for child in ref_node.descendants:
+                    child_urn = f"{version_urn}{child}"
+                    metadata[child_urn] = None
         return metadata
 
 
