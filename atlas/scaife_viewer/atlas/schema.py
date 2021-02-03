@@ -684,6 +684,8 @@ class NamedEntityNode(DjangoObjectType):
 
 
 class DictionaryNode(DjangoObjectType):
+    # FIXME: Implement access checking for all queries
+
     class Meta:
         model = Dictionary
         interfaces = (relay.Node,)
