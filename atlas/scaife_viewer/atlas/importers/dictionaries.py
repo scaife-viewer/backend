@@ -7,6 +7,8 @@ from scaife_viewer.atlas.urn import URN
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
 
 
+RESOLVE_CITATIONS_AS_TEXT_PARTS = False
+
 ANNOTATIONS_DATA_PATH = os.path.join(
     settings.SV_ATLAS_DATA_DIR,
     "annotations",
@@ -20,7 +22,8 @@ def get_paths(path):
     return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
-def _resolve_citations(sense, citations):
+def _resolve_citations_as_text_parts(sense, citations):
+    # TODO: resolve at least to the highest level we have
     created = []
     idx = 0
     for citation in citations:
@@ -53,6 +56,33 @@ def _resolve_citations(sense, citations):
     return created
 
 
+def _resolve_citations_via_data_urn(sense, citations):
+    idx = 0
+    to_create = []
+    for citation in citations:
+        label = f"{sense.id}-{idx}"
+        citation_obj = Citation(
+            label=label,
+            sense=sense,
+            data=citation,
+            # TODO: proper URNs
+            urn=label,
+        )
+        idx += 1
+        to_create.append(citation_obj)
+    created = Citation.objects.bulk_create(to_create, batch_size=500)
+    return created
+
+
+def _resolve_citations(senses, citations):
+    if RESOLVE_CITATIONS_AS_TEXT_PARTS:
+        return _resolve_citations_as_text_parts(senses, citations)
+    else:
+        # We don't bother checking to see if we can resolve the citation
+        # ahead of time (we do this from within LGO currently)
+        return _resolve_citations_via_data_urn(senses, citations)
+
+
 def _process_sense(entry, s, idx, parent=None):
     if parent is None:
         obj = Sense.add_root(
@@ -73,7 +103,7 @@ def _process_sense(entry, s, idx, parent=None):
     _resolve_citations(obj, s.get("citations", []))
     idx += 1
 
-    for ss in s.get("subsenses", []):
+    for ss in s.get("children", []):
         _process_sense(entry, ss, idx, parent=obj)
 
 
