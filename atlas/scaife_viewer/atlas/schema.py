@@ -43,6 +43,9 @@ from .utils import (
 )
 
 
+# TODO: Optimize queries
+CITATIONS_ARE_TEXT_PARTS = False
+
 # @@@ alias Node because relay.Node is quite different
 TextPart = Node
 
@@ -696,10 +699,20 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        # TODO: ORDERING?
-        return queryset.filter(
-            senses__citations__text_parts__in=textparts_queryset
-        ).distinct()
+
+        # TODO: Determine why graphene bloats the "simple" query;
+        # if we just filter the queryset against ids, we're much better off
+        if CITATIONS_ARE_TEXT_PARTS:
+            matches = queryset.filter(
+                senses__citations__text_parts__in=textparts_queryset
+            )
+        else:
+            matches = queryset.filter(
+                senses__citations__data__urn__in=textparts_queryset.values_list("urn")
+            )
+        return queryset.filter(pk__in=matches)
+
+
 def _crush_sense(tree):
     # TODO: Prefer GraphQL Ids
     urn = tree["data"].pop("urn")
@@ -746,8 +759,16 @@ class SenseFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     # TODO: refactor as a mixin
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        # TODO: ORDERING?
-        return queryset.filter(citations__text_parts__in=textparts_queryset).distinct()
+
+        # TODO: Determine why graphene bloats the "simple" query;
+        # if we just filter the queryset against ids, we're much better off
+        if CITATIONS_ARE_TEXT_PARTS:
+            matches = queryset.filter(citations__text_parts__in=textparts_queryset)
+        else:
+            matches = queryset.filter(
+                citations__data__urn__in=textparts_queryset.values_list("urn")
+            )
+        return queryset.filter(pk__in=matches)
 
 
 class SenseNode(DjangoObjectType):
@@ -772,8 +793,15 @@ class CitationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
     # TODO: refactor as a mixin
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        # TODO: ORDERING?
-        return queryset.filter(text_parts__in=textparts_queryset).distinct()
+        # TODO: Determine why graphene bloats the "simple" query;
+        # if we just filter the queryset against ids, we're much better off
+        if CITATIONS_ARE_TEXT_PARTS:
+            matches = queryset.filter(text_parts__in=textparts_queryset).distinct()
+        else:
+            matches = queryset.filter(
+                data__urn__in=textparts_queryset.values_list("urn")
+            )
+        return queryset.filter(pk__in=matches)
 
 
 class CitationNode(DjangoObjectType):
