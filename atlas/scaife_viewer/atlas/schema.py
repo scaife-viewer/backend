@@ -700,10 +700,29 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         return queryset.filter(
             senses__citations__text_parts__in=textparts_queryset
         ).distinct()
+def _crush_sense(tree):
+    # TODO: Prefer GraphQL Ids
+    urn = tree["data"].pop("urn")
+    tree["id"] = urn
+    tree.pop("data")
+    for child in tree.get("children", []):
+        _crush_sense(child)
 
 
 class DictionaryEntryNode(DjangoObjectType):
     data = generic.GenericScalar()
+    sense_tree = generic.GenericScalar(
+        description="A nested structure returning the URN(s) of senses attached to this entry"
+    )
+
+    def resolve_sense_tree(obj, info, **kwargs):
+        # TODO: Proper GraphQL field for crushed tree nodes
+        data = []
+        for sense in obj.senses.filter(depth=1):
+            tree = sense.dump_bulk(parent=sense)[0]
+            _crush_sense(tree)
+            data.append(tree)
+        return data
 
     class Meta:
         model = DictionaryEntry
