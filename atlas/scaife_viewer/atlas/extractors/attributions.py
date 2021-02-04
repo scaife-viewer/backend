@@ -169,73 +169,93 @@ def get_substitutions(config):
 
 
 # TODO: Shorten this function body
-def prepare_attributions_annotation(config, lookup):
-    substitutions = get_substitutions(config)
-    promoted_roles = set(config.get("promoted", []))
 
-    attributions = []
-    for urn, data in lookup.items():
-        attr_set = []
-        for row in data:
-            # @@@ getlist type functionality for persons and organizations
-            role = row[1][0]
-            person = None
-            organization = None
-            orgs = [o.strip() for o in row[2] if o.strip]
-            names = [n.strip() for n in row[0] + row[3] if n.strip]
-            weight = get_weight(promoted_roles, role)
 
-            remap_key = (role, tuple(names), tuple(orgs))
-            if remap_key in substitutions:
-                for replacement in substitutions[remap_key]:
-                    record = dict(data=dict(references=[urn], weight=weight))
-                    record.update(replacement)
-                    attr_set.append(record)
-                continue
-            elif not names and orgs:
-                for org in orgs:
-                    record = dict(
-                        role=role,
-                        person=None,
-                        organization=dict(name=org),
-                        data=dict(references=[urn], weight=weight),
-                    )
-                    attr_set.append(record)
-                continue
-            elif len(names) == len(orgs):
-                for name, org in zip(names, orgs):
-                    record = dict(
-                        role=role,
-                        person=dict(name=name),
-                        organization=dict(name=org),
-                        data=dict(references=[urn], weight=weight),
-                    )
-                    attr_set.append(record)
-            else:
-                for org in orgs:
-                    record = dict(
-                        role=role,
-                        person=None,
-                        organization=dict(name=org),
-                        data=dict(references=[urn], weight=weight),
-                    )
-                    attr_set.append(record)
-                for name in names:
-                    person = {
-                        "name": name,
-                    }
-                    record = dict(
-                        role=role,
-                        person=person,
-                        organization=organization,
-                        data=dict(references=[urn], weight=weight),
-                    )
-                    attr_set.append(record)
-        attr_set = sorted(attr_set, key=lambda x: x.get("data", {}).get("weight", 0))
-        for record in attr_set:
+class AttributionAnnotationConverter:
+    def __init__(self, config, lookup):
+        self.substitutions = get_substitutions(config)
+        self.promoted_roles = set(config.get("promoted", []))
+        self.lookup = lookup
+
+    def process_row(self, urn, row, annotations):
+        # @@@ getlist type functionality for persons and organizations
+        role = row[1][0]
+        person = None
+        organization = None
+        orgs = [o.strip() for o in row[2] if o.strip]
+        names = [n.strip() for n in row[0] + row[3] if n.strip]
+        weight = get_weight(self.promoted_roles, role)
+
+        remap_key = (role, tuple(names), tuple(orgs))
+        if remap_key in self.substitutions:
+            for replacement in self.substitutions[remap_key]:
+                record = dict(data=dict(references=[urn], weight=weight))
+                record.update(replacement)
+                annotations.append(record)
+            return
+        elif not names and orgs:
+            for org in orgs:
+                record = dict(
+                    role=role,
+                    person=None,
+                    organization=dict(name=org),
+                    data=dict(references=[urn], weight=weight),
+                )
+                annotations.append(record)
+            return
+        elif len(names) == len(orgs):
+            for name, org in zip(names, orgs):
+                record = dict(
+                    role=role,
+                    person=dict(name=name),
+                    organization=dict(name=org),
+                    data=dict(references=[urn], weight=weight),
+                )
+                annotations.append(record)
+        else:
+            for org in orgs:
+                record = dict(
+                    role=role,
+                    person=None,
+                    organization=dict(name=org),
+                    data=dict(references=[urn], weight=weight),
+                )
+                annotations.append(record)
+            for name in names:
+                person = {
+                    "name": name,
+                }
+                record = dict(
+                    role=role,
+                    person=person,
+                    organization=organization,
+                    data=dict(references=[urn], weight=weight),
+                )
+                annotations.append(record)
+
+    def postprocess_rows(self, annotations):
+        # post-processing
+        annotations = sorted(annotations, key=lambda x: x.get("data", {}).get("weight", 0))
+        for record in annotations:
             record["data"].pop("weight")
-        attributions.extend(attr_set)
-    return attributions
+        return annotations
+
+    def create_annotations(self, urn, data):
+        annotations = []
+        for row in data:
+            self.process_row(urn, row, annotations)
+        return self.postprocess_rows(annotations)
+
+    def create_attribution_annotations(self):
+        all_annotations = []
+        for urn, data in self.lookup.items():
+            all_annotations.extend(self.create_annotations(urn, data))
+        return all_annotations
+
+
+def prepare_atlas_annotations(config, lookup):
+    converter = AttributionAnnotationConverter(config, lookup)
+    return converter.create_attribution_annotations()
 
 
 def generate_attribution_stats(attributions):
@@ -284,7 +304,7 @@ def extract_attributions():
     lookup = build_attributions_lookup()
 
     config = get_attributions_config()
-    attributions = prepare_attributions_annotation(config, lookup)
+    attributions = prepare_atlas_annotations(config, lookup)
     write_annotations(attributions)
 
     stats = generate_attribution_stats(attributions)
