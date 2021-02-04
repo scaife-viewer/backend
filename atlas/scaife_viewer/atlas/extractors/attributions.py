@@ -43,6 +43,14 @@ def get_tei_xml(resolver, urn):
     return resolver.getTextualNode(urn).xml
 
 
+def extract_publication_statement(xml_obj):
+    try:
+        return list(iter(xml_obj.teiHeader.fileDesc.publicationStmt))[0]
+    except AttributeError as e:
+        logger.debug(e)
+        return None
+
+
 def extract_resp_statements(xml_obj):
     try:
         return list(iter(xml_obj.teiHeader.fileDesc.titleStmt.respStmt))
@@ -51,9 +59,25 @@ def extract_resp_statements(xml_obj):
         return None
 
 
-def process_statements(lookup, urn, resp_statements):
-    for child in resp_statements:
+def process_publication_statement(lookup, urn, publication_statement):
+    value = None
+    publisher_or_authority = getattr(
+        publication_statement,
+        "publisher",
+        getattr(publication_statement, "authority", None),
+    )
+    if publisher_or_authority is not None:
+        value = "".join(publisher_or_authority.itertext()).strip()
 
+    if value:
+        lookup[urn].append([[], ["Publisher"], [value], []])
+    else:
+        msg = f'No publisher [urn="{urn}"]'
+        logger.error(msg)
+
+
+def process_resp_statements(lookup, urn, resp_statements):
+    for child in resp_statements:
         persName = []
         resp = []
         orgName = []
@@ -108,11 +132,14 @@ def build_attributions_lookup():
 
         safe_urn = urn[:-1]
         xml_obj = get_tei_xml(resolver, safe_urn)
-        resp_statements = extract_resp_statements(xml_obj)
-        if not resp_statements:
-            continue
 
-        process_statements(lookup, urn, resp_statements)
+        publication_statement = extract_publication_statement(xml_obj)
+        if publication_statement is not None:
+            process_publication_statement(lookup, urn, publication_statement)
+
+        resp_statements = extract_resp_statements(xml_obj)
+        if resp_statements:
+            process_resp_statements(lookup, urn, resp_statements)
     return lookup
 
 
