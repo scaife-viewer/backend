@@ -113,10 +113,7 @@ def process_resp_statements(lookup, urn, resp_statements):
         logger.debug(name)
 
 
-def build_attributions_lookup():
-    resolver = get_cts_resolver()
-    versions = Node.objects.filter(depth=constants.CTS_URN_DEPTHS["version"])
-
+def build_attributions_lookup(resolver, versions):
     # TODO: Expose proper edge-case support
     edgecases = {
         # https://raw.githubusercontent.com/PerseusDL/canonical-latinLit/549552146ad00e60b065bd22e3935cdcdf529b4d/data/phi0914/phi001/phi0914.phi001.perseus-lat2.xml
@@ -149,11 +146,9 @@ def get_weight(promoted_roles, role):
     return 0
 
 
-def get_attributions_config():
-    # @@@
-    config_file_path = "/Users/jwegner/Data/development/repos/scaife-viewer/backend/atlas/scaife_viewer/atlas/extractors/.scaife-config.yml"
+def get_attributions_config(config_file_path):
     with open(config_file_path) as f:
-        data = yaml.load(f.read())
+        data = yaml.load(f.read(), Loader=yaml.SafeLoader)
     return data.get("attributions")
 
 
@@ -235,7 +230,9 @@ class AttributionAnnotationConverter:
 
     def postprocess_rows(self, annotations):
         # post-processing
-        annotations = sorted(annotations, key=lambda x: x.get("data", {}).get("weight", 0))
+        annotations = sorted(
+            annotations, key=lambda x: x.get("data", {}).get("weight", 0)
+        )
         for record in annotations:
             record["data"].pop("weight")
         return annotations
@@ -254,6 +251,8 @@ class AttributionAnnotationConverter:
 
 
 def prepare_atlas_annotations(config, lookup):
+    if config is None:
+        config = {}
     converter = AttributionAnnotationConverter(config, lookup)
     return converter.create_attribution_annotations()
 
@@ -281,10 +280,9 @@ def generate_attribution_stats(attributions):
     )
 
 
-def write_annotations(attributions):
-    # TODO: Customize file_name
+def write_annotations(name, attributions):
     os.makedirs(ANNOTATIONS_DATA_PATH, exist_ok=True)
-    file_name = os.path.join(ANNOTATIONS_DATA_PATH, "corpora-attributions.json")
+    file_name = os.path.join(ANNOTATIONS_DATA_PATH, f"{name}.json")
     with open(file_name, "w") as f:
         json.dump(attributions, f, ensure_ascii=False, indent=2)
 
@@ -301,11 +299,34 @@ def write_stats(stats):
 def extract_attributions():
     # TODO: filter by repo or URN
     # TODO: write lookup to temp dir
-    lookup = build_attributions_lookup()
+    resolver = get_cts_resolver()
+    version_qs = Node.objects.filter(depth=constants.CTS_URN_DEPTHS["version"])
 
-    config = get_attributions_config()
-    attributions = prepare_atlas_annotations(config, lookup)
-    write_annotations(attributions)
+    # TODO: Split sources by repo
+    ogl_1kgrc_repo = Repo.objects.get(name="OpenGreekAndLatin/First1KGreek")
 
-    stats = generate_attribution_stats(attributions)
-    write_stats(stats)
+    ogl_1kgrc_versions = version_qs.filter(repos__in=[ogl_1kgrc_repo])
+    other_versions = version_qs.exclude(repos__in=[ogl_1kgrc_repo])
+
+    sources = [
+        dict(
+            qs=ogl_1kgrc_versions,
+            name="1kgrc",
+            # TODO: derive queryset and config from repo root
+            # or another optional config path
+            # FIXME: hardcoded to local machine
+            config_path="/Users/jwegner/Data/development/repos/scaife-viewer/backend/atlas/scaife_viewer/atlas/extractors/.scaife-config.yml",
+        ),
+        dict(qs=other_versions, name="other", config_path=None),
+    ]
+    for source in sources:
+        lookup = build_attributions_lookup(resolver, source["qs"])
+        if source["config_path"]:
+            config = get_attributions_config(source["config_path"])
+
+        attributions = prepare_atlas_annotations(config, lookup)
+        write_annotations(source["name"], attributions)
+
+        # TODO: add a flag to expose these
+        # stats = generate_attribution_stats(attributions)
+        # write_stats(stats)
