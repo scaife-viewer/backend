@@ -78,15 +78,17 @@ class TextAlignmentRecordRelation(models.Model):
 
 TEXT_ANNOTATION_KIND_SCHOLIA = "scholia"
 TEXT_ANNOTATION_KIND_SYNTAX_TREE = "syntax-tree"
+TEXT_ANNOTATION_KIND_CONCORDANCE_ENTRY = "concordance-entry"
 TEXT_ANNOTATION_KIND_CHOICES = (
     (TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),
     (TEXT_ANNOTATION_KIND_SYNTAX_TREE, "Syntax tree"),
+    (TEXT_ANNOTATION_KIND_CONCORDANCE_ENTRY, "Concordance entry"),
 )
 
 
 class TextAnnotation(models.Model):
     kind = models.CharField(
-        max_length=7,
+        max_length=18,
         default=TEXT_ANNOTATION_KIND_SCHOLIA,
         choices=TEXT_ANNOTATION_KIND_CHOICES,
     )
