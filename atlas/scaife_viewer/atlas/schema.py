@@ -14,6 +14,7 @@ from .hooks import hookset
 
 # from .models import Node as TextPart
 from .models import (
+    TEXT_ANNOTATION_KIND_CONCORDANCE_ENTRY,
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
     AudioAnnotation,
@@ -597,6 +598,12 @@ class SyntaxTreeNode(AbstractTextAnnotationNode):
         return queryset.filter(kind=TEXT_ANNOTATION_KIND_SYNTAX_TREE)
 
 
+class ConcordanceEntryNode(AbstractTextAnnotationNode):
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind=TEXT_ANNOTATION_KIND_CONCORDANCE_ENTRY)
+
+
 class MetricalAnnotationNode(DjangoObjectType):
     data = generic.GenericScalar()
     metrical_pattern = String()
@@ -709,6 +716,9 @@ class Query(ObjectType):
 
     syntax_tree = relay.Node.Field(SyntaxTreeNode)
     syntax_trees = LimitedConnectionField(SyntaxTreeNode)
+
+    concordance_entry = relay.Node.Field(ConcordanceEntryNode)
+    concordance_entries = LimitedConnectionField(ConcordanceEntryNode)
 
     metrical_annotation = relay.Node.Field(MetricalAnnotationNode)
     metrical_annotations = LimitedConnectionField(MetricalAnnotationNode)
