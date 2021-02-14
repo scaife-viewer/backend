@@ -23,7 +23,7 @@ def tokenize_text_parts(version_exemplar_urn, force=True):
     print(f"Created {created} tokens for {version_exemplar}", file=sys.stderr)
 
 
-def tokenize_all_text_parts(reset=False):
+def tokenize_all_text_parts_parallel(reset=False):
     exceptions = False
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=settings.SV_ATLAS_INGESTION_CONCURRENCY
@@ -42,3 +42,15 @@ def tokenize_all_text_parts(reset=False):
                 print("{} generated an exception: {}".format(urn, exc))
     if exceptions:
         raise AssertionError("Exceptions were encountered tokenizing textparts")
+
+
+def tokenize_all_text_parts_serial(reset=False):
+    version_exemplar_nodes = Node.objects.filter(kind__in=["version", "exemplar"])
+    for node in version_exemplar_nodes:
+        tokenize_text_parts(node.urn, force=reset)
+
+
+def tokenize_all_text_parts(reset=False):
+    # FIXME: Improve reliability of parallel tokenizer
+    return tokenize_all_text_parts_serial(reset=reset)
+
