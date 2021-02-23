@@ -729,6 +729,7 @@ class DictionaryEntryNode(DjangoObjectType):
     sense_tree = generic.GenericScalar(
         description="A nested structure returning the URN(s) of senses attached to this entry"
     )
+    headword_normalized = String()
 
     def resolve_sense_tree(obj, info, **kwargs):
         # TODO: Proper GraphQL field for crushed tree nodes
@@ -738,6 +739,9 @@ class DictionaryEntryNode(DjangoObjectType):
             _crush_sense(tree)
             data.append(tree)
         return data
+
+    def resolve_headword_normalized(obj, info, **kwargs):
+        return obj.headword_normalized
 
     class Meta:
         model = DictionaryEntry
