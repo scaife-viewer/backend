@@ -4,7 +4,6 @@ from collections import defaultdict
 
 from django.core import serializers
 from django.db import models
-from django.utils.functional import cached_property
 
 # @@@ optional for Django 3.1+
 from django_jsonfield_backport.models import JSONField
@@ -14,8 +13,6 @@ from treebeard.mp_tree import MP_Node
 
 from scaife_viewer.atlas import constants
 from scaife_viewer.atlas.conf import settings
-
-from .language_utils.grc import normalize_greek
 
 
 class TextAlignment(models.Model):
@@ -568,6 +565,7 @@ class Dictionary(models.Model):
 
 class DictionaryEntry(models.Model):
     headword = models.CharField(max_length=255)
+    headword_normalized = models.CharField(max_length=255, blank=True, null=True)
     data = JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index")
@@ -580,11 +578,6 @@ class DictionaryEntry(models.Model):
         related_name="entries",
         on_delete=models.CASCADE,
     )
-
-    @cached_property
-    def headword_normalized(self):
-        # TODO: Support other languages
-        return normalize_greek(self.headword)
 
 
 class Sense(MP_Node):

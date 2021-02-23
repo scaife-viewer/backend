@@ -4,15 +4,14 @@ import os
 from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.urn import URN
 
+from ..language_utils.grc import normalize_greek
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
 
 
 RESOLVE_CITATIONS_AS_TEXT_PARTS = False
 
 ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.SV_ATLAS_DATA_DIR,
-    "annotations",
-    "dictionaries",
+    settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries",
 )
 
 
@@ -112,8 +111,12 @@ def _create_dictionaries(path):
     dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
     s_idx = 0
     for e_idx, e in enumerate(data["entries"]):
+        headword = e["headword"]
+        # TODO: Support other languages
+        headword_normalized = normalize_greek(headword)
         entry = DictionaryEntry.objects.create(
-            headword=e["headword"],
+            headword=headword,
+            headword_normalized=headword_normalized,
             idx=e_idx,
             urn=e["urn"],
             dictionary=dictionary,
