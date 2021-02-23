@@ -694,6 +694,7 @@ class DictionaryNode(DjangoObjectType):
 
 class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
+    lemma = django_filters.CharFilter(method="lemma_filter")
 
     class Meta:
         model = DictionaryEntry
@@ -714,6 +715,10 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
             )
         return queryset.filter(pk__in=matches)
 
+    def lemma_filter(self, queryset, name, value):
+        lemma_pattern = rf"^{value}[^\u0300-\u03FF\u1F00-\u1FFF]"
+        return queryset.filter(headword_normalized__regex=lemma_pattern)
+
 
 def _crush_sense(tree):
     # TODO: Prefer GraphQL Ids
@@ -729,7 +734,6 @@ class DictionaryEntryNode(DjangoObjectType):
     sense_tree = generic.GenericScalar(
         description="A nested structure returning the URN(s) of senses attached to this entry"
     )
-    headword_normalized = String()
 
     def resolve_sense_tree(obj, info, **kwargs):
         # TODO: Proper GraphQL field for crushed tree nodes
@@ -739,9 +743,6 @@ class DictionaryEntryNode(DjangoObjectType):
             _crush_sense(tree)
             data.append(tree)
         return data
-
-    def resolve_headword_normalized(obj, info, **kwargs):
-        return obj.headword_normalized
 
     class Meta:
         model = DictionaryEntry
