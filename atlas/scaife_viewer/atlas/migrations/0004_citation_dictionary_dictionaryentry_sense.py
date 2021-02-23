@@ -144,7 +144,7 @@ class Migration(migrations.Migration):
                 (
                     "urn",
                     models.CharField(
-                        help_text="urn:cite2:<site>:senses.atlas_v1",
+                        help_text="urn:cite2:<site>:citations.atlas_v1",
                         max_length=255,
                         unique=True,
                     ),
