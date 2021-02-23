@@ -11,6 +11,7 @@ from graphene_django.utils import camelize
 from .compat import convert_jsonfield_to_string  # noqa
 from .constants import CTS_URN_DEPTHS
 from .hooks import hookset
+from .language_utils.grc import normalize_greek
 
 # from .models import Node as TextPart
 from .models import (
@@ -716,7 +717,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         return queryset.filter(pk__in=matches)
 
     def lemma_filter(self, queryset, name, value):
-        lemma_pattern = rf"^{value}[^\u0300-\u03FF\u1F00-\u1FFF]"
+        lemma_pattern = rf"^{normalize_greek(value)}[^\u0300-\u03FF\u1F00-\u1FFF]?$"
         return queryset.filter(headword_normalized__regex=lemma_pattern)
 
 
