@@ -697,7 +697,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
 
     class Meta:
         model = DictionaryEntry
-        fields = ["urn"]
+        fields = {"urn": ["exact"], "headword": ["exact", "istartswith"]}
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
