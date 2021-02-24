@@ -1,3 +1,5 @@
+import os
+
 from django.db.models import Q
 
 import django_filters
@@ -46,6 +48,8 @@ from .utils import (
 
 # TODO: Optimize queries
 CITATIONS_ARE_TEXT_PARTS = False
+# TODO: Make a proper config variable
+RESOLVE_VIA_LEMMAS = bool(int(os.environ.get("RESOLVE_VIA_LEMMAS", 0)))
 
 # @@@ alias Node because relay.Node is quite different
 TextPart = Node
@@ -704,9 +708,15 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
 
+        if RESOLVE_VIA_LEMMAS:
+            # TODO: revisit normalization here with @jtauber
+            passage_lemmas = Token.objects.filter(
+                text_part__in=textparts_queryset
+            ).values_list("lemma", flat=True)
+            matches = queryset.filter(headword__in=passage_lemmas)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
-        if CITATIONS_ARE_TEXT_PARTS:
+        elif CITATIONS_ARE_TEXT_PARTS:
             matches = queryset.filter(
                 senses__citations__text_parts__in=textparts_queryset
             )
@@ -718,7 +728,9 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
 
     def lemma_filter(self, queryset, name, value):
         value_normalized = normalize_greek(value)
-        lemma_pattern = rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
+        lemma_pattern = (
+            rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
+        )
         return queryset.filter(headword_normalized__regex=lemma_pattern)
 
 
