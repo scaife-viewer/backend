@@ -33,3 +33,8 @@ def normalize_greek(s):
     representation of string
     """
     return strip_accents(s).lower()
+
+
+def normalize_greek_nfkc(s):
+    # TODO: Review with @jtauber
+    return unicodedata.normalize("NFKC", normalize_greek(s))

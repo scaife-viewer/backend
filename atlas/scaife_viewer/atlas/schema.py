@@ -11,7 +11,7 @@ from graphene_django.utils import camelize
 from .compat import convert_jsonfield_to_string  # noqa
 from .constants import CTS_URN_DEPTHS
 from .hooks import hookset
-from .language_utils.grc import normalize_greek
+from .language_utils.grc import normalize_greek_nfkc as normalize_greek
 
 # from .models import Node as TextPart
 from .models import (
