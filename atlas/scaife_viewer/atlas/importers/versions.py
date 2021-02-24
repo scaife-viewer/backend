@@ -51,7 +51,7 @@ class CTSImporter:
         self.node_last_child_lookup = defaultdict()
         self.format = version_data.get("format", "txt")
         # TODO: Provide a better interface here
-        self.textpart_metadata = self.version_data.get("textpart_metadata")
+        self.textpart_metadata = self.version_data.get("textpart_metadata", {})
 
     @staticmethod
     def add_root(data):
