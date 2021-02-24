@@ -120,7 +120,7 @@ def _create_dictionaries(path):
             idx=e_idx,
             urn=e["urn"],
             dictionary=dictionary,
-            data=e["data"],
+            data=e.get("data", {}),
         )
         for sense in e["senses"]:
             _process_sense(entry, sense, s_idx, parent=None)
