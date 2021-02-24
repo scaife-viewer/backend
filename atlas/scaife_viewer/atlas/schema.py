@@ -717,7 +717,8 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         return queryset.filter(pk__in=matches)
 
     def lemma_filter(self, queryset, name, value):
-        lemma_pattern = rf"^{normalize_greek(value)}[^\u0300-\u03FF\u1F00-\u1FFF]?$"
+        value_normalized = normalize_greek(value)
+        lemma_pattern = rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
         return queryset.filter(headword_normalized__regex=lemma_pattern)
 
 
