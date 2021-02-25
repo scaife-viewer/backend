@@ -571,11 +571,16 @@ class TextAlignmentConnection(Connection):
 
 
 class TextAlignmentRecordNode(DjangoObjectType):
+    label = String()
+
     class Meta:
         model = TextAlignmentRecord
         interfaces = (relay.Node,)
         connection_class = TextAlignmentConnection
         filterset_class = TextAlignmentRecordFilterSet
+
+    def resolve_label(obj, *args, **kwargs):
+        return obj.metadata.get("label", "")
 
 
 class TextAlignmentRecordRelationNode(DjangoObjectType):

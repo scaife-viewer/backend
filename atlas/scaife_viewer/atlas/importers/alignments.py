@@ -75,9 +75,30 @@ def build_sorted_records(versions, record_relations):
     return records
 
 
+def set_record_label(record, relation):
+    # TODO: Add a record.label field
+    if record.metadata.get("label"):
+        # TODO: Allow annotation to supply label rather than calculating it
+        return
+    # TODO: Determine how we want to expose the ve_ref value in terms of addressable
+    # tokens; we'll just expose text part ref for now
+    tokens = list(relation.tokens.all())
+    if not tokens:
+        return
+    refs = [tokens[0].text_part.ref]
+    if tokens[0].text_part_id != tokens[-1].text_part_id:
+        refs.append(tokens[-1].text_part.ref)
+    record.metadata["label"] = "-".join(refs)
+
+
 def create_record_relations(record, version_objs, relations):
+    first_relation = None
+    # TODO: Enforce that relation / version obj is 1:1; determine if we need to
+    # support an "empty" relation
     for version_obj, relation in zip(version_objs, relations):
         relation_obj = TextAlignmentRecordRelation(version=version_obj, record=record)
+        if first_relation is None:
+            first_relation = relation_obj
         relation_obj.save()
         tokens = []
         # TODO: Can we build up a veref map and validate?
@@ -94,6 +115,8 @@ def create_record_relations(record, version_objs, relations):
             )
         relation_obj.tokens.set(tokens)
     # TODO: review query counts here and some of our SQL hacks
+
+    set_record_label(record, first_relation)
 
 
 def process_cex(metadata):
@@ -127,12 +150,19 @@ def process_cex(metadata):
     # TODO: review how we might make use of sort key from CEX
     # TODO: sorting versions from Ducat too, especially since Ducat doesn't have 'em
     # maybe something for CITE tools?
+    records_to_update = []
     for _, record_urn, relations in records:
         record = TextAlignmentRecord(idx=idx, alignment=alignment, urn=record_urn)
         record.save()
         idx += 1
 
         create_record_relations(record, version_objs, relations)
+        # TODO: Add explicit `label` field
+        if record.metadata.get("label"):
+            records_to_update.append(record)
+
+    if records_to_update:
+        TextAlignmentRecord.objects.bulk_update(records_to_update, fields=["metadata"])
 
 
 def process_alignments(reset=False):
