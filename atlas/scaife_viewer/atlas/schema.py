@@ -21,6 +21,7 @@ from .models import (
     MetricalAnnotation,
     NamedEntity,
     Node,
+    Repo,
     TextAlignment,
     TextAlignmentRecord,
     TextAlignmentRecordRelation,
@@ -310,6 +311,23 @@ class WorkNode(AbstractTextPartNode):
     def resolve_label(obj, *args, **kwargs):
         # @@@ consider a direct field or faster mapping
         return obj.metadata["label"]
+
+    def resolve_metadata(obj, *args, **kwargs):
+        metadata = obj.metadata
+        return camelize(metadata)
+
+
+class RepoNode(DjangoObjectType):
+    versions = LimitedConnectionField(lambda: VersionNode)
+    metadata = generic.GenericScalar()
+
+    class Meta:
+        model = Repo
+        interfaces = (relay.Node,)
+        filter_fields = ["name"]
+
+    def resolve_versions(obj, *args, **kwargs):
+        return obj.urns
 
     def resolve_metadata(obj, *args, **kwargs):
         metadata = obj.metadata
@@ -725,6 +743,9 @@ class Query(ObjectType):
 
     named_entity = relay.Node.Field(NamedEntityNode)
     named_entities = LimitedConnectionField(NamedEntityNode)
+
+    repo = relay.Node.Field(RepoNode)
+    repos = LimitedConnectionField(RepoNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(

@@ -33,11 +33,16 @@ class RefTree:
         #   citations = ["book", "line"]
         #   reff = "1.2"
         #   -> [[("book", "1"), ("line", "2")], ...]
+        # FIXME: local resolver returns CtsReference, API Resolver returns a string
+        if isinstance(reff, str):
+            ref_parts = reff.split(".")
+        else:
+            ref_parts = reff.start.list
         mapped = list(
             zip_longest(
                 # MyCapytain bugish: citation name could be None (should always be a string)
                 map(str, map(attrgetter("name"), self.citations)),
-                reff.split("."),
+                ref_parts,
             )
         )
         ancestors, leaf = mapped[:-1], mapped[-1]

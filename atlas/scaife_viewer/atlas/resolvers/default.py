@@ -30,9 +30,9 @@ class LibraryDataResolver:
                 raise FileNotFoundError(version_path)
 
             self.versions[version["urn"]] = {
+                **version,
                 "format": extension,
                 "path": version_path,
-                **version,
             }
 
     def resolve_data_dir_path(self, data_dir_path):

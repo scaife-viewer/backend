@@ -511,3 +511,15 @@ class NamedEntity(models.Model):
 
     def __str__(self):
         return f"{self.urn} :: {self.title }"
+
+
+class Repo(models.Model):
+    """
+    NOTE: consider other modeling options like a 1 to 1 model or denorms
+    to different work-level components of the URN
+    """
+
+    name = models.CharField(blank=True, null=True, max_length=255)
+    sha = models.CharField(blank=True, null=True, max_length=255)
+    urns = models.ManyToManyField("scaife_viewer_atlas.Node", related_name="repos")
+    metadata = JSONField(default=dict, blank=True)
