@@ -63,13 +63,13 @@ def build_sorted_records(versions, record_relations):
         # or at least the first does
         try:
             sort_key = natural_keys(relations[0][0])
-        except Exception as excep:
+        except Exception as excep:  # noqa: F841
             sort_key = None
         relations = [tuple(r) for r in relations]
         records.append((sort_key, record_urn, tuple(relations)))
     try:
         records = sorted(records, key=lambda x: x[0])
-    except Exception as excep:
+    except Exception as excep:  # noqa: F841
         # FIXME: Handle missing sort key
         records = records
     return records
