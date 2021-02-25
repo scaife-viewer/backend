@@ -520,7 +520,7 @@ class TextAlignmentMetadata(dict):
         # textParts
         # records
         # other
-        if self.alignment.urn.contains("word"):
+        if self.alignment.urn.count("word"):
             return "textParts"
         return "records"
 
@@ -529,6 +529,8 @@ class TextAlignmentMetadataNode(ObjectType):
     passage_references = generic.GenericScalar(
         description="References for the passages being aligned"
     )
+    # TODO: Move this out to the alignment node?
+    # TODO: And possibly make this something to be provided at ingestion time?
     display_hint = String()
 
     def resolve_passage_references(self, info, *args, **kwargs):
