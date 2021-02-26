@@ -59,6 +59,7 @@ class DefaultHookSet:
             logger.warning(msg)
             first_passage_urn = None
 
+        # TODO: Move textpart level extractors out to another interface within `Library`
         try:
             textpart_metadata = self.extract_cts_textpart_metadata(version)
         except KeyError:
