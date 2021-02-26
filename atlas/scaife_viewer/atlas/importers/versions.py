@@ -1,5 +1,4 @@
 import logging
-import sys
 from collections import defaultdict
 
 from django.db.models import Max
@@ -13,6 +12,7 @@ from scaife_viewer.atlas import constants
 from ..hooks import hookset
 from ..models import Node
 from ..urn import URN
+from ..utils import get_lowest_citable_depth
 
 
 logger = logging.getLogger(__name__)
@@ -43,11 +43,14 @@ class CTSImporter:
         self.label = label
 
         self.citation_scheme = self.version_data["citation_scheme"]
+        self.lowest_citable_depth = get_lowest_citable_depth(self.citation_scheme)
         self.idx_lookup = defaultdict(int)
 
         self.nodes_to_create = []
         self.node_last_child_lookup = defaultdict()
         self.format = version_data.get("format", "txt")
+        # TODO: Provide a better interface here
+        self.textpart_metadata = self.version_data.get("textpart_metadata", {})
 
     @staticmethod
     def add_root(data):
@@ -73,15 +76,19 @@ class CTSImporter:
     def get_parent_urn(idx, branch_data):
         return branch_data[idx - 1]["urn"] if idx else None
 
-    def get_node_idx(self, kind):
-        idx = self.idx_lookup[kind]
-        self.idx_lookup[kind] += 1
+    def get_node_idx(self, node_data):
+        key = node_data["kind"]
+        rank = node_data.get("rank")
+        if rank:
+            key = f"{rank}_{key}"
+        idx = self.idx_lookup[key]
+        self.idx_lookup[key] += 1
         return idx
 
-    def get_partial_urn(self, kind, node_urn):
+    def get_partial_urn(self, workpart_kind, node_urn):
         scheme = self.get_root_urn_scheme(node_urn)
         kind_map = {kind: getattr(URN, kind.upper()) for kind in scheme}
-        return node_urn.up_to(kind_map[kind])
+        return node_urn.up_to(kind_map[workpart_kind])
 
     def get_root_urn_scheme(self, node_urn):
         if node_urn.has_exemplar:
@@ -127,6 +134,9 @@ class CTSImporter:
         )
         return default
 
+    def get_textpart_metadata(self, urn):
+        return self.textpart_metadata.get(urn) or {}
+
     def add_child_bulk(self, parent, node_data):
         # @@@ forked version of `Node._inc_path`
         # https://github.com/django-treebeard/django-treebeard/blob/master/treebeard/mp_tree.py#L1121
@@ -171,20 +181,18 @@ class CTSImporter:
             return self.add_child_bulk(parent, node_data)
         return self.add_child(parent, node_data)
 
-    def destructure_urn(self, node_urn, tokens, extract_text_parts=True):
-        node_data = []
-        for kind in self.get_urn_scheme(node_urn):
-            data = {"kind": kind}
+    @staticmethod
+    def is_workpart(value):
+        # TODO: Support exemplars
+        return value <= constants.CTS_URN_DEPTHS["version"]
 
-            # TODO: Determine when we're dealing with a passage reference portion vs
-            # work part of the urn.
-            # May be done with parts of `get_urn_scheme`
-            # And maybe the "presence" / absence of tokens could help slightly too
-            # @@@ duplicate; we might need a cts_ prefix for work, for example
-            urn_is_work_part = (
-                kind not in self.citation_scheme or kind == "work" and not tokens
-            )
-            if urn_is_work_part:
+    def destructure_urn(self, node_urn, text_content):
+        node_data = []
+        for pos, kind in enumerate(self.get_urn_scheme(node_urn)):
+            depth = pos + 1
+            data = {"kind": kind}
+            is_workpart = self.is_workpart(depth)
+            if is_workpart:
                 data.update({"urn": self.get_partial_urn(kind, node_urn)})
                 if kind == "textgroup":
                     data.update({"metadata": self.get_text_group_metadata()})
@@ -194,40 +202,48 @@ class CTSImporter:
                     data.update({"metadata": self.get_version_metadata()})
                 # TODO: Handle exemplars
             else:
-                if not extract_text_parts:
+                # NOTE: `text_content is None` allows for empty text parts
+                if text_content is None and not self.textpart_metadata:
                     continue
 
                 ref_index = self.citation_scheme.index(kind)
                 ref = ".".join(node_urn.passage_nodes[: ref_index + 1])
                 urn = f"{node_urn.up_to(node_urn.NO_PASSAGE)}{ref}"
-                data.update({"urn": urn, "ref": ref, "rank": ref_index + 1})
-                if kind == self.citation_scheme[-1]:
-                    data.update({"text_content": tokens})
+                rank = ref_index + 1
+                data.update({"urn": urn, "ref": ref, "rank": rank})
+
+                if depth == self.lowest_citable_depth:
+                    data.update({"text_content": text_content})
+                if rank == 1:
+                    # TODO: Additive metadata, other ranks
+                    data.update({"metadata": self.get_textpart_metadata(urn)})
 
             node_data.append(data)
 
         return node_data
 
-    def extract_urn_and_tokens(self, line):
-        if not line:
-            tokens = ""
-            urn = f"{self.urn}"
-        elif self.format == "cex":
-            urn, tokens = line.strip().split("#", maxsplit=1)
+    def extract_urn_and_text_content(self, line):
+        if self.format == "cex":
+            urn, text_content = line.strip().split("#", maxsplit=1)
         else:
-            ref, tokens = line.strip().split(maxsplit=1)
+            ref, text_content = line.strip().split(maxsplit=1)
             urn = f"{self.urn}{ref}"
-        return URN(urn), tokens
+        return URN(urn), text_content
 
-    def generate_branch(self, line, extract_text_parts=True):
-        node_urn, tokens = self.extract_urn_and_tokens(line)
-        branch_data = self.destructure_urn(
-            node_urn, tokens, extract_text_parts=extract_text_parts
-        )
+    def generate_branch(self, urn=None, line=None):
+        if line:
+            node_urn, text_content = self.extract_urn_and_text_content(line)
+        elif urn:
+            node_urn = URN(urn)
+            text_content = None
+        else:
+            raise ValueError('Either a "urn" or "line" value must be supplied.')
+
+        branch_data = self.destructure_urn(node_urn, text_content)
         for idx, node_data in enumerate(branch_data):
             node = self.nodes.get(node_data["urn"])
             if node is None:
-                node_data.update({"idx": self.get_node_idx(node_data["kind"])})
+                node_data.update({"idx": self.get_node_idx(node_data)})
                 parent_urn = self.get_parent_urn(idx, branch_data)
                 node = self.generate_node(idx, node_data, parent_urn)
                 self.nodes[node_data["urn"]] = node
@@ -255,9 +271,14 @@ class CTSImporter:
         if full_content_path:
             with open(full_content_path, "r") as f:
                 for line in f:
-                    self.generate_branch(line)
+                    self.generate_branch(line=line)
+        elif self.textpart_metadata:
+            # NOTE: This allows SV 1 readers to ingest text parts
+            # without needing to also ingest text_content or tokens
+            for urn in self.textpart_metadata.keys():
+                self.generate_branch(urn=urn)
         else:
-            self.generate_branch("", extract_text_parts=False)
+            self.generate_branch(urn=self.urn)
 
         count = self.finalize()
         logger.debug(f"{self.label}: {count} nodes.")
@@ -277,11 +298,13 @@ def get_first_value_for_language(values, lang, fallback=True):
 def import_versions(reset=False):
     if reset:
         Node.objects.filter(kind="nid").delete()
-
+    # TODO: Wire up logging
+    logger.info("Resolving library")
     library = hookset.resolve_library()
 
+    logger.info("Importing nodes into ATLAS")
     importer_class = hookset.get_importer_class()
     nodes = {}
     for _, version_data in tqdm(library.versions.items()):
         importer_class(library, version_data, nodes).apply()
-    print(f"{Node.objects.count()} total nodes on the tree.", file=sys.stderr)
+    logger.info(f"{Node.objects.count()} total nodes on the tree.")

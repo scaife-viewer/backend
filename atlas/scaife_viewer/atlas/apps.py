@@ -20,6 +20,13 @@ def tweak_sqlite_pragma(sender, connection, **kwargs):
         cursor.execute("PRAGMA synchronous=OFF;")
         cursor.execute("PRAGMA cache_size=100000;")
         cursor.execute("PRAGMA journal_mode=MEMORY;")
+        # TODO: Add note to documentation and consider
+        # alternatives to django-treebeard implementation
+        # 😱 TIL:
+        # https://code.djangoproject.com/ticket/9905
+        # https://code.djangoproject.com/ticket/15659
+        # https://docs.djangoproject.com/en/3.1/ref/databases/#substring-matching-and-case-sensitivity
+        cursor.execute("PRAGMA case_sensitive_like=ON;")
 
 
 connection_created.connect(tweak_sqlite_pragma)

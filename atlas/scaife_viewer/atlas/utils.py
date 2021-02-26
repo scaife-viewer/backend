@@ -3,6 +3,8 @@ from django.utils.functional import cached_property
 
 from scaife_viewer.atlas.conf import settings
 
+from .constants import CTS_URN_DEPTHS
+
 
 class BaseSiblingChunker:
     def __init__(self, queryset, start_idx, chunk_length, queryset_values=None):
@@ -140,17 +142,37 @@ def filter_via_ref_predicate(queryset, predicate):
     # might work too, but having `idx` also allows us to do simple integer math
     # as-needed.
     if queryset.exists():
-        subquery = queryset.filter(predicate).aggregate(min=Min("idx"), max=Max("idx"))
-        queryset = queryset.filter(idx__gte=subquery["min"], idx__lte=subquery["max"])
+        try:
+            subquery = queryset.filter(predicate).aggregate(
+                min=Min("idx"), max=Max("idx")
+            )
+            queryset = queryset.filter(
+                idx__gte=subquery["min"], idx__lte=subquery["max"]
+            )
+        except Exception:
+            # TODO: Handle SV 1 where not all text parts are ingested
+            return queryset.none()
     return queryset
+
+
+def get_lowest_citable_depth(citation_scheme):
+    # TODO: Support exemplars
+    depth = CTS_URN_DEPTHS["version"]
+    if citation_scheme:
+        depth += len(citation_scheme)
+    return depth
+
+
+def get_lowest_citable_nodes(version):
+    citation_scheme = version.metadata.get("citation_scheme")
+    lowest_citable_depth = get_lowest_citable_depth(citation_scheme)
+    return version.get_descendants().filter(depth=lowest_citable_depth)
 
 
 def get_textparts_from_passage_reference(passage_reference, version):
     citation_scheme = version.metadata["citation_scheme"]
-    max_depth = version.get_descendants().last().depth
-
     max_rank = len(citation_scheme)
-    queryset = version.get_descendants().filter(depth=max_depth)
+    queryset = get_lowest_citable_nodes(version)
     _, ref = passage_reference.rsplit(":", maxsplit=1)
     predicate = build_textpart_predicate(queryset, ref, max_rank)
     return filter_via_ref_predicate(queryset, predicate)
