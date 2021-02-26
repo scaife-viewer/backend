@@ -357,7 +357,16 @@ class Node(MP_Node):
         if up_to and up_to not in constants.CTS_URN_NODES:
             raise ValueError(f"Invalid CTS node identifier for: {up_to}")
 
-        qs = cls._get_serializable_model().get_tree(parent=root)
+        # NOTE: This filters the queryset using path__startswith,
+        # because the default `get_tree(parent=root)` uses `self.is_leaf
+        # and the current bulk ingestion into ATLAS does not populate
+        # `numchild`.
+        qs = cls._get_serializable_model().get_tree()
+        if root:
+            qs = qs.filter(
+                path__startswith=root.path,
+                # depth__gte=parent.depth
+            ).order_by("path")
         if up_to:
             depth = constants.CTS_URN_DEPTHS[up_to]
             qs = qs.exclude(depth__gt=depth)
@@ -536,3 +545,15 @@ class NamedEntity(models.Model):
 
     def __str__(self):
         return f"{self.urn} :: {self.title }"
+
+
+class Repo(models.Model):
+    """
+    NOTE: consider other modeling options like a 1 to 1 model or denorms
+    to different work-level components of the URN
+    """
+
+    name = models.CharField(blank=True, null=True, max_length=255)
+    sha = models.CharField(blank=True, null=True, max_length=255)
+    urns = models.ManyToManyField("scaife_viewer_atlas.Node", related_name="repos")
+    metadata = JSONField(default=dict, blank=True)

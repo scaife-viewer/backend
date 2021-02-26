@@ -53,6 +53,15 @@ class Command(BaseCommand):
         self.stdout.write("--[Populating ATLAS db]--")
         importers.versions.import_versions()
 
+        # TODO: make this pipeline more configurable
+        try:
+            from github import Github
+        except ModuleNotFoundError:
+            pass
+        else:
+            self.stdout.write("--[Applying repo metadata]--")
+            importers.repo_metadata.import_repo_metadata(reset=True)
+
     def handle(self, *args, **options):
         database_path = settings.SV_ATLAS_DB_PATH
 

@@ -8,7 +8,7 @@ from .utils import natural_keys
 def heal(passage: Passage) -> Tuple[Passage, bool]:
     if not passage.exists():
         toc = passage.text.toc()
-        healed_node = heal_recursive(toc.root, passage.reference.list)
+        healed_node = heal_recursive(toc.root, passage.reference.start.list)
         return Passage(passage.text, healed_node.reference), True
     return passage, False
 
