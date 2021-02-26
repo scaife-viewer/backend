@@ -13,7 +13,7 @@ from graphene_django.utils import camelize
 from .compat import convert_jsonfield_to_string  # noqa
 from .constants import CTS_URN_DEPTHS
 from .hooks import hookset
-from .language_utils.grc import normalize_greek_nfkc as normalize_greek
+from .language_utils import normalize_string
 
 # from .models import Node as TextPart
 from .models import (
@@ -727,7 +727,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         return queryset.filter(pk__in=matches)
 
     def lemma_filter(self, queryset, name, value):
-        value_normalized = normalize_greek(value)
+        value_normalized = normalize_string(value)
         lemma_pattern = (
             rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
         )

@@ -4,7 +4,7 @@ import os
 from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.urn import URN
 
-from ..language_utils.grc import normalize_greek_nfkc as normalize_greek
+from ..language_utils import normalize_string
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
 
 
@@ -112,8 +112,7 @@ def _create_dictionaries(path):
     s_idx = 0
     for e_idx, e in enumerate(data["entries"]):
         headword = e["headword"]
-        # TODO: Support other languages
-        headword_normalized = normalize_greek(headword)
+        headword_normalized = normalize_string(headword)
         entry = DictionaryEntry.objects.create(
             headword=headword,
             headword_normalized=headword_normalized,
