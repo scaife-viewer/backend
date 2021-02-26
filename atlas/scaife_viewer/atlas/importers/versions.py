@@ -1,5 +1,4 @@
 import logging
-import sys
 from collections import defaultdict
 
 from django.db.models import Max
@@ -305,12 +304,12 @@ def import_versions(reset=False):
     if reset:
         Node.objects.filter(kind="nid").delete()
     # TODO: Wire up logging
-    print("Resolving library")
+    logger.info("Resolving library")
     library = hookset.resolve_library()
 
-    print("Importing nodes into ATLAS")
+    logger.info("Importing nodes into ATLAS")
     importer_class = hookset.get_importer_class()
     nodes = {}
     for _, version_data in tqdm(library.versions.items()):
         importer_class(library, version_data, nodes).apply()
-    print(f"{Node.objects.count()} total nodes on the tree.", file=sys.stderr)
+    logger.info(f"{Node.objects.count()} total nodes on the tree.")
