@@ -563,6 +563,18 @@ class Dictionary(models.Model):
         return self.label
 
 
+class Repo(models.Model):
+    """
+    NOTE: consider other modeling options like a 1 to 1 model or denorms
+    to different work-level components of the URN
+    """
+
+    name = models.CharField(blank=True, null=True, max_length=255)
+    sha = models.CharField(blank=True, null=True, max_length=255)
+    urns = models.ManyToManyField("scaife_viewer_atlas.Node", related_name="repos")
+    metadata = JSONField(default=dict, blank=True)
+
+
 class DictionaryEntry(models.Model):
     headword = models.CharField(max_length=255)
     headword_normalized = models.CharField(max_length=255, blank=True, null=True)

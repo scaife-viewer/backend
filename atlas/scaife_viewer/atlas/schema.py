@@ -27,6 +27,7 @@ from .models import (
     MetricalAnnotation,
     NamedEntity,
     Node,
+    Repo,
     Sense,
     TextAlignment,
     TextAlignmentRecord,
@@ -328,6 +329,23 @@ class WorkNode(AbstractTextPartNode):
         return camelize(metadata)
 
 
+class RepoNode(DjangoObjectType):
+    versions = LimitedConnectionField(lambda: VersionNode)
+    metadata = generic.GenericScalar()
+
+    class Meta:
+        model = Repo
+        interfaces = (relay.Node,)
+        filter_fields = ["name"]
+
+    def resolve_versions(obj, *args, **kwargs):
+        return obj.urns
+
+    def resolve_metadata(obj, *args, **kwargs):
+        metadata = obj.metadata
+        return camelize(metadata)
+
+
 class VersionNode(AbstractTextPartNode):
     text_alignment_records = LimitedConnectionField(lambda: TextAlignmentRecordNode)
 
@@ -386,7 +404,6 @@ class VersionNode(AbstractTextPartNode):
 
 
 class TextPartNode(AbstractTextPartNode):
-    # TODO: Determine if this is used in TOW
     lowest_citable_part = String()
 
 
@@ -899,6 +916,9 @@ class Query(ObjectType):
 
     named_entity = relay.Node.Field(NamedEntityNode)
     named_entities = LimitedConnectionField(NamedEntityNode)
+
+    repo = relay.Node.Field(RepoNode)
+    repos = LimitedConnectionField(RepoNode)
 
     dictionary = relay.Node.Field(DictionaryNode)
     dictionaries = LimitedConnectionField(DictionaryNode)

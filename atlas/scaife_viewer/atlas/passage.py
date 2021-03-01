@@ -117,7 +117,7 @@ class Passage:
 
 
 class SelectedTextPartsMixin:
-    # TODO: LRU cache or some other memoization, especially for text overview
+    # TODO: LRU cache or some other memoization, especially for citation TOC
     @staticmethod
     def get_text_parts_in_range(text_parts, start, end, field_name="idx"):
         for text_part in text_parts:

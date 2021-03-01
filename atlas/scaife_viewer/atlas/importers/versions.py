@@ -1,9 +1,7 @@
 import logging
-import sys
 from collections import defaultdict
 from itertools import islice
 
-from django.db.models import Max
 from django.utils.translation import ugettext_noop
 
 from tqdm import tqdm
@@ -18,6 +16,23 @@ from ..utils import get_lowest_citable_depth
 
 
 logger = logging.getLogger(__name__)
+
+"""
+`Node.save` performs multiple INSERT and UPDATE queries.
+
+For text-part level nodes, we see a massive performance
+benefit by batching and bulk inserting the nodes. This is
+also true for corpora with hundreds of work-part level nodes.
+
+Overriding `get_descendants` and `get_children` to use
+"live" queries allows us to skip manually setting the
+`numchild` value of of each node.
+
+Skipping the queries needed to set `numchild` speeds up
+ingestion time by 180% on a test data set (64 seconds vs
+184 seconds on one test dataset).
+"""
+USE_BULK_INGESTION = True
 
 
 class CTSImporter:
@@ -161,23 +176,11 @@ class CTSImporter:
         self.nodes_to_create.append(child_node)
         return child_node
 
-    def use_bulk(self, node_data):
-        """
-        `Node.save` performs multiple INSERT and UPDATE queries.
-
-        For text-part level nodes, we see a massive performance
-        benefit by batching and bulk inserting the nodes, and then
-        bulk updating any parent nodes to keep the `numchild`
-        value of nodes in sync.
-        """
-        return True
-        # return bool(node_data.get("rank"))
-
     def generate_node(self, idx, node_data, parent_urn):
         if idx == 0:
             return self.add_root(node_data)
         parent = self.nodes.get(parent_urn)
-        if self.use_bulk(node_data):
+        if USE_BULK_INGESTION:
             return self.add_child_bulk(parent, node_data)
         return self.add_child(parent, node_data)
 
@@ -186,7 +189,7 @@ class CTSImporter:
         # TODO: Support exemplars
         return value <= constants.CTS_URN_DEPTHS["version"]
 
-    def destructure_urn(self, node_urn, tokens, extract_text_parts=True):
+    def destructure_urn(self, node_urn, text_content):
         node_data = []
         for pos, kind in enumerate(self.get_urn_scheme(node_urn)):
             depth = pos + 1
@@ -202,7 +205,8 @@ class CTSImporter:
                     data.update({"metadata": self.get_version_metadata()})
                 # TODO: Handle exemplars
             else:
-                if not extract_text_parts and not self.textpart_metadata:
+                # NOTE: `text_content is None` allows for empty text parts
+                if text_content is None and not self.textpart_metadata:
                     continue
 
                 ref_index = self.citation_scheme.index(kind)
@@ -212,7 +216,7 @@ class CTSImporter:
                 data.update({"urn": urn, "ref": ref, "rank": rank})
 
                 if depth == self.lowest_citable_depth:
-                    data.update({"text_content": tokens})
+                    data.update({"text_content": text_content})
                 if rank == 1:
                     # TODO: Additive metadata, other ranks
                     data.update({"metadata": self.get_textpart_metadata(urn)})
@@ -221,28 +225,24 @@ class CTSImporter:
 
         return node_data
 
-    def extract_urn_and_tokens(self, line):
-        if not line:
-            tokens = ""
-            urn = f"{self.urn}"
-        elif self.format == "cex":
-            urn, tokens = line.strip().split("#", maxsplit=1)
+    def extract_urn_and_text_content(self, line):
+        if self.format == "cex":
+            urn, text_content = line.strip().split("#", maxsplit=1)
         else:
-            try:
-                ref, tokens = line.strip().split(maxsplit=1)
-            except ValueError:
-                # FIXME: Likely refactor this for when we won't have any tokens
-                # (like textpart metadata)
-                ref = line
-                tokens = ""
+            ref, text_content = line.strip().split(maxsplit=1)
             urn = f"{self.urn}{ref}"
-        return URN(urn), tokens
+        return URN(urn), text_content
 
-    def generate_branch(self, line, extract_text_parts=True):
-        node_urn, tokens = self.extract_urn_and_tokens(line)
-        branch_data = self.destructure_urn(
-            node_urn, tokens, extract_text_parts=extract_text_parts
-        )
+    def generate_branch(self, urn=None, line=None):
+        if line:
+            node_urn, text_content = self.extract_urn_and_text_content(line)
+        elif urn:
+            node_urn = urn
+            text_content = None
+        else:
+            raise ValueError('Either a "urn" or "line" value must be supplied.')
+
+        branch_data = self.destructure_urn(node_urn, text_content)
         for idx, node_data in enumerate(branch_data):
             node = self.nodes.get(node_data["urn"])
             if node is None:
@@ -256,15 +256,14 @@ class CTSImporter:
         if full_content_path:
             with open(full_content_path, "r") as f:
                 for line in f:
-                    self.generate_branch(line)
-        # TODO: Better organize this conditional
+                    self.generate_branch(line=line)
         elif self.textpart_metadata:
+            # NOTE: This allows SV 1 readers to ingest text parts
+            # without needing to also ingest text_content or tokens
             for urn in self.textpart_metadata.keys():
-                # TODO: Revisit URN utility here
-                _, ref = urn.rsplit(":", maxsplit=1)
-                self.generate_branch(ref, extract_text_parts=False)
+                self.generate_branch(urn=URN(urn))
         else:
-            self.generate_branch("", extract_text_parts=False)
+            self.generate_branch(urn=self.urn)
         return self.nodes_to_create
 
 
@@ -305,10 +304,10 @@ def import_versions(reset=False):
     if reset:
         Node.objects.filter(kind="nid").delete()
     # TODO: Wire up logging
-    print("Resolving library")
+    logger.info("Resolving library")
     library = hookset.resolve_library()
 
-    print("Building Node tree")
+    logger.info("Building Node tree")
     importer_class = hookset.get_importer_class()
     nodes = {}
     to_defer = []
@@ -329,6 +328,6 @@ def import_versions(reset=False):
 
             lookup = importer.node_last_child_lookup
 
-    print("Inserting Node tree")
+    logger.info("Inserting Node tree")
     chunked_bulk_create(to_defer)
-    print(f"{Node.objects.count()} total nodes on the tree.", file=sys.stderr)
+    logger.info(f"{Node.objects.count()} total nodes on the tree.")

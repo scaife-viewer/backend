@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from ...cloud import CloudJob
+from ...conf import settings
 from ...indexer import DirectPusher, Indexer, PubSubPusher
 
 
@@ -43,8 +44,17 @@ class IndexerCommand(BaseCommand):
         print(f"Finished in {elapsed}s")
 
 
-class Command(CloudJob, IndexerCommand):
-    pass
+if settings.SCAIFE_VIEWER_CORE_USE_CLOUD_INDEXER:
+    # NOTE: Adds additional GCE metadata hooks
+    # onto the indexing command
+    class Command(CloudJob, IndexerCommand):
+        pass
+
+
+else:
+
+    class Command(IndexerCommand):
+        pass
 
 
 class Timer:

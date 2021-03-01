@@ -1,9 +1,13 @@
+import logging
+
 from . import constants
 from .resolvers.default import resolve_library
 
 
 # TODO: Make this a config level option
 INGEST_TO_LOWEST_CITABLE_NODES = True
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_trailing_colon(urn):
@@ -49,27 +53,27 @@ class DefaultHookSet:
         )
 
     def extract_cts_version_metadata(self, version):
-        # TODO: Add logging and improve fallback
         urn = str(version.urn)
 
-        # FIXME: better internal logging / exception raising
         try:
             first_passage_urn = str(version.first_passage().urn)
-        except Exception:
-            print(f'Could not extract first_passage_urn [urn="{urn}"]')
+        except KeyError:
+            msg = f'Could not extract first_passage_urn [urn="{urn}"]'
+            logger.warning(msg)
             first_passage_urn = None
 
+        # TODO: Move textpart level extractors out to another interface within `Library`
         try:
             textpart_metadata = self.extract_cts_textpart_metadata(version)
-        except Exception:
-            print(f'Could not extract textpart_metadata [urn="{urn}"]')
+        except KeyError:
+            msg = f'Could not extract textpart_metadata [urn="{urn}"]'
+            logger.warning(msg)
             textpart_metadata = {}
 
         return dict(
             urn=f"{ensure_trailing_colon(version.urn)}",
             version_kind=version.kind,
             # TODO: Other ways to expose this on `Library`
-            # TODO: Ensure we don't hit weird MRO stuff here
             textpart_metadata=textpart_metadata,
             first_passage_urn=first_passage_urn,
             citation_scheme=[c.name for c in version.metadata.citation],
