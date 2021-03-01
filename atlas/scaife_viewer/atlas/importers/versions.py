@@ -233,7 +233,7 @@ class CTSImporter:
         if line:
             node_urn, text_content = self.extract_urn_and_text_content(line)
         elif urn:
-            node_urn = URN(urn)
+            node_urn = urn
             text_content = None
         else:
             raise ValueError('Either a "urn" or "line" value must be supplied.')
@@ -257,7 +257,7 @@ class CTSImporter:
             # NOTE: This allows SV 1 readers to ingest text parts
             # without needing to also ingest text_content or tokens
             for urn in self.textpart_metadata.keys():
-                self.generate_branch(urn=urn)
+                self.generate_branch(urn=URN(urn))
         else:
             self.generate_branch(urn=self.urn)
         return self.nodes_to_create
