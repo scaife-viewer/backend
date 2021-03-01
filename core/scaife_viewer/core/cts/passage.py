@@ -9,7 +9,7 @@ import anytree
 import regex
 from lxml import etree
 from MyCapytain.common.constants import Mimetypes
-from MyCapytain.common.reference import Reference
+from MyCapytain.common.reference import CtsReference as Reference
 
 from .capitains import default_resolver
 from .reference import URN

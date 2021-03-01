@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("scaife_viewer_atlas", "0003_syntax_trees"),
+        ("scaife_viewer_atlas", "0004_repo"),
     ]
 
     operations = [

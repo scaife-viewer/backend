@@ -1,4 +1,6 @@
 import json
+import multiprocessing
+import os
 from collections import Counter, deque
 from itertools import zip_longest
 from operator import attrgetter
@@ -13,9 +15,20 @@ from anytree.iterators import PreOrderIter
 
 from . import cts
 from .morphology import Morphology
+from .search import default_es_client_config
 
 
 morphology = None
+DASK_CONFIG_NUM_WORKERS = int(
+    os.environ.get("DASK_CONFIG_NUM_WORKERS", multiprocessing.cpu_count() - 1)
+)
+LEMMA_CONTENT = bool(int(os.environ.get("LEMMA_CONTENT", 0)))
+
+
+def compute_kwargs(**params):
+    kwargs = {"num_workers": DASK_CONFIG_NUM_WORKERS}
+    kwargs.update(params)
+    return kwargs
 
 
 class SortedPassage(NamedTuple):
@@ -47,28 +60,58 @@ class Indexer:
             morphology = Morphology.load(path)
             print("Morphology loaded")
 
+    def get_urn_obj(self):
+        if not self.urn_prefix:
+            return None
+        return cts.URN(self.urn_prefix)
+
+    def get_urn_prefix_filter(self, urn_obj):
+        if not urn_obj:
+            return None
+        if urn_obj.reference:
+            up_to = cts.URN.NO_PASSAGE
+        elif urn_obj.version:
+            up_to = cts.URN.VERSION
+        elif urn_obj.work:
+            up_to = cts.URN.WORK
+        elif urn_obj.textgroup:
+            up_to = cts.URN.TEXTGROUP
+        elif urn_obj.namespace:
+            up_to = cts.URN.NAMESPACE
+        else:
+            raise ValueError(f'Could not derive prefix filter from "{urn_obj}"')
+
+        value = urn_obj.upTo(up_to)
+        print(f"Applying URN prefix filter: {value}")
+        return value
+
     def index(self):
         cts.TextInventory.load()
         print("Text inventory loaded")
-        if self.urn_prefix:
-            urn_prefix = cts.URN(self.urn_prefix)
-            print(f"Applying URN prefix filter: {urn_prefix.upTo(cts.URN.NO_PASSAGE)}")
-        else:
-            urn_prefix = None
-        texts = dask.bag.from_sequence(
-            self.texts(urn_prefix.upTo(cts.URN.NO_PASSAGE) if urn_prefix else None)
-        )
+        urn_obj = self.get_urn_obj()
+        prefix_filter = self.get_urn_prefix_filter(urn_obj)
+        texts = dask.bag.from_sequence(self.texts(prefix_filter))
+
+        if LEMMA_CONTENT:
+            # only retrieve greek texts
+            texts = texts.filter(lambda t: t.lang == "grc")
+
         passages = texts.map(self.passages_from_text).flatten()
-        if urn_prefix and urn_prefix.reference:
-            print(f"Applying URN reference filter: {urn_prefix.reference}")
-            passages = passages.filter(lambda p: p["urn"] == str(urn_prefix))
+        if urn_obj and urn_obj.reference:
+            print(f"Applying URN reference filter: {urn_obj.reference}")
+            passages = passages.filter(lambda p: p.urn == str(urn_obj))
         if self.limit is not None:
             passages = passages.take(self.limit, npartitions=-1)
         else:
-            passages = passages.compute()
+            passages = passages.compute(**compute_kwargs())
         print(f"Indexing {len(passages)} passages")
+        indexer_kwargs = dict(lemma_content=LEMMA_CONTENT and bool(morphology))
+        # @@@ revisit partitions based on `DASK_CONFIG_NUM_WORKERS`; also partitions sorted by
+        # token size for consistent memory usage
         word_counts = (
-            dask.bag.from_sequence(passages).map_partitions(self.indexer).compute()
+            dask.bag.from_sequence(passages)
+            .map_partitions(self.indexer, **indexer_kwargs)
+            .compute(**compute_kwargs())
         )
         total_word_counts = Counter()
         for (lang, count) in word_counts:
@@ -100,6 +143,7 @@ class Indexer:
                         "urn:cts:greekLit:tlg4015.tlg007.opp-grc1",
                         "urn:cts:greekLit:tlg4015.tlg008.opp-grc1",
                         "urn:cts:greekLit:tlg4015.tlg009.opp-grc1",
+                        "urn:cts:greekLit:tlg4016.tlg003.opp-grc2",
                     }
                     if str(text.urn) in exclude:
                         continue
@@ -112,41 +156,48 @@ class Indexer:
         try:
             toc = text.toc()
         except Exception as e:
-            print(f"{text.urn} toc error: {e}")
+            print(f"toc error: {e} [urn={text.urn}]")
         else:
             leaves = PreOrderIter(toc.root, filter_=attrgetter("is_leaf"))
             for i, node in enumerate(leaves):
                 passages.append(
-                    SortedPassage(urn=f"{text.urn}:{node.reference}", sort_idx=i)
+                    SortedPassage(urn=f"{text.urn}:{node.reference}", sort_idx=i,)
                 )
         return passages
 
-    def indexer(self, chunk: Iterable[SortedPassage]):
+    def indexer(self, chunk: Iterable[SortedPassage], lemma_content=True):
         from raven.contrib.django.raven_compat.models import client as sentry
 
         words = []
+        result = None
         for p in chunk:
             urn = p.urn
             try:
                 passage = cts.passage(urn)
             except cts.PassageDoesNotExist:
-                print(f"Passage {urn} does not exist")
+                print(f"Passage does not exist [urn={urn}]")
                 continue
             except Exception as e:
-                print(f"Error {e}")
+                print(f"Error {e} [urn={urn}]")
                 continue
             try:
                 # tokenized once and passed around as an optimization
                 tokens = passage.tokenize(whitespace=False)
-                words.append((str(passage.text.lang), self.count_words(tokens)))
-                doc = self.passage_to_doc(passage, p.sort_idx, tokens)
+                stats = (str(passage.text.lang), self.count_words(tokens))
+                words.append(stats)
+                doc = self.passage_to_doc(
+                    passage, p.sort_idx, tokens, stats, lemma_content
+                )
             except MemoryError:
                 return words
             except Exception:
                 sentry.captureException()
                 raise
             if not self.dry_run:
-                self.pusher.push(doc)
+                result = self.pusher.push(doc)
+
+        self.pusher.finalize(result, self.dry_run)
+
         return words
 
     def count_words(self, tokens) -> int:
@@ -162,6 +213,14 @@ class Indexer:
         short_key = morphology.short_keys.get(str(passage.text.urn))
         if short_key is None:
             return ""
+
+        token_limit = 50000
+        limit_exceeded = len(tokens) > token_limit
+        if limit_exceeded:
+            print(
+                f"more than {token_limit} tokens detected [urn={passage.urn}] [count={len(tokens)}]"
+            )
+
         thibault = [token["w"] for token in tokens]
         giuseppe = []
         text = morphology.text.get((short_key, str(passage.reference)))
@@ -172,25 +231,37 @@ class Indexer:
             form = morphology.forms[int(form_key) - 1]
             giuseppe.append((form.form, form.lemma))
         missing = chr(0xFFFD)
-        return " ".join(
+        content = " ".join(
             [{None: missing}.get(w, w) for w in align_text(thibault, giuseppe)]
         )
+        if limit_exceeded:
+            print(f"lemma content generated [urn={passage.urn}]")
 
-    def passage_to_doc(self, passage, sort_idx, tokens):
-        return {
-            "urn": str(passage.urn),
-            "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
-            "work": str(passage.text.urn.upTo(cts.URN.WORK)),
-            "text": {
-                "urn": str(passage.text.urn),
-                "label": passage.text.label,
-                "description": passage.text.description,
-            },
-            "reference": str(passage.reference),
-            "sort_idx": sort_idx,
-            "lemma_content": self.lemma_content(passage, tokens),
-            "content": " ".join([token["w"] for token in tokens]),
-        }
+        return content
+
+    def passage_to_doc(self, passage, sort_idx, tokens, word_stats, lemma_content):
+        urn = str(passage.urn)
+        language, word_count = word_stats
+        if lemma_content:
+            lc = self.lemma_content(passage, tokens)
+            return {"urn": urn, "lemma_content": lc}
+        else:
+            return {
+                "urn": urn,
+                "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
+                "work": str(passage.text.urn.upTo(cts.URN.WORK)),
+                "text": {
+                    "urn": str(passage.text.urn),
+                    "label": passage.text.label,
+                    "description": passage.text.description,
+                },
+                "reference": str(passage.reference),
+                "sort_idx": sort_idx,
+                "content": " ".join([token["w"] for token in tokens]),
+                "raw_content": passage.content,
+                "language": language,
+                "word_count": word_count,
+            }
 
 
 def consume(it):
@@ -212,11 +283,7 @@ class DirectPusher:
     @property
     def es(self):
         if not hasattr(self, "_es"):
-            self._es = elasticsearch.Elasticsearch(
-                hosts=settings.ELASTICSEARCH_HOSTS,
-                sniff_on_start=settings.ELASTICSEARCH_SNIFF_ON_START,
-                sniff_on_connection_fail=settings.ELASTICSEARCH_SNIFF_ON_CONNECTION_FAIL,
-            )
+            self._es = elasticsearch.Elasticsearch(**default_es_client_config())
         return self._es
 
     @property
@@ -235,6 +302,15 @@ class DirectPusher:
         docs = ({"_id": doc["urn"], **metadata, **doc} for doc in self.docs)
         elasticsearch.helpers.bulk(self.es, docs)
         self.docs.clear()
+
+    def finalize(self, result, dry_run):
+        if dry_run:
+            return
+
+        # we need to ensure the deque is cleared if less than
+        # `chunk_size`
+        self.commit_docs()
+        print("Committing documents to ElasticSearch")
 
     def __getstate__(self):
         s = self.__dict__.copy()
@@ -260,7 +336,22 @@ class PubSubPusher:
         return self._publisher
 
     def push(self, doc):
-        self.publisher.publish(self.topic_path, json.dumps(doc).encode("utf-8"))
+        """
+        Returns a Future
+
+        https://github.com/googleapis/google-cloud-python/blob/master/pubsub/docs/publisher/index.rst#futures
+        """
+        return self.publisher.publish(self.topic_path, json.dumps(doc).encode("utf-8"))
+
+    def finalize(self, future, dry_run):
+        if dry_run:
+            return
+
+        if future and not future.done():
+            print("Publishing messages to PubSub")
+            # Block until the last message has been published
+            # https://github.com/googleapis/google-cloud-python/blob/69ec9fea1026c00642ca55ca18110b7ef5a09675/pubsub/docs/publisher/index.rst#futures
+            future.result()
 
     def __getstate__(self):
         s = self.__dict__.copy()
