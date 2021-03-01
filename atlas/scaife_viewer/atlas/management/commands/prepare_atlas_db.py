@@ -55,7 +55,7 @@ class Command(BaseCommand):
 
         # TODO: make this pipeline more configurable
         try:
-            from github import Github
+            from github import Github  # noqa: F401
         except ModuleNotFoundError:
             pass
         else:

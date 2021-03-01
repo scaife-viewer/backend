@@ -2,7 +2,6 @@ import logging
 from collections import defaultdict
 from itertools import islice
 
-from django.db.models import Max
 from django.utils.translation import ugettext_noop
 
 from tqdm import tqdm
