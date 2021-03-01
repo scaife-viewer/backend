@@ -18,6 +18,23 @@ from ..utils import get_lowest_citable_depth
 
 logger = logging.getLogger(__name__)
 
+"""
+`Node.save` performs multiple INSERT and UPDATE queries.
+
+For text-part level nodes, we see a massive performance
+benefit by batching and bulk inserting the nodes. This is
+also true for corpora with hundreds of work-part level nodes.
+
+Overriding `get_descendants` and `get_children` to use
+"live" queries allows us to skip manually setting the
+`numchild` value of of each node.
+
+Skipping the queries needed to set `numchild` speeds up
+ingestion time by 180% on a test data set (64 seconds vs
+184 seconds on one test dataset).
+"""
+USE_BULK_INGESTION = True
+
 
 class CTSImporter:
     """
@@ -160,23 +177,11 @@ class CTSImporter:
         self.nodes_to_create.append(child_node)
         return child_node
 
-    def use_bulk(self, node_data):
-        """
-        `Node.save` performs multiple INSERT and UPDATE queries.
-
-        For text-part level nodes, we see a massive performance
-        benefit by batching and bulk inserting the nodes, and then
-        bulk updating any parent nodes to keep the `numchild`
-        value of nodes in sync.
-        """
-        return True
-        # return bool(node_data.get("rank"))
-
     def generate_node(self, idx, node_data, parent_urn):
         if idx == 0:
             return self.add_root(node_data)
         parent = self.nodes.get(parent_urn)
-        if self.use_bulk(node_data):
+        if USE_BULK_INGESTION:
             return self.add_child_bulk(parent, node_data)
         return self.add_child(parent, node_data)
 
