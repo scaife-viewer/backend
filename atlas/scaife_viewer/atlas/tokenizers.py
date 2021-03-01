@@ -53,4 +53,3 @@ def tokenize_all_text_parts_serial(reset=False):
 def tokenize_all_text_parts(reset=False):
     # FIXME: Improve reliability of parallel tokenizer
     return tokenize_all_text_parts_serial(reset=reset)
-
