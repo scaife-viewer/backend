@@ -597,6 +597,8 @@ class AttributionRecord(models.Model):
 
     # TODO: Formalize relation patterns; we'll query through data.references
     # to begin
+
+    # TODO: IDX
     urns = models.ManyToManyField(
         "scaife_viewer_atlas.Node", related_name="attribution_records"
     )
