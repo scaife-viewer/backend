@@ -12,6 +12,12 @@ Default: `False`
 When `False`, to maintain compatability with the MyCapitain resolver,
 the trailing colon will be stripped from URNs.
 
+### REDIRECT_VERSION_LIBRARY_COLLECTION_TO_READER
+
+Default: `True`
+
+When `True`, will redirect a version / exemplar `library_collection` URL to the first passage of the version in the reader`
+
 ### HOOKSET
 
 Default: `"scaife_viewer.core.hooks.DefaultHookSet"`

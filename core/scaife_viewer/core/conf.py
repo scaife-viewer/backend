@@ -26,6 +26,8 @@ class CoreAppConf(AppConf):
     ALLOW_TRAILING_COLON = False
 
     # Other
+    REDIRECT_VERSION_LIBRARY_COLLECTION_TO_READER = True
+
     HOOKSET = "scaife_viewer.core.hooks.DefaultHookSet"
 
     # Search Indexing

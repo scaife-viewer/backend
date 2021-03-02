@@ -9,7 +9,7 @@ import sortedm2m.fields
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("scaife_viewer_atlas", "0004_repo"),
+        ("scaife_viewer_atlas", "0005_attributions"),
     ]
 
     operations = [

@@ -69,6 +69,9 @@ class Command(BaseCommand):
             self.stdout.write("--[Applying repo metadata]--")
             importers.repo_metadata.import_repo_metadata(reset=True)
 
+        self.stdout.write("--[Loading attributions]--")
+        importers.attributions.import_attributions(reset=True)
+
     def handle(self, *args, **options):
         database_path = settings.SV_ATLAS_DB_PATH
 

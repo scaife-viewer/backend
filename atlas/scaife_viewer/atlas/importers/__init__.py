@@ -1,5 +1,6 @@
 from . import (
     alignments,
+    attributions,
     audio_annotations,
     dictionaries,
     image_annotations,
@@ -14,6 +15,7 @@ from . import (
 
 __all__ = [
     "alignments",
+    "attributions",
     "audio_annotations",
     "dictionaries",
     "image_annotations",
