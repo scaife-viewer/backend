@@ -16,6 +16,7 @@ from .hooks import hookset
 from .models import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
+    AttributionRecord,
     AudioAnnotation,
     ImageAnnotation,
     MetricalAnnotation,
@@ -693,6 +694,31 @@ class NamedEntityNode(DjangoObjectType):
         filterset_class = NamedEntityFilterSet
 
 
+class AttributionRecordFilterSet(django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = AttributionRecord
+        fields = []
+
+    def reference_filter(self, queryset, name, value):
+        # TODO: Handle path expansion, healed URNs, etc here
+        return queryset.filter(data__references__icontains=value)
+
+
+class AttributionRecordNode(DjangoObjectType):
+    name = String()
+
+    class Meta:
+        model = AttributionRecord
+        interfaces = (relay.Node,)
+        filterset_class = AttributionRecordFilterSet
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.select_related("person", "organization")
+
+
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
     text_groups = LimitedConnectionField(TextGroupNode)
@@ -746,6 +772,9 @@ class Query(ObjectType):
 
     repo = relay.Node.Field(RepoNode)
     repos = LimitedConnectionField(RepoNode)
+
+    attribution = relay.Node.Field(AttributionRecordNode)
+    attributions = LimitedConnectionField(AttributionRecordNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
