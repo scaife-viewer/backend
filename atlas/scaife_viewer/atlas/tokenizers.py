@@ -3,6 +3,7 @@ import sys
 
 from .conf import settings
 from .models import Node, Token
+from .utils import get_lowest_citable_nodes
 
 
 LIMIT = 500
@@ -13,8 +14,7 @@ def tokenize_text_parts(version_exemplar_urn, force=True):
         Token.objects.filter(text_part__urn__icontains=version_exemplar_urn).delete()
 
     version_exemplar = Node.objects.get(urn=version_exemplar_urn)
-    lowest_kind = version_exemplar.metadata["citation_scheme"][-1]
-    text_parts = version_exemplar.get_descendants().filter(kind=lowest_kind)
+    text_parts = get_lowest_citable_nodes(version_exemplar)
     counters = {"token_idx": 0}
     to_create = []
     for text_part in text_parts:
@@ -53,4 +53,3 @@ def tokenize_all_text_parts_serial(reset=False):
 def tokenize_all_text_parts(reset=False):
     # FIXME: Improve reliability of parallel tokenizer
     return tokenize_all_text_parts_serial(reset=reset)
-

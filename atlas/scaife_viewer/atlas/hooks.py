@@ -1,5 +1,10 @@
+import logging
+
 from . import constants
 from .resolvers.default import resolve_library
+
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_trailing_colon(urn):
@@ -45,10 +50,29 @@ class DefaultHookSet:
         )
 
     def extract_cts_version_metadata(self, version):
+        urn = str(version.urn)
+
+        try:
+            first_passage_urn = str(version.first_passage().urn)
+        except KeyError:
+            msg = f'Could not extract first_passage_urn [urn="{urn}"]'
+            logger.warning(msg)
+            first_passage_urn = None
+
+        # TODO: Move textpart level extractors out to another interface within `Library`
+        try:
+            textpart_metadata = self.extract_cts_textpart_metadata(version)
+        except KeyError:
+            msg = f'Could not extract textpart_metadata [urn="{urn}"]'
+            logger.warning(msg)
+            textpart_metadata = {}
+
         return dict(
             urn=f"{ensure_trailing_colon(version.urn)}",
             version_kind=version.kind,
-            # TODO: provide first_passage_urn
+            # TODO: Other ways to expose this on `Library`
+            textpart_metadata=textpart_metadata,
+            first_passage_urn=first_passage_urn,
             citation_scheme=[c.name for c in version.metadata.citation],
             label=[
                 {
@@ -66,6 +90,19 @@ class DefaultHookSet:
             ],
             lang=version.lang,
         )
+
+    def extract_cts_textpart_metadata(self, version):
+        version_urn = ensure_trailing_colon(version.urn)
+        # TODO: define this on cts.Text?
+        metadata = {}
+        toc = version.toc()
+        for ref_node in toc.num_resolver.glob(toc.root, "*"):
+            ref = ref_node.num
+            textpart_urn = f"{version_urn}{ref}"
+            metadata[textpart_urn] = {
+                "first_passage_urn": next(toc.chunks(ref_node), None).urn,
+            }
+        return metadata
 
 
 class HookProxy:

@@ -1,3 +1,5 @@
+from tqdm import tqdm
+
 from ..hooks import hookset
 from .common import Library
 
@@ -16,6 +18,7 @@ class CTSCollectionResolver:
             version_urn = version_metadata["urn"]
             version_metadata["path"] = None
             self.versions[version_urn] = version_metadata
+            self.progress_bar.update(1)
 
     def resolve_works(self, text_group):
         for work in text_group.works():
@@ -27,6 +30,14 @@ class CTSCollectionResolver:
             self.works[work_urn] = work_metadata
             self.resolve_versions(work)
 
+    def calculate_texts_count(self, text_groups):
+        count = 0
+        for text_group in text_groups:
+            for work in text_group.works():
+                for text in work.texts():
+                    count += 1
+        return count
+
     def resolve_text_inventory(self, text_inventory):
         """
         Resolves the library from `cts.TextInventory`.
@@ -34,11 +45,16 @@ class CTSCollectionResolver:
         Since Node instances are ordered by their `path` value,
         `cts.collections.SORT_OVERRIDES` is respected by ATLAS.
         """
-        for text_group in text_inventory.text_groups():
-            text_group_metadata = hookset.extract_cts_text_group_metadata(text_group)
-            tg_urn = text_group_metadata.pop("urn")
-            self.text_groups[tg_urn] = text_group_metadata
-            self.resolve_works(text_group)
+        text_groups = list(text_inventory.text_groups())
+        texts_count = self.calculate_texts_count(text_groups)
+        with tqdm(total=texts_count) as self.progress_bar:
+            for text_group in text_groups:
+                text_group_metadata = hookset.extract_cts_text_group_metadata(
+                    text_group
+                )
+                tg_urn = text_group_metadata.pop("urn")
+                self.text_groups[tg_urn] = text_group_metadata
+                self.resolve_works(text_group)
         return self.text_groups, self.works, self.versions
 
 

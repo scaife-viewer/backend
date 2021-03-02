@@ -357,7 +357,16 @@ class Node(MP_Node):
         if up_to and up_to not in constants.CTS_URN_NODES:
             raise ValueError(f"Invalid CTS node identifier for: {up_to}")
 
-        qs = cls._get_serializable_model().get_tree(parent=root)
+        # NOTE: This filters the queryset using path__startswith,
+        # because the default `get_tree(parent=root)` uses `self.is_leaf
+        # and the current bulk ingestion into ATLAS does not populate
+        # `numchild`.
+        qs = cls._get_serializable_model().get_tree()
+        if root:
+            qs = qs.filter(
+                path__startswith=root.path,
+                # depth__gte=parent.depth
+            ).order_by("path")
         if up_to:
             depth = constants.CTS_URN_DEPTHS[up_to]
             qs = qs.exclude(depth__gt=depth)
@@ -401,6 +410,31 @@ class Node(MP_Node):
         if not self.rank:
             return Node.objects.none()
         return version.get_descendants().filter(rank=self.rank)
+
+    def get_descendants(self):
+        # NOTE: This overrides `get_descendants` to avoid checking
+        # `self.is_leaf`; current bulk ingestion into ATLAS
+        # does not populate numchild.
+        # TODO: populate numchild and remove override
+        parent = self
+        return (
+            self.__class__.objects.filter(
+                path__startswith=parent.path, depth__gte=parent.depth
+            )
+            .order_by("path")
+            .exclude(pk=parent.pk)
+        )
+
+    def get_children(self):
+        # NOTE: This overrides `get_children` to avoid checking
+        # `self.is_leaf`; current bulk ingestion into ATLAS
+        # does not populate numchild.
+        # TODO: populate numchild and remove override
+
+        return self.__class__.objects.filter(
+            depth=self.depth + 1,
+            path__range=self._get_children_path_interval(self.path),
+        ).order_by("path")
 
 
 class Token(models.Model):
