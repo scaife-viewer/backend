@@ -683,3 +683,47 @@ class Citation(models.Model):
     text_parts = SortedManyToManyField(
         "scaife_viewer_atlas.Node", related_name="sense_citations"
     )
+
+
+class Metadata(models.Model):
+    """
+    idx
+    identifier (urn)
+    collection identifier (urn)
+    collection-scoped identifier (defer, possibly just props)
+    data type (enum)
+    language (defer, string)
+    label (string)
+    value (string)
+    object (defer)
+    up_to (defer)
+    index (bool)
+    __str__
+    """
+
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(
+        # TODO: Can we encode the collection into the URN too?
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:metadata.atlas_v1",
+    )
+    collection_urn = models.CharField(
+        max_length=255, help_text="urn:cite2:<site>:metadata_collection.atlas_v1"
+    )
+    datatype = models.CharField(
+        choices=[("str", "String"), ("int", "Integer"), ("date", "Date")],
+        max_length=4,
+        default="str",
+    )
+    label = models.CharField(max_length=255)
+    value = models.CharField(blank=True, null=True, max_length=255)
+
+    index = models.BooleanField(default=True, help_text="Include in search index")
+
+    cts_relations = SortedManyToManyField(
+        "scaife_viewer_atlas.Node", related_name="structured_metadata"
+    )
+
+    def __str__(self):
+        return f"{self.label}: {self.value}"
