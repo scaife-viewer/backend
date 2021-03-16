@@ -302,7 +302,7 @@ class TextGroupNode(AbstractTextPartNode):
 
 class WorkNode(AbstractTextPartNode):
     # @@@ apply a subfilter here?
-    versions = LimitedConnectionField(lambda: VersionNode)
+    versions = LimitedConnectionField(lambda: hookset.version_node_class())
 
     @classmethod
     def get_queryset(cls, queryset, info):
@@ -319,7 +319,7 @@ class WorkNode(AbstractTextPartNode):
 
 
 class RepoNode(DjangoObjectType):
-    versions = LimitedConnectionField(lambda: VersionNode)
+    versions = LimitedConnectionField(lambda: hookset.version_node_class())
     metadata = generic.GenericScalar()
 
     class Meta:
@@ -707,8 +707,8 @@ class Query(ObjectType):
     work = relay.Node.Field(WorkNode)
     works = LimitedConnectionField(WorkNode)
 
-    version = relay.Node.Field(VersionNode)
-    versions = LimitedConnectionField(VersionNode)
+    version = relay.Node.Field(lambda: hookset.version_node_class())
+    versions = LimitedConnectionField(lambda: hookset.version_node_class())
 
     text_part = relay.Node.Field(TextPartNode)
     text_parts = LimitedConnectionField(TextPartNode)

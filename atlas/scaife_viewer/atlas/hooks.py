@@ -104,6 +104,10 @@ class DefaultHookSet:
             }
         return metadata
 
+    def version_node_class(self):
+        from .schema import VersionNode
+        return VersionNode
+
 
 class HookProxy:
     def __getattr__(self, attr):
