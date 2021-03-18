@@ -49,7 +49,7 @@ from .utils import (
 
 
 # TODO: Optimize queries
-CITATIONS_ARE_TEXT_PARTS = False
+CITATIONS_ARE_TEXT_PARTS = True
 # TODO: Make a proper config variable
 RESOLVE_VIA_LEMMAS = bool(int(os.environ.get("RESOLVE_VIA_LEMMAS", 0)))
 

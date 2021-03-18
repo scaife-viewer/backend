@@ -4,13 +4,14 @@ import os
 from tqdm import tqdm
 
 from scaife_viewer.atlas.conf import settings
-from scaife_viewer.atlas.urn import URN
 
 from ..language_utils import normalize_string
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
+from ..utils import chunked_bulk_create
 
 
-RESOLVE_CITATIONS_AS_TEXT_PARTS = False
+CitationThroughModel = Citation.text_parts.through
+RESOLVE_CITATIONS_AS_TEXT_PARTS = True
 
 ANNOTATIONS_DATA_PATH = os.path.join(
     settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries",
@@ -23,41 +24,7 @@ def get_paths(path):
     return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
-def _resolve_citations_as_text_parts(sense, citations):
-    # TODO: resolve at least to the highest level we have
-    created = []
-    idx = 0
-    for citation in citations:
-        text_part = None
-        urn = citation.get("urn")
-        if urn:
-            urn = URN(urn)
-            # TODO: skip a step
-            version_urn = urn.up_to(URN.VERSION)
-            version_obj = Node.objects.filter(kind="version", urn=version_urn,).first()
-            try:
-                text_part = (
-                    version_obj.get_descendants()
-                    .filter(ref=urn.passage.split(".")[0])
-                    .get()
-                )
-            except Node.DoesNotExist:
-                print(f"{urn} not found")
-        citation_obj = Citation.objects.create(
-            label=citation["content"],
-            sense=sense,
-            data=citation,
-            # TODO: proper URNs
-            urn=f"{sense.id}-{idx}",
-        )
-        idx += 1
-        if text_part:
-            citation_obj.text_parts.add(text_part)
-        created.append(citation_obj)
-    return created
-
-
-def _resolve_citations_via_data_urn(sense, citations):
+def _bulk_create_citations(sense, citations):
     idx = 0
     to_create = []
     for citation in citations:
@@ -72,16 +39,9 @@ def _resolve_citations_via_data_urn(sense, citations):
         idx += 1
         to_create.append(citation_obj)
     created = Citation.objects.bulk_create(to_create, batch_size=500)
+    # TODO: Defer creation to reduce SQL inserts in a
+    # nested loop
     return created
-
-
-def _resolve_citations(senses, citations):
-    if RESOLVE_CITATIONS_AS_TEXT_PARTS:
-        return _resolve_citations_as_text_parts(senses, citations)
-    else:
-        # We don't bother checking to see if we can resolve the citation
-        # ahead of time (we do this from within LGO currently)
-        return _resolve_citations_via_data_urn(senses, citations)
 
 
 def _process_sense(entry, s, idx, parent=None):
@@ -101,11 +61,51 @@ def _process_sense(entry, s, idx, parent=None):
             urn=s["urn"],
             entry=entry,
         )
-    _resolve_citations(obj, s.get("citations", []))
+    _bulk_create_citations(obj, s.get("citations", []))
     idx += 1
 
     for ss in s.get("children", []):
         _process_sense(entry, ss, idx, parent=obj)
+
+
+def _bulk_prepare_citation_through_objects(qs):
+    msg = "Retrieving URNs for citations"
+    print(msg)
+    citation_urn_pk_values = qs.values_list("data__urn", "pk")
+
+    candidates = list(set([c[0] for c in citation_urn_pk_values]))
+    msg = f"URNs retrieved: {len(candidates)}"
+    print(msg)
+
+    msg = "Building URN to Node (TextPart) pk lookup"
+    print(msg)
+    node_urn_pk_values = Node.objects.filter(urn__in=candidates).values_list(
+        "urn", "pk"
+    )
+    text_part_lookup = {}
+    for urn, pk in node_urn_pk_values:
+        text_part_lookup[urn] = pk
+
+    msg = "Preparing through objects for insert"
+    print(msg)
+    to_create = []
+    for urn, citation_id in citation_urn_pk_values:
+        node_id = text_part_lookup.get(urn, None)
+        if node_id:
+            to_create.append(
+                CitationThroughModel(node_id=node_id, citation_id=citation_id)
+            )
+    return to_create
+
+
+def _resolve_citation_textparts(qs):
+    prepared_objs = _bulk_prepare_citation_through_objects(qs)
+
+    relation_label = CitationThroughModel._meta.verbose_name_plural
+    msg = f"Bulk creating {relation_label}"
+    print(msg)
+
+    chunked_bulk_create(CitationThroughModel, prepared_objs)
 
 
 def _create_dictionaries(path):
@@ -128,6 +128,14 @@ def _create_dictionaries(path):
             )
             for sense in e["senses"]:
                 _process_sense(entry, sense, s_idx, parent=None)
+
+    if RESOLVE_CITATIONS_AS_TEXT_PARTS:
+        msg = "Generating citation through models..."
+        print(msg)
+        citations_with_urns = Citation.objects.filter(
+            sense__entry__dictionary=dictionary
+        ).exclude(data__urn=None)
+        _resolve_citation_textparts(citations_with_urns)
 
 
 def import_dictionaries(reset=False):
