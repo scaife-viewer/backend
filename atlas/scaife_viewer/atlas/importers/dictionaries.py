@@ -1,6 +1,8 @@
 import json
 import os
 
+from tqdm import tqdm
+
 from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.urn import URN
 
@@ -110,19 +112,22 @@ def _create_dictionaries(path):
     data = json.load(open(path))
     dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
     s_idx = 0
-    for e_idx, e in enumerate(data["entries"]):
-        headword = e["headword"]
-        headword_normalized = normalize_string(headword)
-        entry = DictionaryEntry.objects.create(
-            headword=headword,
-            headword_normalized=headword_normalized,
-            idx=e_idx,
-            urn=e["urn"],
-            dictionary=dictionary,
-            data=e.get("data", {}),
-        )
-        for sense in e["senses"]:
-            _process_sense(entry, sense, s_idx, parent=None)
+    entry_count = len(data["entries"])
+    with tqdm(total=entry_count) as pbar:
+        for e_idx, e in enumerate(data["entries"]):
+            pbar.update(1)
+            headword = e["headword"]
+            headword_normalized = normalize_string(headword)
+            entry = DictionaryEntry.objects.create(
+                headword=headword,
+                headword_normalized=headword_normalized,
+                idx=e_idx,
+                urn=e["urn"],
+                dictionary=dictionary,
+                data=e.get("data", {}),
+            )
+            for sense in e["senses"]:
+                _process_sense(entry, sense, s_idx, parent=None)
 
 
 def import_dictionaries(reset=False):
