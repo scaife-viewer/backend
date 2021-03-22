@@ -4,9 +4,6 @@ from . import constants
 from .resolvers.default import resolve_library
 
 
-# TODO: Make this a config level option
-INGEST_TO_LOWEST_CITABLE_NODES = True
-
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +91,9 @@ class DefaultHookSet:
             lang=version.lang,
         )
 
+    def should_ingest_lowest_citable_nodes(self, cts_version_obj):
+        return True
+
     def extract_cts_textpart_metadata(self, version):
         version_urn = ensure_trailing_colon(version.urn)
         # TODO: define this on cts.Text?
@@ -105,7 +105,7 @@ class DefaultHookSet:
                 "first_passage_urn": next(toc.chunks(ref_node), None).urn,
             }
 
-            if INGEST_TO_LOWEST_CITABLE_NODES:
+            if self.should_ingest_lowest_citable_nodes(version):
                 for child in ref_node.descendants:
                     child_urn = f"{version_urn}{child}"
                     metadata[child_urn] = None
