@@ -111,6 +111,11 @@ class DefaultHookSet:
                     metadata[child_urn] = None
         return metadata
 
+    def run_ingestion_pipeline(self, outf):
+        from .ingestion_pipeline import run_ingestion_pipeline
+
+        return run_ingestion_pipeline(outf)
+
 
 class HookProxy:
     def __getattr__(self, attr):
