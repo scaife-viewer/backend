@@ -192,7 +192,11 @@ def chunked_bulk_create(model, iterable, total=None, batch_size=500):
     Use islice to lazily pass subsets of the iterable for bulk creation
     """
     if total is None:
-        total = len(iterable)
+        try:
+            total = len(iterable)
+        except TypeError:
+            # NOTE: If iterable lacks __len__, short-circuit the progress bar display
+            total = None
 
     generator = lazy_iterable(iterable)
     with tqdm(total=total) as pbar:
