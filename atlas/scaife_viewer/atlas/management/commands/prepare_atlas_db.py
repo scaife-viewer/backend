@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand, CommandError
 from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.data_model import VERSION
 
-from ... import importers
+from ...hooks import hookset
 
 
 class Command(BaseCommand):
@@ -57,20 +57,9 @@ class Command(BaseCommand):
             if os.path.exists(resolver_path):
                 shutil.rmtree(resolver_path)
                 self.stdout.write("--[Removed existing CTS resolver cache]--")
-        self.stdout.write("--[Populating ATLAS db]--")
-        importers.versions.import_versions()
 
-        # TODO: make this pipeline more configurable
-        try:
-            from github import Github  # noqa: F401
-        except ModuleNotFoundError:
-            pass
-        else:
-            self.stdout.write("--[Applying repo metadata]--")
-            importers.repo_metadata.import_repo_metadata(reset=True)
-
-        self.stdout.write("--[Loading attributions]--")
-        importers.attributions.import_attributions(reset=True)
+        self.stdout.write("--[Processing ATLAS ingestion pipeline]--")
+        hookset.run_ingestion_pipeline(self.stdout)
 
     def handle(self, *args, **options):
         database_path = settings.SV_ATLAS_DB_PATH
