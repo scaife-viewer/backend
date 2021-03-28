@@ -33,19 +33,16 @@ def get_paths(path):
     return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
-def _bulk_create_citations(sense, citations):
+def _prepare_citation_objs(sense, citations):
     idx = 0
     to_create = []
     for citation in citations:
-        # TODO: More meaningful labels
-        label = f"{idx}"
-        urn = label
         citation_obj = Citation(
-            label=label,
+            label=citation.get("ref", ""),
             # sense=sense,
-            data=citation,
-            # TODO: Supply proper URNs
-            urn=urn,
+            data=citation["data"],
+            urn=citation["urn"],
+            idx=idx,
         )
         # FIXME: This is a bit hacky; we likely want a parallel data structure
         # that passes FKs for "deferred" purposes
@@ -117,7 +114,7 @@ def _process_sense(entry, s, idx, parent=None, last_sibling=None):
 
     senses.append(obj)
 
-    citations.extend(_bulk_create_citations(obj, s.get("citations", [])))
+    citations.extend(_prepare_citation_objs(obj, s.get("citations", [])))
     idx += 1
 
     for ss in s.get("children", []):
@@ -245,9 +242,6 @@ def _create_dictionaries(path):
         for citation in citations:
             sense_id = sense_urn_pk_lookup[citation.sense_urn]
             citation.sense_id = sense_id
-            # TODO: More meaningful labels
-            citation.label = f"{sense_id}-{citation.label}"
-            citation.urn = citation.label
 
     print("Inserting Citation objects")
     chunked_bulk_create(Citation, itertools.chain.from_iterable(deferred["citations"]))
