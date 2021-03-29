@@ -548,6 +548,22 @@ class NamedEntity(models.Model):
         return f"{self.urn} :: {self.title }"
 
 
+class Dictionary(models.Model):
+    """
+    A dictionary model.
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+    data = JSONField(default=dict, blank=True)
+
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:dictionaries.atlas_v1"
+    )
+
+    def __str__(self):
+        return self.label
+
+
 class Repo(models.Model):
     """
     NOTE: consider other modeling options like a 1 to 1 model or denorms
@@ -616,3 +632,54 @@ class AttributionRecord(models.Model):
         if self.organization:
             parts.append(self.organization.name)
         return ", ".join(parts)
+
+
+class DictionaryEntry(models.Model):
+    headword = models.CharField(max_length=255)
+    headword_normalized = models.CharField(max_length=255, blank=True, null=True)
+    data = JSONField(default=dict, blank=True)
+
+    idx = models.IntegerField(help_text="0-based index")
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:entries.atlas_v1"
+    )
+
+    dictionary = models.ForeignKey(
+        "scaife_viewer_atlas.Dictionary",
+        related_name="entries",
+        on_delete=models.CASCADE,
+    )
+
+
+class Sense(MP_Node):
+    label = models.CharField(blank=True, null=True, max_length=255)
+    definition = models.CharField(blank=True, null=True, max_length=255)
+
+    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:senses.atlas_v1"
+    )
+
+    entry = models.ForeignKey(
+        "scaife_viewer_atlas.DictionaryEntry",
+        related_name="senses",
+        on_delete=models.CASCADE,
+    )
+
+
+class Citation(models.Model):
+    label = models.CharField(blank=True, null=True, max_length=255)
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(
+        max_length=255, unique=True, help_text="urn:cite2:<site>:citations.atlas_v1"
+    )
+    sense = models.ForeignKey(
+        "scaife_viewer_atlas.Sense", related_name="citations", on_delete=models.CASCADE,
+    )
+    data = JSONField(default=dict, blank=True)
+    # TODO: There may be additional optimizations we can do on the text part / citation relation
+    text_parts = SortedManyToManyField(
+        "scaife_viewer_atlas.Node", related_name="sense_citations"
+    )

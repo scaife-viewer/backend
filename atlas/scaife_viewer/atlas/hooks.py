@@ -91,18 +91,30 @@ class DefaultHookSet:
             lang=version.lang,
         )
 
+    def should_ingest_lowest_citable_nodes(self, cts_version_obj):
+        return True
+
     def extract_cts_textpart_metadata(self, version):
         version_urn = ensure_trailing_colon(version.urn)
         # TODO: define this on cts.Text?
         metadata = {}
         toc = version.toc()
         for ref_node in toc.num_resolver.glob(toc.root, "*"):
-            ref = ref_node.num
-            textpart_urn = f"{version_urn}{ref}"
+            textpart_urn = f"{version_urn}{ref_node}"
             metadata[textpart_urn] = {
                 "first_passage_urn": next(toc.chunks(ref_node), None).urn,
             }
+
+            if self.should_ingest_lowest_citable_nodes(version):
+                for child in ref_node.descendants:
+                    child_urn = f"{version_urn}{child}"
+                    metadata[child_urn] = None
         return metadata
+
+    def run_ingestion_pipeline(self, outf):
+        from .ingestion_pipeline import run_ingestion_pipeline
+
+        return run_ingestion_pipeline(outf)
 
 
 class HookProxy:

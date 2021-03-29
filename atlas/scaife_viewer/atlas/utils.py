@@ -1,5 +1,9 @@
+from itertools import islice
+
 from django.db.models import Max, Min, Q
 from django.utils.functional import cached_property
+
+from tqdm import tqdm
 
 from scaife_viewer.atlas.conf import settings
 
@@ -176,3 +180,29 @@ def get_textparts_from_passage_reference(passage_reference, version):
     _, ref = passage_reference.rsplit(":", maxsplit=1)
     predicate = build_textpart_predicate(queryset, ref, max_rank)
     return filter_via_ref_predicate(queryset, predicate)
+
+
+def lazy_iterable(iterable):
+    for item in iterable:
+        yield item
+
+
+def chunked_bulk_create(model, iterable, total=None, batch_size=500):
+    """
+    Use islice to lazily pass subsets of the iterable for bulk creation
+    """
+    if total is None:
+        try:
+            total = len(iterable)
+        except TypeError:
+            # NOTE: If iterable lacks __len__, short-circuit the progress bar display
+            total = None
+
+    generator = lazy_iterable(iterable)
+    with tqdm(total=total) as pbar:
+        while True:
+            subset = list(islice(generator, batch_size))
+            if not subset:
+                break
+            created = len(model.objects.bulk_create(subset, batch_size=batch_size))
+            pbar.update(created)

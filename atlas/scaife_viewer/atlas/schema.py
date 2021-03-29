@@ -1,3 +1,5 @@
+import os
+
 from django.db.models import Q
 
 import django_filters
@@ -11,6 +13,7 @@ from graphene_django.utils import camelize
 from .compat import convert_jsonfield_to_string  # noqa
 from .constants import CTS_URN_DEPTHS
 from .hooks import hookset
+from .language_utils import normalize_string
 
 # from .models import Node as TextPart
 from .models import (
@@ -18,11 +21,15 @@ from .models import (
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
     AttributionRecord,
     AudioAnnotation,
+    Citation,
+    Dictionary,
+    DictionaryEntry,
     ImageAnnotation,
     MetricalAnnotation,
     NamedEntity,
     Node,
     Repo,
+    Sense,
     TextAlignment,
     TextAlignmentRecord,
     TextAlignmentRecordRelation,
@@ -40,6 +47,14 @@ from .utils import (
     get_textparts_from_passage_reference,
 )
 
+
+# TODO: Make these proper, documented configuration variables
+RESOLVE_CITATIONS_VIA_TEXT_PARTS = bool(
+    int(os.environ.get("SV_ATLAS_RESOLVE_CITATIONS_VIA_TEXT_PARTS", 1))
+)
+RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS = bool(
+    int(os.environ.get("SV_ATLAS_RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS", 0))
+)
 
 # @@@ alias Node because relay.Node is quite different
 TextPart = Node
@@ -719,6 +734,167 @@ class AttributionRecordNode(DjangoObjectType):
         return queryset.select_related("person", "organization")
 
 
+class DictionaryNode(DjangoObjectType):
+    # FIXME: Implement access checking for all queries
+
+    class Meta:
+        model = Dictionary
+        interfaces = (relay.Node,)
+        filter_fields = ["urn"]
+
+
+class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+    lemma = django_filters.CharFilter(method="lemma_filter")
+
+    class Meta:
+        model = DictionaryEntry
+        fields = {"urn": ["exact"], "headword": ["exact", "istartswith"]}
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+
+        if RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS:
+            # TODO: revisit normalization here with @jtauber
+            passage_lemmas = Token.objects.filter(
+                text_part__in=textparts_queryset
+            ).values_list("lemma", flat=True)
+            matches = queryset.filter(headword__in=passage_lemmas)
+        # TODO: Determine why graphene bloats the "simple" query;
+        # if we just filter the queryset against ids, we're much better off
+        elif RESOLVE_CITATIONS_VIA_TEXT_PARTS:
+            matches = queryset.filter(
+                senses__citations__text_parts__in=textparts_queryset
+            )
+        else:
+            matches = queryset.filter(
+                senses__citations__data__urn__in=textparts_queryset.values_list("urn")
+            )
+        return queryset.filter(pk__in=matches)
+
+    def lemma_filter(self, queryset, name, value):
+        value_normalized = normalize_string(value)
+        lemma_pattern = (
+            rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
+        )
+        return queryset.filter(headword_normalized__regex=lemma_pattern)
+
+
+def _crush_sense(tree):
+    # TODO: Prefer GraphQL Ids
+    urn = tree["data"].pop("urn")
+    tree["id"] = urn
+    tree.pop("data")
+    for child in tree.get("children", []):
+        _crush_sense(child)
+
+
+class DictionaryEntryNode(DjangoObjectType):
+    data = generic.GenericScalar()
+    sense_tree = generic.GenericScalar(
+        description="A nested structure returning the URN(s) of senses attached to this entry"
+    )
+
+    def resolve_sense_tree(obj, info, **kwargs):
+        # TODO: Proper GraphQL field for crushed tree nodes
+        data = []
+        for sense in obj.senses.filter(depth=1):
+            tree = sense.dump_bulk(parent=sense)[0]
+            _crush_sense(tree)
+            data.append(tree)
+        return data
+
+    class Meta:
+        model = DictionaryEntry
+        interfaces = (relay.Node,)
+        filterset_class = DictionaryEntryFilterSet
+
+
+class SenseFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = Sense
+        fields = {
+            "urn": ["exact", "startswith"],
+            "entry": ["exact"],
+            "entry__urn": ["exact"],
+            "depth": ["exact", "gt", "lt", "gte", "lte"],
+            "path": ["exact", "startswith"],
+        }
+
+    # TODO: refactor as a mixin
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+
+        # TODO: Determine why graphene bloats the "simple" query;
+        # if we just filter the queryset against ids, we're much better off
+        if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
+            matches = queryset.filter(citations__text_parts__in=textparts_queryset)
+        else:
+            matches = queryset.filter(
+                citations__data__urn__in=textparts_queryset.values_list("urn")
+            )
+        return queryset.filter(pk__in=matches)
+
+
+class SenseNode(DjangoObjectType):
+    # TODO: Implement subsenses or descendants either as a top-level
+    # field or combining path, depth and URN filters
+
+    class Meta:
+        model = Sense
+        interfaces = (relay.Node,)
+        filterset_class = SenseFilterSet
+
+
+class CitationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = Citation
+        fields = {
+            "text_parts__urn": ["exact"],
+        }
+
+    # TODO: refactor as a mixin
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        # TODO: Determine why graphene bloats the "simple" query;
+        # if we just filter the queryset against ids, we're much better off
+        if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
+            matches = queryset.filter(text_parts__in=textparts_queryset).distinct()
+        else:
+            matches = queryset.filter(
+                data__urn__in=textparts_queryset.values_list("urn")
+            )
+        return queryset.filter(pk__in=matches)
+
+
+class CitationNode(DjangoObjectType):
+    text_parts = LimitedConnectionField(TextPartNode)
+    data = generic.GenericScalar()
+
+    ref = String()
+    quote = String()
+    passage_urn = String()
+
+    def resolve_ref(obj, info, **kwargs):
+        return obj.data.get("ref", "")
+
+    def resolve_quote(obj, info, **kwargs):
+        return obj.data.get("quote", "")
+
+    def resolve_passage_urn(obj, info, **kwargs):
+        # TODO: Do further validation to ensure we can resolve this
+        return obj.data.get("urn", "")
+
+    class Meta:
+        model = Citation
+        interfaces = (relay.Node,)
+        filterset_class = CitationFilterSet
+
+
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
     text_groups = LimitedConnectionField(TextGroupNode)
@@ -775,6 +951,18 @@ class Query(ObjectType):
 
     attribution = relay.Node.Field(AttributionRecordNode)
     attributions = LimitedConnectionField(AttributionRecordNode)
+
+    dictionary = relay.Node.Field(DictionaryNode)
+    dictionaries = LimitedConnectionField(DictionaryNode)
+
+    dictionary_entry = relay.Node.Field(DictionaryEntryNode)
+    dictionary_entries = LimitedConnectionField(DictionaryEntryNode)
+
+    sense = relay.Node.Field(SenseNode)
+    senses = LimitedConnectionField(SenseNode)
+
+    citation = relay.Node.Field(CitationNode)
+    citations = LimitedConnectionField(CitationNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
