@@ -127,16 +127,14 @@ def _process_sense(entry, s, idx, parent=None, last_sibling=None):
 
 
 def _bulk_prepare_citation_through_objects(qs):
-    msg = "Retrieving URNs for citations"
-    print(msg)
+    logger.info("Retrieving URNs for citations")
     citation_urn_pk_values = qs.values_list("data__urn", "pk")
 
     candidates = list(set([c[0] for c in citation_urn_pk_values]))
     msg = f"URNs retrieved: {len(candidates)}"
-    print(msg)
+    logger.info(msg)
 
-    msg = "Building URN to Node (TextPart) pk lookup"
-    print(msg)
+    logger.info("Building URN to Node (TextPart) pk lookup")
     node_urn_pk_values = Node.objects.filter(urn__in=candidates).values_list(
         "urn", "pk"
     )
@@ -144,8 +142,7 @@ def _bulk_prepare_citation_through_objects(qs):
     for urn, pk in node_urn_pk_values:
         text_part_lookup[urn] = pk
 
-    msg = "Preparing through objects for insert"
-    print(msg)
+    logger.info("Preparing through objects for insert")
     to_create = []
     for urn, citation_id in citation_urn_pk_values:
         node_id = text_part_lookup.get(urn, None)
@@ -161,7 +158,7 @@ def _resolve_citation_textparts(qs):
 
     relation_label = CitationThroughModel._meta.verbose_name_plural
     msg = f"Bulk creating {relation_label}"
-    print(msg)
+    logger.info(msg)
 
     chunked_bulk_create(CitationThroughModel, prepared_objs)
 
@@ -188,15 +185,14 @@ def _defer_entry(deferred, entry, data, s_idx):
 def _create_dictionaries(path):
     # TODO: Prefer JSONL spec to avoid memory headaches
     msg = f"Loading dictionary from {path}"
-    print(msg)
+    logger.info(msg)
     data = json.load(open(path))
     dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
     s_idx = 0
     entry_count = len(data["entries"])
     deferred = defaultdict(list)
 
-    msg = "Extracting entries, senses and citations"
-    print(msg)
+    logger.info("Extracting entries, senses and citations")
     with tqdm(total=entry_count) as pbar:
         for e_idx, e in enumerate(data["entries"]):
             pbar.update(1)
@@ -213,10 +209,10 @@ def _create_dictionaries(path):
             # FIXME: Ensure `s_idx` is actually getting incremented
             _defer_entry(deferred, entry, e, s_idx)
 
-    print("Inserting DictionaryEntry objects")
+    logger.info("Inserting DictionaryEntry objects")
     chunked_bulk_create(DictionaryEntry, deferred["entries"])
 
-    print("Setting entry_id on Sense objects")
+    logger.info("Setting entry_id on Sense objects")
     entry_ids = (
         DictionaryEntry.objects.filter(dictionary_id=dictionary.id)
         .order_by("pk")
@@ -228,10 +224,10 @@ def _create_dictionaries(path):
 
     import itertools
 
-    print("Inserting Sense objects")
+    logger.info("Inserting Sense objects")
     chunked_bulk_create(Sense, itertools.chain.from_iterable(deferred["senses"]))
 
-    print("Setting sense_id on Citation objects")
+    logger.info("Setting sense_id on Citation objects")
     sense_urn_pk_lookup = {}
     sense_urn_pk_lookup.update(
         Sense.objects.filter(entry__dictionary_id=dictionary.id).values_list(
@@ -243,12 +239,11 @@ def _create_dictionaries(path):
             sense_id = sense_urn_pk_lookup[citation.sense_urn]
             citation.sense_id = sense_id
 
-    print("Inserting Citation objects")
+    logger.info("Inserting Citation objects")
     chunked_bulk_create(Citation, itertools.chain.from_iterable(deferred["citations"]))
 
     if RESOLVE_CITATIONS_AS_TEXT_PARTS:
-        msg = "Generating citation through models..."
-        print(msg)
+        logger.info("Generating citation through models...")
         citations_with_urns = Citation.objects.filter(
             sense__entry__dictionary=dictionary
         ).exclude(data__urn=None)
