@@ -100,7 +100,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
                     ckwargs["child"] = cites[-1]
                 cites.append(XmlCtsCitation(**ckwargs))
             metadata.citation = cites[-1]
-            self.logger.info(f"{metadata.path} has been parsed")
+            self.logger.debug(f"{metadata.path} has been parsed")
             if not metadata.citation.is_set():
                 to_remove.append(urn)
                 self.logger.warning(f"{metadata.path} has no passages")
