@@ -49,21 +49,22 @@ class DefaultHookSet:
             ],
         )
 
-    def extract_cts_version_metadata(self, version):
-        urn = str(version.urn)
-
+    def get_first_passage_urn(self, version):
         try:
-            first_passage_urn = str(version.first_passage().urn)
+            return str(version.first_passage().urn)
         except (KeyError, ValueError, TypeError):
-            msg = f'Could not extract first_passage_urn [urn="{urn}"]'
+            msg = f'Could not extract first_passage_urn [urn="{version.urn}"]'
             logger.warning(msg)
-            first_passage_urn = None
+            return None
+
+    def extract_cts_version_metadata(self, version):
+        first_passage_urn = self.get_first_passage_urn(version)
 
         # TODO: Move textpart level extractors out to another interface within `Library`
         try:
             textpart_metadata = self.extract_cts_textpart_metadata(version)
         except (KeyError, ValueError, TypeError):
-            msg = f'Could not extract textpart_metadata [urn="{urn}"]'
+            msg = f'Could not extract textpart_metadata [urn="{version.urn}"]'
             logger.warning(msg)
             textpart_metadata = {}
 
