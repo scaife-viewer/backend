@@ -79,6 +79,13 @@ class LocalResolver(CtsCapitainsLocalResolver):
             # NOTE: Don't try and continue processing the text
             return
 
+        if metadata.path:
+            # NOTE: We use metadata.path being populated as a way
+            # to determine if the text has been processed by this function.
+            # This avoids hitting an errant FileNotFoundError if the texts
+            # are stored across multiple data directories (corpora).
+            return
+
         metadata.path = os.path.join(
             base_path,
             "{text_group}.{work}.{version}.xml".format(
@@ -144,10 +151,11 @@ class LocalResolver(CtsCapitainsLocalResolver):
                             text_group_metadata, work_path
                         )
                         for text_urn in work_metadata.texts:
-                            self.process_text(
+                            processed = self.process_text(
                                 text_urn, os.path.dirname(work_path), to_remove
                             )
-                            repo_metadata["texts"].append(text_urn)
+                            if processed:
+                                repo_metadata["texts"].append(text_urn)
                 except UndispatchedTextError as e:
                     self.logger.warning(f"Error dispatching {text_group_path}: {e}")
                     if self.RAISE_ON_UNDISPATCHED:
