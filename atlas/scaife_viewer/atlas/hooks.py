@@ -54,7 +54,7 @@ class DefaultHookSet:
 
         try:
             first_passage_urn = str(version.first_passage().urn)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             msg = f'Could not extract first_passage_urn [urn="{urn}"]'
             logger.warning(msg)
             first_passage_urn = None
@@ -62,7 +62,7 @@ class DefaultHookSet:
         # TODO: Move textpart level extractors out to another interface within `Library`
         try:
             textpart_metadata = self.extract_cts_textpart_metadata(version)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             msg = f'Could not extract textpart_metadata [urn="{urn}"]'
             logger.warning(msg)
             textpart_metadata = {}
