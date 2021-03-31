@@ -34,7 +34,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
         urn = str(metadata.urn)
         if urn in self.inventory["default"].textgroups:
             try:
-                self.inventory[urn].update(metadata)
+                metadata = self.inventory[urn].update(metadata)
             except UnknownCollection as e:
                 if self.RAISE_ON_UNKNOWN_COLLECTION:
                     raise e
@@ -54,7 +54,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
         work_urn = str(metadata.urn)
         if work_urn in text_group_metadata.works:
             try:
-                self.inventory[work_urn].update(metadata)
+                metadata = self.inventory[work_urn].update(metadata)
             except UnknownCollection as e:
                 if self.RAISE_ON_UNKNOWN_COLLECTION:
                     raise e
