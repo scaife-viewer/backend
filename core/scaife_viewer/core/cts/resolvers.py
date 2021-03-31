@@ -48,7 +48,6 @@ class LocalResolver(CtsCapitainsLocalResolver):
         return metadata
 
     def process_work(self, text_group_metadata, path):
-        text_group_urn = str(text_group_metadata.urn)
         with open(path) as f:
             metadata = XmlCtsWorkMetadata.parse(resource=f, parent=text_group_metadata,)
         work_urn = str(metadata.urn)
