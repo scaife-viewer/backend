@@ -720,6 +720,21 @@ class Metadata(models.Model):
     value = models.CharField(blank=True, null=True, max_length=255)
 
     index = models.BooleanField(default=True, help_text="Include in search index")
+    visible = models.BooleanField(default=True, help_text="Visible in widget")
+
+    level = models.CharField(
+        choices=[
+            ("text_group", "Text Group"),
+            ("work", "Work"),
+            ("version", "Version"),
+            ("passage", "Passage"),
+        ],
+        max_length=11,
+        default="version",
+        help_text="Human-readable representation of the level of URN(s) to which metadata is attached",
+    )
+    # TODO: Decouple level and depth, but likely refactoring depth
+    depth = models.PositiveIntegerField()
 
     cts_relations = SortedManyToManyField(
         "scaife_viewer_atlas.Node", related_name="structured_metadata"
