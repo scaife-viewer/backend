@@ -25,6 +25,7 @@ from .models import (
     Dictionary,
     DictionaryEntry,
     ImageAnnotation,
+    Metadata,
     MetricalAnnotation,
     NamedEntity,
     Node,
@@ -892,6 +893,35 @@ class CitationNode(DjangoObjectType):
         filterset_class = CitationFilterSet
 
 
+class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = Metadata
+        fields = {
+            "collection_urn": ["exact"],
+            "value": ["exact"],
+            "level": ["exact", "in"],
+            "depth": ["exact", "gt", "lt", "gte", "lte"],
+        }
+
+    # TODO: refactor as a mixin
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        matches = queryset.filter(cts_relations__in=textparts_queryset).distinct()
+        return queryset.filter(pk__in=matches)
+
+
+class MetadataNode(DjangoObjectType):
+    class Meta:
+        model = Metadata
+        interfaces = (relay.Node,)
+        filterset_class = MetadataFilterSet
+
+        # TODO: Resolve with a future update to graphene-django
+        convert_choices_to_enum = []
+
+
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
     text_groups = LimitedConnectionField(TextGroupNode)
@@ -960,6 +990,9 @@ class Query(ObjectType):
 
     citation = relay.Node.Field(CitationNode)
     citations = LimitedConnectionField(CitationNode)
+
+    structured_metadata = relay.Node.Field(MetadataNode)
+    structured_metadatum = LimitedConnectionField(MetadataNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
