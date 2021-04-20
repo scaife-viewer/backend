@@ -4,9 +4,6 @@ from . import constants
 from .resolvers.default import resolve_library
 
 
-# TODO: Make this a config level option
-INGEST_TO_LOWEST_CITABLE_NODES = True
-
 logger = logging.getLogger(__name__)
 
 
@@ -52,21 +49,22 @@ class DefaultHookSet:
             ],
         )
 
-    def extract_cts_version_metadata(self, version):
-        urn = str(version.urn)
-
+    def get_first_passage_urn(self, version):
         try:
-            first_passage_urn = str(version.first_passage().urn)
-        except KeyError:
-            msg = f'Could not extract first_passage_urn [urn="{urn}"]'
+            return str(version.first_passage().urn)
+        except (KeyError, ValueError, TypeError):
+            msg = f'Could not extract first_passage_urn [urn="{version.urn}"]'
             logger.warning(msg)
-            first_passage_urn = None
+            return None
+
+    def extract_cts_version_metadata(self, version):
+        first_passage_urn = self.get_first_passage_urn(version)
 
         # TODO: Move textpart level extractors out to another interface within `Library`
         try:
             textpart_metadata = self.extract_cts_textpart_metadata(version)
-        except KeyError:
-            msg = f'Could not extract textpart_metadata [urn="{urn}"]'
+        except (KeyError, ValueError, TypeError):
+            msg = f'Could not extract textpart_metadata [urn="{version.urn}"]'
             logger.warning(msg)
             textpart_metadata = {}
 
@@ -94,6 +92,9 @@ class DefaultHookSet:
             lang=version.lang,
         )
 
+    def should_ingest_lowest_citable_nodes(self, cts_version_obj):
+        return True
+
     def extract_cts_textpart_metadata(self, version):
         version_urn = ensure_trailing_colon(version.urn)
         # TODO: define this on cts.Text?
@@ -105,11 +106,16 @@ class DefaultHookSet:
                 "first_passage_urn": next(toc.chunks(ref_node), None).urn,
             }
 
-            if INGEST_TO_LOWEST_CITABLE_NODES:
+            if self.should_ingest_lowest_citable_nodes(version):
                 for child in ref_node.descendants:
                     child_urn = f"{version_urn}{child}"
                     metadata[child_urn] = None
         return metadata
+
+    def run_ingestion_pipeline(self, outf):
+        from .ingestion_pipeline import run_ingestion_pipeline
+
+        return run_ingestion_pipeline(outf)
 
 
 class HookProxy:

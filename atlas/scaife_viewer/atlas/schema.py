@@ -49,10 +49,13 @@ from .utils import (
 )
 
 
-# TODO: Optimize queries
-CITATIONS_ARE_TEXT_PARTS = False
-# TODO: Make a proper config variable
-RESOLVE_VIA_LEMMAS = bool(int(os.environ.get("RESOLVE_VIA_LEMMAS", 0)))
+# TODO: Make these proper, documented configuration variables
+RESOLVE_CITATIONS_VIA_TEXT_PARTS = bool(
+    int(os.environ.get("SV_ATLAS_RESOLVE_CITATIONS_VIA_TEXT_PARTS", 1))
+)
+RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS = bool(
+    int(os.environ.get("SV_ATLAS_RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS", 0))
+)
 
 # @@@ alias Node because relay.Node is quite different
 TextPart = Node
@@ -752,7 +755,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
 
-        if RESOLVE_VIA_LEMMAS:
+        if RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS:
             # TODO: revisit normalization here with @jtauber
             passage_lemmas = Token.objects.filter(
                 text_part__in=textparts_queryset
@@ -760,7 +763,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
             matches = queryset.filter(headword__in=passage_lemmas)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
-        elif CITATIONS_ARE_TEXT_PARTS:
+        elif RESOLVE_CITATIONS_VIA_TEXT_PARTS:
             matches = queryset.filter(
                 senses__citations__text_parts__in=textparts_queryset
             )
@@ -827,7 +830,7 @@ class SenseFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
 
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
-        if CITATIONS_ARE_TEXT_PARTS:
+        if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
             matches = queryset.filter(citations__text_parts__in=textparts_queryset)
         else:
             matches = queryset.filter(
@@ -860,7 +863,7 @@ class CitationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
-        if CITATIONS_ARE_TEXT_PARTS:
+        if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
             matches = queryset.filter(text_parts__in=textparts_queryset).distinct()
         else:
             matches = queryset.filter(

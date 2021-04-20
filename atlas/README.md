@@ -30,6 +30,19 @@ Used by `django-treebeard` to calculate the maximum path steps.
 See the [django-treebeard docs](https://django-treebeard.readthedocs.io/en/latest/mp_tree.html#treebeard.mp_tree.MP_Node.alphabet) for more information.
 
 
+**INGESTION_PIPELINE**
+
+Default:
+```python
+[
+    "scaife_viewer.atlas.importers.versions.import_versions",
+]
+```
+
+A list of callables that are ran by the `prepare_atlas_db` management
+command to ingest data into ATLAS.
+
+
 ### Database
 
 **DB_LABEL**

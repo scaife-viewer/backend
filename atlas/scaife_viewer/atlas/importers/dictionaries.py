@@ -1,18 +1,30 @@
 import json
+import logging
 import os
+from collections import defaultdict
+
+from tqdm import tqdm
 
 from scaife_viewer.atlas.conf import settings
-from scaife_viewer.atlas.urn import URN
 
 from ..language_utils import normalize_string
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
+from ..utils import chunked_bulk_create
 
 
-RESOLVE_CITATIONS_AS_TEXT_PARTS = False
+# FIXME: Factor out globals into a dictionary-level attr
+ROOT_PATH_LOOKUP = []
+PARENT_PATH_LOOKUP = defaultdict(dict)
+PATH_SET = set()
+
+CitationThroughModel = Citation.text_parts.through
+RESOLVE_CITATIONS_AS_TEXT_PARTS = True
 
 ANNOTATIONS_DATA_PATH = os.path.join(
     settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries",
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_paths(path):
@@ -21,108 +33,221 @@ def get_paths(path):
     return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
-def _resolve_citations_as_text_parts(sense, citations):
-    # TODO: resolve at least to the highest level we have
-    created = []
-    idx = 0
-    for citation in citations:
-        text_part = None
-        urn = citation.get("urn")
-        if urn:
-            urn = URN(urn)
-            # TODO: skip a step
-            version_urn = urn.up_to(URN.VERSION)
-            version_obj = Node.objects.filter(kind="version", urn=version_urn,).first()
-            try:
-                text_part = (
-                    version_obj.get_descendants()
-                    .filter(ref=urn.passage.split(".")[0])
-                    .get()
-                )
-            except Node.DoesNotExist:
-                print(f"{urn} not found")
-        citation_obj = Citation.objects.create(
-            label=citation["content"],
-            sense=sense,
-            data=citation,
-            # TODO: proper URNs
-            urn=f"{sense.id}-{idx}",
-        )
-        idx += 1
-        if text_part:
-            citation_obj.text_parts.add(text_part)
-        created.append(citation_obj)
-    return created
-
-
-def _resolve_citations_via_data_urn(sense, citations):
+def _prepare_citation_objs(sense, citations):
     idx = 0
     to_create = []
     for citation in citations:
-        label = f"{sense.id}-{idx}"
         citation_obj = Citation(
-            label=label,
-            sense=sense,
-            data=citation,
-            # TODO: proper URNs
-            urn=label,
+            label=citation.get("ref", ""),
+            # sense=sense,
+            data=citation["data"],
+            urn=citation["urn"],
+            idx=idx,
         )
+        # FIXME: This is a bit hacky; we likely want a parallel data structure
+        # that passes FKs for "deferred" purposes
+        citation_obj.sense_urn = sense.urn
         idx += 1
         to_create.append(citation_obj)
-    created = Citation.objects.bulk_create(to_create, batch_size=500)
-    return created
+    return to_create
 
 
-def _resolve_citations(senses, citations):
-    if RESOLVE_CITATIONS_AS_TEXT_PARTS:
-        return _resolve_citations_as_text_parts(senses, citations)
-    else:
-        # We don't bother checking to see if we can resolve the citation
-        # ahead of time (we do this from within LGO currently)
-        return _resolve_citations_via_data_urn(senses, citations)
-
-
-def _process_sense(entry, s, idx, parent=None):
+def _process_sense(entry, s, idx, parent=None, last_sibling=None):
+    senses = []
+    citations = []
     if parent is None:
-        obj = Sense.add_root(
+        if ROOT_PATH_LOOKUP:
+            last_root = ROOT_PATH_LOOKUP.pop()
+            path = last_root._inc_path()
+        else:
+            path = Sense._get_path(None, 1, 1)
+        obj = Sense(
             label=s["label"],
             definition=s["definition"],
             idx=idx,
             urn=s["urn"],
-            entry=entry,
+            depth=1,
+            path=path,
         )
+        assert path not in PATH_SET
+        ROOT_PATH_LOOKUP.append(obj)
     else:
-        obj = parent.add_child(
+        path = None
+        depth = parent.depth + 1
+        if last_sibling:
+            last_sibling = last_sibling[0]
+            if last_sibling.path == parent.path:
+                logger.debug("this is the first child of the parent")
+                path = Sense._get_path(parent.path, depth, 1)
+                assert path not in PATH_SET
+                PARENT_PATH_LOOKUP[parent.path].update({depth: path})
+            elif last_sibling.depth == depth:
+                logger.debug("this is a sibling at the current depth")
+                path = last_sibling._inc_path()
+                assert path not in PATH_SET
+                PARENT_PATH_LOOKUP[parent.path].update({depth: path})
+            elif last_sibling.depth > depth:
+                logger.debug("this is a node at a higher depth")
+                last_sibling_path = PARENT_PATH_LOOKUP[parent.path][depth]
+                sibling_obj = Sense(depth=depth, path=last_sibling_path)
+                path = sibling_obj._inc_path()
+                PARENT_PATH_LOOKUP[parent.path].update({depth: path})
+                # last_seen_path = PARENT_PATH_LOOKUP[parent.path][depth]
+                # path = Sense._get_path(last_seen_path, depth, 1)
+                # this
+            else:
+                assert False
+        else:
+            assert False
+        logger.debug(path)
+        obj = Sense(
             label=s["label"],
             definition=s["definition"],
             idx=idx,
             urn=s["urn"],
-            entry=entry,
+            depth=depth,
+            path=path,
+            # entry=entry,
         )
-    _resolve_citations(obj, s.get("citations", []))
+        assert path is not None
+        PATH_SET.add(obj.path)
+
+    senses.append(obj)
+
+    citations.extend(_prepare_citation_objs(obj, s.get("citations", [])))
     idx += 1
 
     for ss in s.get("children", []):
-        _process_sense(entry, ss, idx, parent=obj)
+        new_senses, new_citations = _process_sense(
+            entry, ss, idx, parent=obj, last_sibling=senses[-1:]
+        )
+        senses.extend(new_senses)
+        citations.extend(new_citations)
+    return senses, citations
+
+
+def _bulk_prepare_citation_through_objects(qs):
+    logger.info("Retrieving URNs for citations")
+    citation_urn_pk_values = qs.values_list("data__urn", "pk")
+
+    candidates = list(set([c[0] for c in citation_urn_pk_values]))
+    msg = f"URNs retrieved: {len(candidates)}"
+    logger.info(msg)
+
+    logger.info("Building URN to Node (TextPart) pk lookup")
+    node_urn_pk_values = Node.objects.filter(urn__in=candidates).values_list(
+        "urn", "pk"
+    )
+    text_part_lookup = {}
+    for urn, pk in node_urn_pk_values:
+        text_part_lookup[urn] = pk
+
+    logger.info("Preparing through objects for insert")
+    to_create = []
+    for urn, citation_id in citation_urn_pk_values:
+        node_id = text_part_lookup.get(urn, None)
+        if node_id:
+            to_create.append(
+                CitationThroughModel(node_id=node_id, citation_id=citation_id)
+            )
+    return to_create
+
+
+def _resolve_citation_textparts(qs):
+    prepared_objs = _bulk_prepare_citation_through_objects(qs)
+
+    relation_label = CitationThroughModel._meta.verbose_name_plural
+    msg = f"Bulk creating {relation_label}"
+    logger.info(msg)
+
+    chunked_bulk_create(CitationThroughModel, prepared_objs)
+
+
+def _defer_entry(deferred, entry, data, s_idx):
+    """
+    Create entry and related child objects in memory, but don't yet
+    persist them to the database.
+
+    This avoids an avalanche of SQL SELECT and INSERT statements that
+    would otherwise occur on each `.create` or `.save` call.
+    """
+    senses = []
+    citations = []
+    for sense in data["senses"]:
+        new_senses, new_citations = _process_sense(entry, sense, s_idx, parent=None)
+        senses.extend(new_senses)
+        citations.extend(new_citations)
+    deferred["entries"].append(entry)
+    deferred["senses"].append(senses)
+    deferred["citations"].append(citations)
 
 
 def _create_dictionaries(path):
+    # TODO: Prefer JSONL spec to avoid memory headaches
+    msg = f"Loading dictionary from {path}"
+    logger.info(msg)
     data = json.load(open(path))
     dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
     s_idx = 0
-    for e_idx, e in enumerate(data["entries"]):
-        headword = e["headword"]
-        headword_normalized = normalize_string(headword)
-        entry = DictionaryEntry.objects.create(
-            headword=headword,
-            headword_normalized=headword_normalized,
-            idx=e_idx,
-            urn=e["urn"],
-            dictionary=dictionary,
-            data=e.get("data", {}),
+    entry_count = len(data["entries"])
+    deferred = defaultdict(list)
+
+    logger.info("Extracting entries, senses and citations")
+    with tqdm(total=entry_count) as pbar:
+        for e_idx, e in enumerate(data["entries"]):
+            pbar.update(1)
+            headword = e["headword"]
+            headword_normalized = normalize_string(headword)
+            entry = DictionaryEntry(
+                headword=headword,
+                headword_normalized=headword_normalized,
+                idx=e_idx,
+                urn=e["urn"],
+                dictionary=dictionary,
+                data=e.get("data", {}),
+            )
+            # FIXME: Ensure `s_idx` is actually getting incremented
+            _defer_entry(deferred, entry, e, s_idx)
+
+    logger.info("Inserting DictionaryEntry objects")
+    chunked_bulk_create(DictionaryEntry, deferred["entries"])
+
+    logger.info("Setting entry_id on Sense objects")
+    entry_ids = (
+        DictionaryEntry.objects.filter(dictionary_id=dictionary.id)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    for entry_id, entry_senses in zip(entry_ids, deferred["senses"]):
+        for s in entry_senses:
+            s.entry_id = entry_id
+
+    import itertools
+
+    logger.info("Inserting Sense objects")
+    chunked_bulk_create(Sense, itertools.chain.from_iterable(deferred["senses"]))
+
+    logger.info("Setting sense_id on Citation objects")
+    sense_urn_pk_lookup = {}
+    sense_urn_pk_lookup.update(
+        Sense.objects.filter(entry__dictionary_id=dictionary.id).values_list(
+            "urn", "pk"
         )
-        for sense in e["senses"]:
-            _process_sense(entry, sense, s_idx, parent=None)
+    )
+    for citations in deferred["citations"]:
+        for citation in citations:
+            sense_id = sense_urn_pk_lookup[citation.sense_urn]
+            citation.sense_id = sense_id
+
+    logger.info("Inserting Citation objects")
+    chunked_bulk_create(Citation, itertools.chain.from_iterable(deferred["citations"]))
+
+    if RESOLVE_CITATIONS_AS_TEXT_PARTS:
+        logger.info("Generating citation through models...")
+        citations_with_urns = Citation.objects.filter(
+            sense__entry__dictionary=dictionary
+        ).exclude(data__urn=None)
+        _resolve_citation_textparts(citations_with_urns)
 
 
 def import_dictionaries(reset=False):
