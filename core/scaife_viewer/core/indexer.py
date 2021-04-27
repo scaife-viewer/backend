@@ -86,11 +86,8 @@ class Indexer:
         return value
 
     def prepare_passages(self, urn_prefix=None):
-        if urn_prefix is not None:
-            raise NotImplementedError("URN prefix is not currently supported")
-
         texts = dask.bag.from_sequence(
-            self.texts(urn_prefix.upTo(cts.URN.NO_PASSAGE) if urn_prefix else None)
+            self.texts(urn_prefix)
         )
 
         if LEMMA_CONTENT:
