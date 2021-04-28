@@ -906,6 +906,7 @@ class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
             "value": ["exact"],
             "level": ["exact", "in"],
             "depth": ["exact", "gt", "lt", "gte", "lte"],
+            "visible": ["exact"],
         }
 
     # TODO: refactor as a mixin
