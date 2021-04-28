@@ -917,6 +917,10 @@ class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
 
 
 class MetadataNode(DjangoObjectType):
+    # FIXME: We are going to specify `PassageTextPartNode` so we can use the reference
+    # filter, but it may not be the ideal field long term.
+    cts_relations = LimitedConnectionField(lambda: PassageTextPartNode)
+
     class Meta:
         model = Metadata
         interfaces = (relay.Node,)
