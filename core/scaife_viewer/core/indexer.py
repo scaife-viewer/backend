@@ -303,7 +303,7 @@ class DirectPusher:
             self.commit_docs()
 
     def commit_docs(self):
-        metadata = {"_op_type": "index", "_index": self.index_name, "_type": "text"}
+        metadata = {"_op_type": "index", "_index": self.index_name, "_type": "_doc"}
         docs = ({"_id": doc["urn"], **metadata, **doc} for doc in self.docs)
         elasticsearch.helpers.bulk(self.es, docs)
         self.docs.clear()

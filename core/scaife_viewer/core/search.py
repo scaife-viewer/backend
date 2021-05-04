@@ -68,7 +68,7 @@ class SearchQuery:
         self.total_count = None
 
     def query_index(self):
-        return {"index": settings.ELASTICSEARCH_INDEX_NAME, "doc_type": "text"}
+        return {"index": settings.ELASTICSEARCH_INDEX_NAME}
 
     def query_sort(self):
         if not self.sort_by:

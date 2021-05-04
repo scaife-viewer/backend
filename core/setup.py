@@ -30,7 +30,7 @@ setup(
         "dask[bag]==1.1.0",
         "django_appconf>=1.0.4",
         "Django>=2.2,<3.0",
-        "elasticsearch==6.3.1",
+        "elasticsearch>=7.0.0,<8.0.0",
         "google-auth==1.6.2",
         "google-cloud-pubsub==0.39.1",
         "lxml>=4.3.5",
