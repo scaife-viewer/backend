@@ -66,6 +66,17 @@ def _resolve_metadata_cts_relations(qs, through_lookup):
     chunked_bulk_create(MetadataThroughModel, prepared_objs)
 
 
+# FIXME: Standardize these depths and make the GraphQL filters
+# take them into account
+UP_TO_DEPTHS = {
+    "version": 5,
+    # TODO: Prefer citation-level, which could be nodes >= 6;
+    # we may end up just doing those types of queries for "depth"
+    # in our references filters
+    "passage": 6,
+}
+
+
 def _process_collection(collection):
     idx = 0
     to_create = []
@@ -82,7 +93,7 @@ def _process_collection(collection):
                     label=field,
                     value=row["value"],
                     # TODO actually get the depth
-                    depth=5,
+                    depth=UP_TO_DEPTHS[data["up_to"]],
                     index=data["index"],
                     visible=data["visible"],
                 )
