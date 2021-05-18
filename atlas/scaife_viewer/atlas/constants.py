@@ -91,3 +91,10 @@ HUMAN_FRIENDLY_LANGUAGE_MAP = {
     "heb": "Hebrew",
     "lat": "Latin",
 }
+
+TEXT_ANNOTATION_KIND_SCHOLIA = "scholia"
+TEXT_ANNOTATION_KIND_SYNTAX_TREE = "syntax-tree"
+TEXT_ANNOTATION_KIND_CHOICES = (
+    (TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),
+    (TEXT_ANNOTATION_KIND_SYNTAX_TREE, "Syntax tree"),
+)

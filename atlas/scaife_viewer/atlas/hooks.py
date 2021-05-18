@@ -14,6 +14,11 @@ def ensure_trailing_colon(urn):
 
 
 class DefaultHookSet:
+    # NOTE: Site developers can override attrs on their hookset class
+    # to override the choices and default value for TextAnnotation.kind
+    TEXT_ANNOTATION_DEFAULT_KIND = constants.TEXT_ANNOTATION_KIND_SCHOLIA
+    TEXT_ANNOTATION_KIND_CHOICES = constants.TEXT_ANNOTATION_KIND_CHOICES
+
     def resolve_library(self):
         return resolve_library()
 
