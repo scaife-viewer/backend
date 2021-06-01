@@ -7,7 +7,7 @@ import django_jsonfield_backport.models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("scaife_viewer_atlas", "0007_metadata"),
+        ("scaife_viewer_atlas", "0008_metadata"),
     ]
 
     operations = [

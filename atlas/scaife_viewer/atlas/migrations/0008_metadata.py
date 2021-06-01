@@ -7,7 +7,7 @@ import sortedm2m.fields
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("scaife_viewer_atlas", "0006_dictionary_models"),
+        ("scaife_viewer_atlas", "0007_hookset_for_text_annotation_kinds"),
     ]
 
     operations = [
