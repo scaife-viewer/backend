@@ -15,6 +15,8 @@ from treebeard.mp_tree import MP_Node
 from scaife_viewer.atlas import constants
 from scaife_viewer.atlas.conf import settings
 
+from .hooks import hookset
+
 
 class TextAlignment(models.Model):
     """
@@ -77,19 +79,11 @@ class TextAlignmentRecordRelation(models.Model):
     )
 
 
-TEXT_ANNOTATION_KIND_SCHOLIA = "scholia"
-TEXT_ANNOTATION_KIND_SYNTAX_TREE = "syntax-tree"
-TEXT_ANNOTATION_KIND_CHOICES = (
-    (TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),
-    (TEXT_ANNOTATION_KIND_SYNTAX_TREE, "Syntax tree"),
-)
-
-
 class TextAnnotation(models.Model):
     kind = models.CharField(
-        max_length=7,
-        default=TEXT_ANNOTATION_KIND_SCHOLIA,
-        choices=TEXT_ANNOTATION_KIND_CHOICES,
+        max_length=255,
+        default=hookset.TEXT_ANNOTATION_DEFAULT_KIND,
+        choices=hookset.TEXT_ANNOTATION_KIND_CHOICES,
     )
     data = JSONField(default=dict, blank=True)
     idx = models.IntegerField(help_text="0-based index")
