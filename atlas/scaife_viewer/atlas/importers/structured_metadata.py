@@ -77,6 +77,17 @@ UP_TO_DEPTHS = {
 }
 
 
+def _value_fields(kind, row):
+    if kind == "obj":
+        value = ""
+        value_obj = row["value_obj"]
+    else:
+        value = row["value"]
+        # TODO: None?
+        value_obj = {}
+    return (value, value_obj)
+
+
 def _process_collection(collection):
     idx = 0
     to_create = []
@@ -85,13 +96,17 @@ def _process_collection(collection):
         for field, data in collection["fields"].items():
             value_count = 0
             for row in data["values"]:
+                value, value_obj = _value_fields(data["kind"], row)
                 metadata_obj = Metadata(
                     urn=row["urn"],
                     # TODO: Wither idx?
                     idx=idx,
+                    # TODO: ElasticSearch mapping?
+                    datatype=data["kind"],
                     collection_urn=collection["urn"],
                     label=field,
-                    value=row["value"],
+                    value=value,
+                    value_obj=value_obj,
                     # TODO actually get the depth
                     depth=UP_TO_DEPTHS[data["up_to"]],
                     index=data["index"],

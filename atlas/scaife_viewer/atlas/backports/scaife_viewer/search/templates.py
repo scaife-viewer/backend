@@ -13,6 +13,9 @@ def text_field_template():
 def build_fields(collection):
     fields = {}
     for field in collection:
+        if field == "jo_entry_texts":
+            # FIXME: Extract kind and use for an explicit mapping
+            continue
         # TODO: Handle other fields besides text fields
         fields[field] = text_field_template()
     return fields

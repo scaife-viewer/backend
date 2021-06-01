@@ -685,6 +685,9 @@ class Citation(models.Model):
     )
 
 
+# TODO: Determine how strict we want to be on object vs value; need object type for entry.texts
+
+
 class Metadata(models.Model):
     """
     idx
@@ -712,12 +715,19 @@ class Metadata(models.Model):
         max_length=255, help_text="urn:cite2:<site>:metadata_collection.atlas_v1"
     )
     datatype = models.CharField(
-        choices=[("str", "String"), ("int", "Integer"), ("date", "Date")],
+        # TODO: Object vs CITEObj, etc
+        choices=[
+            ("str", "String"),
+            ("int", "Integer"),
+            ("date", "Date"),
+            ("obj", "Object"),
+        ],
         max_length=4,
         default="str",
     )
     label = models.CharField(max_length=255)
     value = models.CharField(blank=True, null=True, max_length=255)
+    value_obj = JSONField(default=dict, blank=True)
 
     index = models.BooleanField(default=True, help_text="Include in search index")
     visible = models.BooleanField(default=True, help_text="Visible in widget")
