@@ -1,28 +1,16 @@
 import json
 import logging
-import os
 
 from tqdm import tqdm
 
-from scaife_viewer.atlas.conf import settings
-
+from ..hooks import hookset
 from ..models import Metadata, Node
 from ..utils import chunked_bulk_create
 
 
 MetadataThroughModel = Metadata.cts_relations.through
 
-ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.SV_ATLAS_DATA_DIR, "annotations", "structured-metadata",
-)
-
 logger = logging.getLogger(__name__)
-
-
-def get_paths(path):
-    if not os.path.exists(path):
-        return []
-    return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
 def _bulk_prepare_metadata_through_objects(qs, through_lookup):
@@ -140,6 +128,6 @@ def import_metadata(reset=False):
     if reset:
         Metadata.objects.all().delete()
 
-    metadata_paths = get_paths(ANNOTATIONS_DATA_PATH)
+    metadata_paths = hookset.get_metadata_collection_annotation_paths()
     for path in metadata_paths:
         _create_metadata(path)
