@@ -38,6 +38,7 @@ setup(
         "graphene-django==2.6.0",
         # @@@ can be dropped in Python > 3.8
         "importlib-resources>=5.1.2,<6",
+        "jsonlines>=2.0.0,<3",
         "logfmt==0.4",
         "regex>=2020.11.13",
         "tqdm>= 4.48.2,<5",

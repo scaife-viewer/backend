@@ -1,6 +1,8 @@
 import json
 import logging
+from pathlib import Path
 
+import jsonlines
 from tqdm import tqdm
 
 from ..hooks import hookset
@@ -77,14 +79,27 @@ def _value_fields(kind, row):
     return (value, value_obj)
 
 
-def _process_collection(collection):
+def _field_values(data, values_path):
+    field_data = data.get("values", [])
+    if isinstance(field_data, list):
+        for row in field_data:
+            yield row
+    elif values_path and field_data.endswith("jsonl"):
+        jsonl_path = Path(values_path, field_data)
+        with jsonlines.open(jsonl_path) as reader:
+            for row in reader.iter():
+                yield row
+    return []
+
+
+def _process_collection(collection, values_path=None):
     idx = 0
     to_create = []
     through_lookup = {}
     with tqdm() as pbar:
         for field, data in collection["fields"].items():
             value_count = 0
-            for row in data["values"]:
+            for row in _field_values(data, values_path=values_path):
                 value, value_obj = _value_fields(data["kind"], row)
                 metadata_obj = Metadata(
                     urn=row["urn"],
@@ -114,7 +129,8 @@ def _create_metadata(path):
     msg = f"Loading metadata from {path}"
     logger.info(msg)
     collection = json.load(open(path))
-    objs, through_lookup = _process_collection(collection)
+    values_path = Path(Path(path).parent, "values")
+    objs, through_lookup = _process_collection(collection, values_path=values_path)
 
     logger.info("Inserting Metadata objects")
     chunked_bulk_create(Metadata, objs)
