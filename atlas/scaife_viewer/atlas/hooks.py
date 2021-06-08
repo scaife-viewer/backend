@@ -127,7 +127,7 @@ class DefaultHookSet:
         from .conf import settings  # noqa; avoids race condition
 
         path = os.path.join(
-            settings.SV_ATLAS_DATA_DIR, "annotations", "structured-metadata",
+            settings.SV_ATLAS_DATA_DIR, "annotations", "metadata-collections",
         )
         if not os.path.exists(path):
             return []

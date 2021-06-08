@@ -997,8 +997,8 @@ class Query(ObjectType):
     citation = relay.Node.Field(CitationNode)
     citations = LimitedConnectionField(CitationNode)
 
-    structured_metadata = relay.Node.Field(MetadataNode)
-    structured_metadatum = LimitedConnectionField(MetadataNode)
+    metadata_record = relay.Node.Field(MetadataNode)
+    metadata_records = LimitedConnectionField(MetadataNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(

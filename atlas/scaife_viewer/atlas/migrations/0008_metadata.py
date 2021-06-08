@@ -87,7 +87,7 @@ class Migration(migrations.Migration):
                     "cts_relations",
                     sortedm2m.fields.SortedManyToManyField(
                         help_text=None,
-                        related_name="structured_metadata",
+                        related_name="metadata_records",
                         to="scaife_viewer_atlas.Node",
                     ),
                 ),

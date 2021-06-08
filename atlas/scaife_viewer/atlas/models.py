@@ -741,7 +741,7 @@ class Metadata(models.Model):
     depth = models.PositiveIntegerField()
 
     cts_relations = SortedManyToManyField(
-        "scaife_viewer_atlas.Node", related_name="structured_metadata"
+        "scaife_viewer_atlas.Node", related_name="metadata_records"
     )
 
     def __str__(self):
