@@ -25,6 +25,7 @@ setup(
     package_data={
         "atlas": []
     },
+    include_package_data=True,
     test_suite="runtests.runtests",
     install_requires=[
         "django_appconf>=1.0.4",
