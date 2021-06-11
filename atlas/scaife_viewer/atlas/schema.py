@@ -478,14 +478,17 @@ class TextAlignmentMetadata(dict):
         tokens_list = list(
             tokens_qs.filter(text_part__urn__startswith=version_urn).order_by("idx")
         )
-        text_parts_list = list(
-            TextPart.objects.filter(tokens__in=tokens_list).distinct()
-        )
-        return {
-            "reference": self.get_passage_reference(version_urn, text_parts_list),
-            "start_idx": tokens_list[0].idx,
-            "end_idx": tokens_list[-1].idx,
-        }
+        data = {"token_count": len(tokens_list), "version_urn": version_urn}
+        if tokens_list:
+            text_parts_list = list(
+                TextPart.objects.filter(tokens__in=tokens_list).distinct()
+            )
+            data.update({
+                "reference": self.get_passage_reference(version_urn, text_parts_list),
+                "start_idx": tokens_list[0].idx,
+                "end_idx": tokens_list[-1].idx,
+            })
+        return camelize(data)
 
     @cached_property
     def alignment(self):
