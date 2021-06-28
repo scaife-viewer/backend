@@ -10,14 +10,34 @@ def text_field_template():
     }
 
 
+def int_field_template():
+    return {
+        "type": "integer",
+        "coerce": True,
+        "ignore_malformed": True,
+    }
+
+
+def date_field_template():
+    return {
+        "type": "date",
+        "format": "year",
+    }
+
+
 def build_fields(collection):
     fields = {}
-    for field in collection:
-        if field == "jo_entry_texts":
-            # FIXME: Extract kind and use for an explicit mapping
+    for field in collection["fields"]:
+        if field["label"] == "jo_entry_texts":
+            # TODO: Update explicit data type to engage a "dynamic" map; likely
+            # "obj" within ATLAS
             continue
-        # TODO: Handle other fields besides text fields
-        fields[field] = text_field_template()
+        elif field["datatype"] == "int":
+            fields[field["label"]] = int_field_template()
+        elif field["datatype"] == "date":
+            fields[field["label"]] = date_field_template()
+        else:
+            fields[field["label"]] = text_field_template()
     return fields
 
 
@@ -41,12 +61,18 @@ def get_collections():
         prefix = collection_urn.rsplit(":", maxsplit=1)[1]
         fields = (
             Metadata.objects.filter(collection_urn=collection_urn)
-            .values_list("label", flat=True)
+            .values("label", "datatype", "index")
             .distinct()
         )
-        prefixed_fields = [f"{prefix}_{field}" for field in fields]
-        collections.append(prefixed_fields)
-    # TODO: actually make use of hidden / index values
+        collection_obj = {
+            "urn": collection_urn,
+            "fields": [
+                {"label": f'{prefix}_{field["label"]}', "datatype": field["datatype"]}
+                for field in fields
+                if field["index"]
+            ],
+        }
+        collections.append(collection_obj)
     return collections
 
 
