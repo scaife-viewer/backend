@@ -28,15 +28,14 @@ def date_field_template():
 def build_fields(collection):
     fields = {}
     for field in collection["fields"]:
-        if field["label"] == "jo_entry_texts":
-            # TODO: Update explicit data type to engage a "dynamic" map; likely
-            # "obj" within ATLAS
+        if field["datatype"] == "obj":
             continue
         elif field["datatype"] == "int":
             fields[field["label"]] = int_field_template()
         elif field["datatype"] == "date":
             fields[field["label"]] = date_field_template()
         else:
+            # TODO: Handle CITE Obj
             fields[field["label"]] = text_field_template()
     return fields
 

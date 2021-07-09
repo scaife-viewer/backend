@@ -715,8 +715,9 @@ class Metadata(models.Model):
             ("int", "Integer"),
             ("date", "Date"),
             ("obj", "Object"),
+            ("cite_urn", "CITE URN"),
         ],
-        max_length=4,
+        max_length=8,
         default="str",
     )
     label = models.CharField(max_length=255)
