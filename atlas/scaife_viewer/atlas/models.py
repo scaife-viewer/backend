@@ -682,6 +682,18 @@ class Citation(models.Model):
 # TODO: Determine how strict we want to be on object vs value; need object type for entry.texts
 
 
+METADATA_VISIBILITY_ALL = "all"
+METADATA_VISIBILITY_LIBRARY = "library"
+METADATA_VISIBILITY_READER = "reader"
+METADATA_VISIBILITY_HIDDEN = "hidden"
+METADATA_VISIBLITY_CHOICES = [
+    (METADATA_VISIBILITY_ALL, "all"),
+    (METADATA_VISIBILITY_LIBRARY, "library"),
+    (METADATA_VISIBILITY_READER, "reader"),
+    (METADATA_VISIBILITY_HIDDEN, "hidden"),
+]
+
+
 class Metadata(models.Model):
     """
     idx
@@ -725,7 +737,11 @@ class Metadata(models.Model):
     value_obj = JSONField(default=dict, blank=True)
 
     index = models.BooleanField(default=True, help_text="Include in search index")
-    visible = models.BooleanField(default=True, help_text="Visible in widget")
+    visibility = models.CharField(
+        choices=METADATA_VISIBLITY_CHOICES,
+        max_length=7,
+        default=METADATA_VISIBILITY_ALL,
+    )
 
     level = models.CharField(
         choices=[
