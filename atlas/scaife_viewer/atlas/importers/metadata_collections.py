@@ -92,6 +92,18 @@ def _field_values(data, values_path):
     return []
 
 
+def _get_visibility(data):
+    visibility = data.get("visibility")
+    if visibility:
+        return visibility
+    # TODO: Deprecate the visible flag once Brill
+    # has deployed to `2021-07-09-001`
+    visible = data.get("visible", None)
+    if visible:
+        return "reader"
+    return "hidden"
+
+
 def _process_collection(collection, values_path=None):
     idx = 0
     to_create = []
@@ -114,7 +126,7 @@ def _process_collection(collection, values_path=None):
                     # TODO actually get the depth
                     depth=UP_TO_DEPTHS[data["up_to"]],
                     index=data["index"],
-                    visible=data["visible"],
+                    visibility=_get_visibility(data),
                 )
                 to_create.append(metadata_obj)
                 through_lookup[metadata_obj.urn] = row["cts_urns"]

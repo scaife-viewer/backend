@@ -899,6 +899,11 @@ class CitationNode(DjangoObjectType):
 
 class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
+    # TODO: Deprecate visible field in favor of visibility
+    visible = django_filters.BooleanFilter(method="visible_filter")
+    # TODO: Determine why visibility isn't working right, likely related
+    # to convert_choices_to_enum being disabled
+    visibility = django_filters.CharFilter(method="visibility_filter")
 
     class Meta:
         model = Metadata
@@ -907,7 +912,6 @@ class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
             "value": ["exact"],
             "level": ["exact", "in"],
             "depth": ["exact", "gt", "lt", "gte", "lte"],
-            "visible": ["exact"],
         }
 
     # TODO: refactor as a mixin
@@ -915,6 +919,16 @@ class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         matches = queryset.filter(cts_relations__in=textparts_queryset).distinct()
         return queryset.filter(pk__in=matches)
+
+    def visibility_filter(self, queryset, name, value):
+        return queryset.filter(visibility=value)
+
+    def visible_filter(self, queryset, name, value):
+        visibility_lookup = {
+            True: "reader",
+            False: "hidden",
+        }
+        return queryset.filter(visibility=visibility_lookup[value])
 
 
 class MetadataNode(DjangoObjectType):
