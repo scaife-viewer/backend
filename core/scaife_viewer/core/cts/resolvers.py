@@ -34,7 +34,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
         urn = str(metadata.urn)
         if urn in self.inventory["default"].textgroups:
             try:
-                self.inventory[urn].update(metadata)
+                metadata = self.inventory[urn].update(metadata)
             except UnknownCollection as e:
                 if self.RAISE_ON_UNKNOWN_COLLECTION:
                     raise e
@@ -48,13 +48,12 @@ class LocalResolver(CtsCapitainsLocalResolver):
         return metadata
 
     def process_work(self, text_group_metadata, path):
-        text_group_urn = str(text_group_metadata.urn)
         with open(path) as f:
             metadata = XmlCtsWorkMetadata.parse(resource=f, parent=text_group_metadata,)
         work_urn = str(metadata.urn)
         if work_urn in text_group_metadata.works:
             try:
-                self.inventory[work_urn].update(metadata)
+                metadata = self.inventory[work_urn].update(metadata)
             except UnknownCollection as e:
                 if self.RAISE_ON_UNKNOWN_COLLECTION:
                     raise e
@@ -79,6 +78,13 @@ class LocalResolver(CtsCapitainsLocalResolver):
             # NOTE: Don't try and continue processing the text
             return
 
+        if metadata.path:
+            # NOTE: We use metadata.path being populated as a way
+            # to determine if the text has been processed by this function.
+            # This avoids hitting an errant FileNotFoundError if the texts
+            # are stored across multiple data directories (corpora).
+            return
+
         metadata.path = os.path.join(
             base_path,
             "{text_group}.{work}.{version}.xml".format(
@@ -100,7 +106,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
                     ckwargs["child"] = cites[-1]
                 cites.append(XmlCtsCitation(**ckwargs))
             metadata.citation = cites[-1]
-            self.logger.info(f"{metadata.path} has been parsed")
+            self.logger.debug(f"{metadata.path} has been parsed")
             if not metadata.citation.is_set():
                 to_remove.append(urn)
                 self.logger.warning(f"{metadata.path} has no passages")
@@ -144,10 +150,11 @@ class LocalResolver(CtsCapitainsLocalResolver):
                             text_group_metadata, work_path
                         )
                         for text_urn in work_metadata.texts:
-                            self.process_text(
+                            processed = self.process_text(
                                 text_urn, os.path.dirname(work_path), to_remove
                             )
-                            repo_metadata["texts"].append(text_urn)
+                            if processed:
+                                repo_metadata["texts"].append(text_urn)
                 except UndispatchedTextError as e:
                     self.logger.warning(f"Error dispatching {text_group_path}: {e}")
                     if self.RAISE_ON_UNDISPATCHED:

@@ -85,25 +85,33 @@ class Indexer:
         print(f"Applying URN prefix filter: {value}")
         return value
 
-    def index(self):
-        cts.TextInventory.load()
-        print("Text inventory loaded")
-        urn_obj = self.get_urn_obj()
-        prefix_filter = self.get_urn_prefix_filter(urn_obj)
-        texts = dask.bag.from_sequence(self.texts(prefix_filter))
+    def prepare_passages(self, urn_prefix=None):
+        if urn_prefix is not None:
+            raise NotImplementedError("URN prefix is not currently supported")
+
+        texts = dask.bag.from_sequence(
+            self.texts(urn_prefix.upTo(cts.URN.NO_PASSAGE) if urn_prefix else None)
+        )
 
         if LEMMA_CONTENT:
             # only retrieve greek texts
             texts = texts.filter(lambda t: t.lang == "grc")
 
-        passages = texts.map(self.passages_from_text).flatten()
-        if urn_obj and urn_obj.reference:
-            print(f"Applying URN reference filter: {urn_obj.reference}")
-            passages = passages.filter(lambda p: p.urn == str(urn_obj))
+        passages = []
+        for text in texts:
+            passages.extend(self.passages_from_text(text))
         if self.limit is not None:
-            passages = passages.take(self.limit, npartitions=-1)
-        else:
-            passages = passages.compute(**compute_kwargs())
+            passages = passages[0 : self.limit]
+        return passages
+
+    def index(self):
+        cts.TextInventory.load()
+        print("Text inventory loaded")
+        urn_obj = self.get_urn_obj()
+        prefix_filter = self.get_urn_prefix_filter(urn_obj)
+
+        passages = self.prepare_passage(urn_prefix=prefix_filter)
+
         print(f"Indexing {len(passages)} passages")
         indexer_kwargs = dict(lemma_content=LEMMA_CONTENT and bool(morphology))
         # @@@ revisit partitions based on `DASK_CONFIG_NUM_WORKERS`; also partitions sorted by

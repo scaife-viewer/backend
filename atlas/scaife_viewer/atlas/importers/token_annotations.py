@@ -1,5 +1,6 @@
 import csv
 import os
+import re
 
 from scaife_viewer.atlas.conf import settings
 
@@ -9,6 +10,9 @@ from ..models import Node, Token
 ANNOTATIONS_DATA_PATH = os.path.join(
     settings.SV_ATLAS_DATA_DIR, "annotations", "token-annotations"
 )
+
+
+VE_REF_PATTTERN = re.compile(r"(?P<ref>.*).t(?P<token>.*)")
 
 
 def get_paths():
@@ -26,14 +30,10 @@ def resolve_version(path):
     return Node.objects.filter(urn__endswith=versionish).get()
 
 
-def extract_ref_and_position(row):
-    """
-    @@@ this is just to get the treebank data loaded and queryable;
-    want to revisit how this entire extraction works in the future
-    """
-    text_part_ref, token_idx = row["uuid"][1:].split("_")
-    position = int(token_idx) + 1
-    return (text_part_ref, position, row)
+def extract_ref_and_token_position(row):
+    match = VE_REF_PATTTERN.match(row["ve_ref"])
+    assert match
+    return (match["ref"], int(match["token"]), row)
 
 
 def extract_lookup_and_refs(path):
@@ -42,7 +42,7 @@ def extract_lookup_and_refs(path):
     with open(path, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            ref, position, data = extract_ref_and_position(row)
+            ref, position, data = extract_ref_and_token_position(row)
             key = (ref, position)
             refs.append(ref)
             lookup[key] = data

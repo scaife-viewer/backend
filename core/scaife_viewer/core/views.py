@@ -3,7 +3,6 @@ import json
 import os
 from urllib.parse import urlencode
 
-from django.conf import settings
 from django.http import (
     Http404,
     HttpResponse,
@@ -18,6 +17,7 @@ import dateutil.parser
 import requests
 
 from . import cts
+from .conf import settings
 from .http import ConditionMixin
 from .precomputed import library_view_json
 from .search import SearchQuery
@@ -79,12 +79,28 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
         except cts.CollectionDoesNotExist:
             raise Http404()
 
+    @property
+    def collection_is_version_exemplar(self):
+        return len(str(self.collection.urn).rsplit(".")) > 2
+
+    @property
+    def should_redirect_to_reader(self):
+        if settings.SCAIFE_VIEWER_CORE_REDIRECT_VERSION_LIBRARY_COLLECTION_TO_READER:
+            return self.collection_is_version_exemplar and self.format == "html"
+        return False
+
+    def get(self, request, **kwargs):
+        self.collection = self.get_collection()
+        if self.should_redirect_to_reader:
+            return library_text_redirect(request, self.kwargs["urn"])
+        return super().get(request, **kwargs)
+
     def as_html(self):
         normalized_urn = normalize_urn(self.kwargs["urn"])
         if normalized_urn != self.kwargs["urn"]:
             return redirect("library_collection", urn=normalized_urn)
 
-        collection = self.get_collection()
+        collection = self.collection
         collection_name = collection.__class__.__name__.lower()
         ctx = {collection_name: collection}
         return render(self.request, f"library/cts_{collection_name}.html", ctx)
@@ -97,7 +113,7 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
 
     @property
     def json_paylod(self):
-        collection = self.get_collection()
+        collection = self.collection
         if self.should_toc:
             return apify(collection, with_toc=True)
         return apify(collection)

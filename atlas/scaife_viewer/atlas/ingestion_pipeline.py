@@ -1,9 +1,6 @@
 import importlib
 
-from django.conf import settings  # noqa
 from django.core.exceptions import ImproperlyConfigured
-
-from appconf import AppConf
 
 
 def load_path_attr(path):
@@ -22,22 +19,12 @@ def load_path_attr(path):
     return attr
 
 
-class CoreAppConf(AppConf):
-    ALLOW_TRAILING_COLON = False
+def run_ingestion_pipeline(outf):
+    from .conf import settings  # noqa; avoids race condition
 
-    # Other
-    REDIRECT_VERSION_LIBRARY_COLLECTION_TO_READER = True
+    pipeline_func_paths = settings.SV_ATLAS_INGESTION_PIPELINE
 
-    HOOKSET = "scaife_viewer.core.hooks.DefaultHookSet"
-
-    # Search Indexing
-    USE_CLOUD_INDEXER = False
-
-    # Resolver cache settings
-    RESOLVER_CACHE_LABEL = "cts-resolver"
-
-    class Meta:
-        prefix = "scaife_viewer_core"
-
-    def configure_hookset(self, value):
-        return load_path_attr(value)()
+    for path in pipeline_func_paths:
+        func = load_path_attr(path)
+        outf.write(f"--[{path}]--")
+        func(reset=True)

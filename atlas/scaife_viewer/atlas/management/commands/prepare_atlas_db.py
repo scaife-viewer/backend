@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand, CommandError
 from scaife_viewer.atlas.conf import settings
 from scaife_viewer.atlas.data_model import VERSION
 
-from ... import importers
+from ...hooks import hookset
 
 
 class Command(BaseCommand):
@@ -24,6 +24,11 @@ class Command(BaseCommand):
             "--force",
             action="store_true",
             help="Forces the ATLAS management command to run",
+        )
+        parser.add_argument(
+            "--keep-resolver-cache",
+            action="store_true",
+            help="Keeps CTS resolver cache in place",
         )
 
     def do_db_prep(self, database_path, *args, **options):
@@ -45,22 +50,16 @@ class Command(BaseCommand):
         self.stdout.write(f'--[Running database migrations on "{db_label}"]--')
         call_command("migrate", database=db_label)
 
-        if hasattr(settings, "CTS_RESOLVER_CACHE_LOCATION"):
+        if hasattr(settings, "CTS_RESOLVER_CACHE_LOCATION") and not options.get(
+            "keep_resolver_cache"
+        ):
             resolver_path = settings.CTS_RESOLVER_CACHE_LOCATION
             if os.path.exists(resolver_path):
                 shutil.rmtree(resolver_path)
                 self.stdout.write("--[Removed existing CTS resolver cache]--")
-        self.stdout.write("--[Populating ATLAS db]--")
-        importers.versions.import_versions()
 
-        # TODO: make this pipeline more configurable
-        try:
-            from github import Github  # noqa: F401
-        except ModuleNotFoundError:
-            pass
-        else:
-            self.stdout.write("--[Applying repo metadata]--")
-            importers.repo_metadata.import_repo_metadata(reset=True)
+        self.stdout.write("--[Processing ATLAS ingestion pipeline]--")
+        hookset.run_ingestion_pipeline(self.stdout)
 
     def handle(self, *args, **options):
         database_path = settings.SV_ATLAS_DB_PATH

@@ -2,6 +2,8 @@ import json
 import os
 from collections import defaultdict
 
+from github import Github
+
 from scaife_viewer.atlas.conf import settings
 
 from ..models import Node, Repo
@@ -26,9 +28,6 @@ def get_paths():
 
 
 def get_github_client():
-    # TODO: Add Github dependency, possibly make it optional
-    from github import Github
-
     ACCESS_TOKEN = os.environ.get("GITHUB_ACCESS_TOKEN", "")
     if ACCESS_TOKEN:
         client = Github(ACCESS_TOKEN)

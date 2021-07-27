@@ -26,6 +26,9 @@ class ATLASAppConf(AppConf):
     # Data model
     DATA_DIR = None
     INGESTION_CONCURRENCY = None
+    INGESTION_PIPELINE = [
+        "scaife_viewer.atlas.importers.versions.import_versions",
+    ]
     # TODO: Review alphabet in light of SQLite case-sensitivity
     NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 

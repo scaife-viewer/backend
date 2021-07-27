@@ -1,6 +1,5 @@
 import logging
 from collections import defaultdict
-from itertools import islice
 
 from django.db import IntegrityError
 from django.utils.translation import ugettext_noop
@@ -13,7 +12,7 @@ from scaife_viewer.atlas import constants
 from ..hooks import hookset
 from ..models import Node
 from ..urn import URN
-from ..utils import get_lowest_citable_depth
+from ..utils import chunked_bulk_create, get_lowest_citable_depth
 
 
 logger = logging.getLogger(__name__)
@@ -289,28 +288,6 @@ def get_first_value_for_language(values, lang, fallback=True):
     return value.get("value")
 
 
-def lazy_iterable(iterable):
-    for item in iterable:
-        yield item
-
-
-def chunked_bulk_create(iterable, total=None, batch_size=500):
-    """
-    Use islice to lazily pass subsets of the iterable for bulk creation
-    """
-    if total is None:
-        total = len(iterable)
-
-    generator = lazy_iterable(iterable)
-    with tqdm(total=total) as pbar:
-        while True:
-            subset = list(islice(generator, batch_size))
-            if not subset:
-                break
-            created = len(Node.objects.bulk_create(subset, batch_size=batch_size))
-            pbar.update(created)
-
-
 def import_versions(reset=False, predicate=None):
     if reset:
         Node.objects.filter(kind="nid").delete()
@@ -352,5 +329,5 @@ def import_versions(reset=False, predicate=None):
             lookup = importer.node_last_child_lookup
 
     logger.info("Inserting Node tree")
-    chunked_bulk_create(to_defer)
+    chunked_bulk_create(Node, to_defer)
     logger.info(f"{Node.objects.count()} total nodes on the tree.")
