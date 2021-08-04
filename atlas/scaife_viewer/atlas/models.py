@@ -15,6 +15,8 @@ from treebeard.mp_tree import MP_Node
 from scaife_viewer.atlas import constants
 from scaife_viewer.atlas.conf import settings
 
+from .hooks import hookset
+
 
 class TextAlignment(models.Model):
     """
@@ -77,19 +79,11 @@ class TextAlignmentRecordRelation(models.Model):
     )
 
 
-TEXT_ANNOTATION_KIND_SCHOLIA = "scholia"
-TEXT_ANNOTATION_KIND_SYNTAX_TREE = "syntax-tree"
-TEXT_ANNOTATION_KIND_CHOICES = (
-    (TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),
-    (TEXT_ANNOTATION_KIND_SYNTAX_TREE, "Syntax tree"),
-)
-
-
 class TextAnnotation(models.Model):
     kind = models.CharField(
-        max_length=7,
-        default=TEXT_ANNOTATION_KIND_SCHOLIA,
-        choices=TEXT_ANNOTATION_KIND_CHOICES,
+        max_length=255,
+        default=hookset.TEXT_ANNOTATION_DEFAULT_KIND,
+        choices=hookset.TEXT_ANNOTATION_KIND_CHOICES,
     )
     data = JSONField(default=dict, blank=True)
     idx = models.IntegerField(help_text="0-based index")
@@ -488,7 +482,7 @@ class Token(models.Model):
         return re.sub(r"[^\w]", "", value)
 
     @classmethod
-    def tokenize(cls, text_part_node, counters):
+    def tokenize(cls, text_part_node, counters, as_dict=False):
         # @@@ compare with passage-based tokenization on
         # scaife-viewer/scaife-viewer.  See discussion on
         # https://github.com/scaife-viewer/scaife-viewer/issues/162
@@ -511,17 +505,21 @@ class Token(models.Model):
             subref_value = f"{w}[{subref_idx}]"
 
             position = pos + 1
-            to_create.append(
-                cls(
-                    text_part=text_part_node,
-                    value=piece,
-                    word_value=w,
-                    position=position,
-                    ve_ref=f"{text_part_node.ref}.t{position}",
-                    idx=counters["token_idx"],
-                    subref_value=subref_value,
-                )
+            # TODO: Further decouple `as_dict` so we could
+            # for example append to a file buffer using CSV
+            data = dict(
+                text_part_id=text_part_node.pk,
+                value=piece,
+                word_value=w,
+                position=position,
+                ve_ref=f"{text_part_node.ref}.t{position}",
+                idx=counters["token_idx"],
+                subref_value=subref_value,
             )
+            if as_dict:
+                to_create.append(data)
+            else:
+                to_create.append(cls(**data))
             counters["token_idx"] += 1
         return to_create
 

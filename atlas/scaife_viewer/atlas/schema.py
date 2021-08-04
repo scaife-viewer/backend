@@ -18,8 +18,6 @@ from .language_utils import normalize_string
 
 # from .models import Node as TextPart
 from .models import (
-    TEXT_ANNOTATION_KIND_SCHOLIA,
-    TEXT_ANNOTATION_KIND_SYNTAX_TREE,
     AttributionRecord,
     AudioAnnotation,
     Citation,
@@ -649,13 +647,13 @@ class TextAnnotationNode(AbstractTextAnnotationNode):
     # annotation
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SCHOLIA)
+        return queryset.filter(kind=constants.TEXT_ANNOTATION_KIND_SCHOLIA)
 
 
 class SyntaxTreeNode(AbstractTextAnnotationNode):
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(kind=TEXT_ANNOTATION_KIND_SYNTAX_TREE)
+        return queryset.filter(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
 
 
 class MetricalAnnotationNode(DjangoObjectType):
