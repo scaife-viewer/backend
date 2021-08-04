@@ -3,11 +3,11 @@ import os
 
 from scaife_viewer.atlas.conf import settings
 
-from ..models import (
+from ..constants import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
-    TextAnnotation,
 )
+from ..models import TextAnnotation
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
