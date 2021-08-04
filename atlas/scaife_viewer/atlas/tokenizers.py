@@ -6,7 +6,7 @@ from .models import Node, Token
 from .utils import get_lowest_citable_nodes
 
 
-LIMIT = 500
+LIMIT = None
 
 
 def tokenize_text_parts(version_exemplar_urn, force=True):
@@ -18,6 +18,8 @@ def tokenize_text_parts(version_exemplar_urn, force=True):
     counters = {"token_idx": 0}
     to_create = []
     for text_part in text_parts:
+        if not text_part.text_content:
+            continue
         to_create.extend(Token.tokenize(text_part, counters))
     created = len(Token.objects.bulk_create(to_create, batch_size=LIMIT))
     print(f"Created {created} tokens for {version_exemplar}", file=sys.stderr)
