@@ -6,6 +6,9 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+# FIXME: Currently required due to how macOS spawns ProcessPool workers
+import django; django.setup();
+
 from django import db
 from django.conf import settings
 from django.utils.text import slugify
