@@ -10,9 +10,10 @@ from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 from graphene_django.utils import camelize
 
+from . import constants
+
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
-from .constants import CTS_URN_DEPTHS
 from .hooks import hookset
 from .language_utils import normalize_string
 
@@ -302,7 +303,9 @@ class TextGroupNode(AbstractTextPartNode):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(depth=CTS_URN_DEPTHS["textgroup"]).order_by("pk")
+        return queryset.filter(depth=constants.CTS_URN_DEPTHS["textgroup"]).order_by(
+            "pk"
+        )
 
     # TODO: extract to AbstractTextPartNode
     def resolve_label(obj, *args, **kwargs):
@@ -320,7 +323,7 @@ class WorkNode(AbstractTextPartNode):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(depth=CTS_URN_DEPTHS["work"]).order_by("pk")
+        return queryset.filter(depth=constants.CTS_URN_DEPTHS["work"]).order_by("pk")
 
     # TODO: extract to AbstractTextPartNode
     def resolve_label(obj, *args, **kwargs):
@@ -362,7 +365,7 @@ class VersionNode(AbstractTextPartNode):
     def get_queryset(cls, queryset, info):
         # TODO: set a default somewhere
         # return queryset.filter(kind="version").order_by("urn")
-        return queryset.filter(depth=CTS_URN_DEPTHS["version"]).order_by("pk")
+        return queryset.filter(depth=constants.CTS_URN_DEPTHS["version"]).order_by("pk")
 
     # TODO: Determine how tightly coupled these fields
     # should be to metadata (including ["key"] vs .get("key"))
@@ -497,11 +500,15 @@ class TextAlignmentMetadata(dict):
             text_parts_list = list(
                 TextPart.objects.filter(tokens__in=tokens_list).distinct()
             )
-            data.update({
-                "reference": self.get_passage_reference(version_urn, text_parts_list),
-                "start_idx": tokens_list[0].idx,
-                "end_idx": tokens_list[-1].idx,
-            })
+            data.update(
+                {
+                    "reference": self.get_passage_reference(
+                        version_urn, text_parts_list
+                    ),
+                    "start_idx": tokens_list[0].idx,
+                    "end_idx": tokens_list[-1].idx,
+                }
+            )
         return camelize(data)
 
     @cached_property
