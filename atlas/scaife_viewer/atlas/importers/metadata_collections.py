@@ -59,6 +59,7 @@ def _resolve_metadata_cts_relations(qs, through_lookup):
 # FIXME: Standardize these depths and make the GraphQL filters
 # take them into account
 UP_TO_DEPTHS = {
+    "textgroup": 3,
     "work": 4,
     "version": 5,
     # TODO: Prefer citation-level, which could be nodes >= 6;
