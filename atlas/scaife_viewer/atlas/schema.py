@@ -914,10 +914,20 @@ class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
             "depth": ["exact", "gt", "lt", "gte", "lte"],
         }
 
+    # TODO: Refactor to `Node` or other schema mixins
+    def get_workparts_queryset(self, version):
+        return version.get_ancestors() | Node.objects.filter(pk=version.pk)
+
     # TODO: refactor as a mixin
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        matches = queryset.filter(cts_relations__in=textparts_queryset).distinct()
+        # TODO: Get smarter with an `up_to` filter that could further scope the query
+
+        workparts_queryset = self.get_workparts_queryset(self.request.passage.version)
+
+        union_qs = textparts_queryset | workparts_queryset
+        # FIXME: Ensure that existing JO widget remains backwards compatible
+        matches = queryset.filter(cts_relations__in=union_qs).distinct()
         return queryset.filter(pk__in=matches)
 
     def visibility_filter(self, queryset, name, value):
