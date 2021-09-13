@@ -27,6 +27,7 @@ from .models import (
     ImageAnnotation,
     MetricalAnnotation,
     NamedEntity,
+    NamedEntityCollection,
     Node,
     Repo,
     Sense,
@@ -721,12 +722,37 @@ class TokenNode(DjangoObjectType):
         filterset_class = TokenFilterSet
 
 
+class NamedEntityCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = NamedEntityCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            entities__tokens__text_part__in=textparts_queryset
+        ).distinct()
+
+
+class NamedEntityCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = NamedEntityCollection
+        interfaces = (relay.Node,)
+        filterset_class = NamedEntityCollectionFilterSet
+
+
 class NamedEntityFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
 
     class Meta:
         model = NamedEntity
-        fields = ["urn", "kind"]
+        fields = ["urn", "kind", "collection__urn"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
@@ -975,6 +1001,9 @@ class Query(ObjectType):
 
     token = relay.Node.Field(TokenNode)
     tokens = LimitedConnectionField(TokenNode)
+
+    named_entity_collection = relay.Node.Field(NamedEntityCollectionNode)
+    named_entity_collections = LimitedConnectionField(NamedEntityCollectionNode)
 
     named_entity = relay.Node.Field(NamedEntityNode)
     named_entities = LimitedConnectionField(NamedEntityNode)
