@@ -36,7 +36,7 @@ setup(
         # @@@ can be dropped in Django 3.1+
         "django-jsonfield-backport==1.0.0",
         "graphene-django==2.6.0",
-        "logfmt==0.4",
+        "PyYAML==5.4.1",
         "regex>=2020.11.13",
         "tqdm>= 4.48.2,<5",
     ],
