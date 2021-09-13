@@ -527,6 +527,22 @@ class Token(models.Model):
         return f"{self.text_part.urn} :: {self.value}"
 
 
+# TODO: Generic collection / set model
+class NamedEntityCollection(models.Model):
+    """
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+    # TODO: Move out to attributions model
+    data = JSONField(default=dict, blank=True)
+
+    urn = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:named_entity_collection.atlas_v1",
+    )
+
+
 class NamedEntity(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
@@ -536,6 +552,12 @@ class NamedEntity(models.Model):
 
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
     urn = models.CharField(max_length=255, unique=True)
+
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.NamedEntityCollection",
+        related_name="entities",
+        on_delete=models.CASCADE,
+    )
 
     # @@@ we may also want structure these references using URNs
     tokens = models.ManyToManyField(
