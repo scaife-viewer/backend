@@ -28,15 +28,18 @@ def get_paths():
 
 
 def _set_textparts(ia, references):
-    text_parts = list(Node.objects.filter(urn__in=references))
+    text_parts = set(Node.objects.filter(urn__in=references))
     assert len(text_parts) == len(references)
     if settings.SV_ATLAS_EXPAND_IMAGE_ANNOTATION_REFS:
         # Link the annotation to all descendants of the retrieved text parts.
         # NOTE: This may overlap with ROIs, but we decided to do it to
         # improve the display of multiple folios per pagination chunk
         # within the reader.
-        text_parts = set(
-            itertools.chain.from_iterable(tp.get_tree(tp) for tp in text_parts)
+        # FIXME: `get_tree` is broken due to changes we made with bulk ingestion
+        text_parts.update(
+            set(
+                itertools.chain.from_iterable(tp.get_descendants() for tp in text_parts)
+            )
         )
     ia.text_parts.set(text_parts)
 
