@@ -5,6 +5,11 @@ from django.core.exceptions import ImproperlyConfigured
 
 from appconf import AppConf
 
+# TODO: Replace with importlib.resources
+# in Python > 3.8
+# https://importlib-resources.readthedocs.io/en/latest/
+from importlib_resources import files
+
 
 def load_path_attr(path):
     i = path.rfind(".")
@@ -20,6 +25,12 @@ def load_path_attr(path):
             "Module '{0}' does not define a '{1}'".format(module, attr)
         )
     return attr
+
+
+def get_search_template_path():
+    return files("scaife_viewer.atlas.backports.scaife_viewer.search").joinpath(
+        "fixtures", "base_template.json"
+    )
 
 
 class ATLASAppConf(AppConf):
@@ -42,6 +53,8 @@ class ATLASAppConf(AppConf):
     DB_LABEL = "atlas"
     DB_PATH = None
 
+    # Search
+    SEARCH_TEMPLATE_FIXTURE_PATH = get_search_template_path()
     # Other
     HOOKSET = "scaife_viewer.atlas.hooks.DefaultHookSet"
 

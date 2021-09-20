@@ -9,9 +9,10 @@ from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 from graphene_django.utils import camelize
 
+from . import constants
+
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
-from .constants import CTS_URN_DEPTHS
 from .hooks import hookset
 from .language_utils import normalize_string
 
@@ -23,6 +24,7 @@ from .models import (
     Dictionary,
     DictionaryEntry,
     ImageAnnotation,
+    Metadata,
     MetricalAnnotation,
     NamedEntity,
     Node,
@@ -301,7 +303,9 @@ class TextGroupNode(AbstractTextPartNode):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(depth=CTS_URN_DEPTHS["textgroup"]).order_by("pk")
+        return queryset.filter(depth=constants.CTS_URN_DEPTHS["textgroup"]).order_by(
+            "pk"
+        )
 
     # TODO: extract to AbstractTextPartNode
     def resolve_label(obj, *args, **kwargs):
@@ -319,7 +323,7 @@ class WorkNode(AbstractTextPartNode):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(depth=CTS_URN_DEPTHS["work"]).order_by("pk")
+        return queryset.filter(depth=constants.CTS_URN_DEPTHS["work"]).order_by("pk")
 
     # TODO: extract to AbstractTextPartNode
     def resolve_label(obj, *args, **kwargs):
@@ -361,7 +365,7 @@ class VersionNode(AbstractTextPartNode):
     def get_queryset(cls, queryset, info):
         # TODO: set a default somewhere
         # return queryset.filter(kind="version").order_by("urn")
-        return queryset.filter(depth=CTS_URN_DEPTHS["version"]).order_by("pk")
+        return queryset.filter(depth=constants.CTS_URN_DEPTHS["version"]).order_by("pk")
 
     # TODO: Determine how tightly coupled these fields
     # should be to metadata (including ["key"] vs .get("key"))
@@ -893,6 +897,64 @@ class CitationNode(DjangoObjectType):
         filterset_class = CitationFilterSet
 
 
+class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+    # TODO: Deprecate visible field in favor of visibility
+    visible = django_filters.BooleanFilter(method="visible_filter")
+    # TODO: Determine why visibility isn't working right, likely related
+    # to convert_choices_to_enum being disabled
+    visibility = django_filters.CharFilter(method="visibility_filter")
+
+    class Meta:
+        model = Metadata
+        fields = {
+            "collection_urn": ["exact"],
+            "value": ["exact"],
+            "level": ["exact", "in"],
+            "depth": ["exact", "gt", "lt", "gte", "lte"],
+        }
+
+    # TODO: Refactor to `Node` or other schema mixins
+    def get_workparts_queryset(self, version):
+        return version.get_ancestors() | Node.objects.filter(pk=version.pk)
+
+    # TODO: refactor as a mixin
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        # TODO: Get smarter with an `up_to` filter that could further scope the query
+
+        workparts_queryset = self.get_workparts_queryset(self.request.passage.version)
+
+        union_qs = textparts_queryset | workparts_queryset
+        matches = queryset.filter(cts_relations__in=union_qs).distinct()
+        return queryset.filter(pk__in=matches)
+
+    def visibility_filter(self, queryset, name, value):
+        return queryset.filter(visibility=value)
+
+    def visible_filter(self, queryset, name, value):
+        visibility_lookup = {
+            True: "reader",
+            False: "hidden",
+        }
+        return queryset.filter(visibility=visibility_lookup[value])
+
+
+class MetadataNode(DjangoObjectType):
+    # NOTE: We are going to specify `PassageTextPartNode` so we can use the reference
+    # filter, but it may not be the ideal field long term (mainly, if we want to link to
+    # more generic CITE URNs, not just work-part or textpart URNs)
+    cts_relations = LimitedConnectionField(lambda: PassageTextPartNode)
+
+    class Meta:
+        model = Metadata
+        interfaces = (relay.Node,)
+        filterset_class = MetadataFilterSet
+
+        # TODO: Resolve with a future update to graphene-django
+        convert_choices_to_enum = []
+
+
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
     text_groups = LimitedConnectionField(TextGroupNode)
@@ -961,6 +1023,9 @@ class Query(ObjectType):
 
     citation = relay.Node.Field(CitationNode)
     citations = LimitedConnectionField(CitationNode)
+
+    metadata_record = relay.Node.Field(MetadataNode)
+    metadata_records = LimitedConnectionField(MetadataNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
