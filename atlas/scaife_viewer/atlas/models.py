@@ -695,21 +695,6 @@ METADATA_VISIBLITY_CHOICES = [
 
 
 class Metadata(models.Model):
-    """
-    idx
-    identifier (urn)
-    collection identifier (urn)
-    collection-scoped identifier (defer, possibly just props)
-    data type (enum)
-    language (defer, string)
-    label (string)
-    value (string)
-    object (defer)
-    up_to (defer)
-    index (bool)
-    __str__
-    """
-
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
     urn = models.CharField(
         # TODO: Can we encode the collection into the URN too?

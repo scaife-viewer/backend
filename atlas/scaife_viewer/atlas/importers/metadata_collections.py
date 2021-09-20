@@ -106,6 +106,8 @@ def _get_visibility(data):
 
 
 def _process_collection(collection, values_path=None):
+    # TODO: Throw a warning if not using JSONL / `values_path` and the
+    #  number of values crosses an upper threshold
     idx = 0
     to_create = []
     through_lookup = {}
@@ -138,7 +140,6 @@ def _process_collection(collection, values_path=None):
 
 
 def _create_metadata(path):
-    # TODO: Prefer JSONL spec to avoid memory headaches
     msg = f"Loading metadata from {path}"
     logger.info(msg)
     collection = json.load(open(path))

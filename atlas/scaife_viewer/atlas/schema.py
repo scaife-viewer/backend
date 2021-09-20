@@ -926,7 +926,6 @@ class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
         workparts_queryset = self.get_workparts_queryset(self.request.passage.version)
 
         union_qs = textparts_queryset | workparts_queryset
-        # FIXME: Ensure that existing JO widget remains backwards compatible
         matches = queryset.filter(cts_relations__in=union_qs).distinct()
         return queryset.filter(pk__in=matches)
 
@@ -942,8 +941,9 @@ class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
 
 
 class MetadataNode(DjangoObjectType):
-    # FIXME: We are going to specify `PassageTextPartNode` so we can use the reference
-    # filter, but it may not be the ideal field long term.
+    # NOTE: We are going to specify `PassageTextPartNode` so we can use the reference
+    # filter, but it may not be the ideal field long term (mainly, if we want to link to
+    # more generic CITE URNs, not just work-part or textpart URNs)
     cts_relations = LimitedConnectionField(lambda: PassageTextPartNode)
 
     class Meta:
