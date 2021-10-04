@@ -35,6 +35,7 @@ from .models import (
     TextAlignmentRecord,
     TextAlignmentRecordRelation,
     TextAnnotation,
+    TextAnnotationCollection,
     Token,
 )
 from .passage import (
@@ -617,12 +618,37 @@ class TextAlignmentRecordRelationNode(DjangoObjectType):
         filter_fields = ["tokens__text_part__urn"]
 
 
+class TextAnnotationCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = TextAnnotationCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            annotations__text_parts__in=textparts_queryset
+        ).distinct()
+
+
+class TextAnnotationCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = TextAnnotationCollection
+        interfaces = (relay.Node,)
+        filterset_class = TextAnnotationCollectionFilterSet
+
+
 class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
 
     class Meta:
         model = TextAnnotation
-        fields = ["urn"]
+        fields = ["urn", "collection__urn"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
@@ -984,6 +1010,9 @@ class Query(ObjectType):
 
     text_annotation = relay.Node.Field(TextAnnotationNode)
     text_annotations = LimitedConnectionField(TextAnnotationNode)
+
+    text_annotation_collection = relay.Node.Field(TextAnnotationCollectionNode)
+    text_annotation_collections = LimitedConnectionField(TextAnnotationCollectionNode)
 
     syntax_tree = relay.Node.Field(SyntaxTreeNode)
     syntax_trees = LimitedConnectionField(SyntaxTreeNode)
