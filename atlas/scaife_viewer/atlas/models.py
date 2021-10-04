@@ -79,6 +79,22 @@ class TextAlignmentRecordRelation(models.Model):
     )
 
 
+class TextAnnotationCollection(models.Model):
+    """
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+    # TODO: Move out to attributions model
+    data = JSONField(default=dict, blank=True)
+    # TODO: Do we denorm kind here?
+
+    urn = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:text_annotation_collection.atlas_v1",
+    )
+
+
 class TextAnnotation(models.Model):
     kind = models.CharField(
         max_length=255,
@@ -93,6 +109,15 @@ class TextAnnotation(models.Model):
     )
 
     urn = models.CharField(max_length=255, blank=True, null=True)
+
+    # FIXME: Backwards compatibility with other text annotations
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.TextAnnotationCollection",
+        related_name="annotations",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+    )
 
     def resolve_references(self):
         if "references" not in self.data:
