@@ -546,6 +546,12 @@ class TextAlignmentMetadata(dict):
         # textParts
         # records
         # other
+        # TODO: Formalize how prototype is enabled
+        if self.alignment.metadata.get("enable_prototype"):
+            return "regroupedRecords"
+        elif self.alignment.urn == "urn:cite2:scaife-viewer:alignment.v1:hafez-farsi-german-farsi-english-word-alignments-temp":
+            if self["passage"].version.urn == "urn:cts:farsiLit:hafez.divan.perseus-far1-hemis:":
+                return "regroupedRecords"
         if self.alignment.urn.count("word"):
             return "textParts"
         return "records"
