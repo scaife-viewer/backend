@@ -606,6 +606,7 @@ class TextAlignmentConnection(Connection):
 
 class TextAlignmentRecordNode(DjangoObjectType):
     label = String()
+    items = generic.GenericScalar()
 
     class Meta:
         model = TextAlignmentRecord
@@ -615,6 +616,14 @@ class TextAlignmentRecordNode(DjangoObjectType):
 
     def resolve_label(obj, *args, **kwargs):
         return obj.metadata.get("label", "")
+
+    def resolve_items(obj, *args, **kwargs):
+        # TODO: Introduce `obj.blob` or `obj.items`
+        # as a more generic interface; this works
+        # without requiring a data migration.
+        # Used to support the use case in
+        # https://github.com/scaife-viewer/beyond-translation-site/issues/29
+        return obj.metadata.get("items", None)
 
 
 class TextAlignmentRecordRelationNode(DjangoObjectType):
