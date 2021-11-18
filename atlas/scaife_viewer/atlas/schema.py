@@ -556,6 +556,11 @@ class TextAlignmentMetadata(dict):
             return "textParts"
         return "records"
 
+    @property
+    def display_options(self):
+        options = self.alignment.metadata.get("display_options", {})
+        return camelize(options)
+
 
 class TextAlignmentMetadataNode(ObjectType):
     passage_references = generic.GenericScalar(
@@ -564,12 +569,16 @@ class TextAlignmentMetadataNode(ObjectType):
     # TODO: Move this out to the alignment node?
     # TODO: And possibly make this something to be provided at ingestion time?
     display_hint = String()
+    display_options = generic.GenericScalar()
 
     def resolve_passage_references(self, info, *args, **kwargs):
         return self.passage_references
 
     def resolve_display_hint(self, info, *args, **kwargs):
         return self.display_hint
+
+    def resolve_display_options(self, info, *args, **kwargs):
+        return self.display_options
 
 
 class TextAlignmentConnection(Connection):
