@@ -37,6 +37,8 @@ from .models import (
     TextAnnotation,
     TextAnnotationCollection,
     Token,
+    TokenAnnotation,
+    TokenAnnotationCollection,
 )
 from .passage import (
     PassageMetadata,
@@ -772,6 +774,60 @@ class TokenNode(DjangoObjectType):
         filterset_class = TokenFilterSet
 
 
+class TokenAnnotationCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = TokenAnnotationCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            annotations__token__text_part__in=textparts_queryset
+        ).distinct()
+
+
+class TokenAnnotationCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = TokenAnnotationCollection
+        interfaces = (relay.Node,)
+        filterset_class = TokenAnnotationCollectionFilterSet
+
+
+class TokenAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = TokenAnnotation
+        fields = [
+            # TODO: Revisit modeling
+            # "urn",
+            # "kind",
+            "collection__urn"
+        ]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(token__text_part__in=textparts_queryset).distinct()
+
+
+class TokenAnnotationNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = TokenAnnotation
+        interfaces = (relay.Node,)
+        filterset_class = TokenAnnotationFilterSet
+
+    def resolve_data(obj, *args, **kwargs):
+        return camelize(obj.data)
+
+
 class NamedEntityCollectionFilterSet(
     TextPartsReferenceFilterMixin, django_filters.FilterSet
 ):
@@ -1054,6 +1110,12 @@ class Query(ObjectType):
 
     token = relay.Node.Field(TokenNode)
     tokens = LimitedConnectionField(TokenNode)
+
+    token_annotation_collection = relay.Node.Field(TokenAnnotationCollectionNode)
+    token_annotation_collections = LimitedConnectionField(TokenAnnotationCollectionNode)
+
+    token_annotation = relay.Node.Field(TokenAnnotationNode)
+    token_annotations = LimitedConnectionField(TokenAnnotationNode)
 
     named_entity_collection = relay.Node.Field(NamedEntityCollectionNode)
     named_entity_collections = LimitedConnectionField(NamedEntityCollectionNode)

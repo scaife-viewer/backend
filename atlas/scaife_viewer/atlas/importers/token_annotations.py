@@ -4,7 +4,7 @@ import re
 
 from scaife_viewer.atlas.conf import settings
 
-from ..models import Node, Token
+from ..models import Node, Token, TokenAnnotation, TokenAnnotationCollection
 
 
 ANNOTATIONS_DATA_PATH = os.path.join(
@@ -56,30 +56,30 @@ def update_if_not_set(token, data, fields_to_update):
             fields_to_update.add(k)
 
 
-def update_version_tokens(version, lookup, refs):
+def create_token_annotations(collection, version, lookup, refs):
+    # TODO: Relying on an "upsert" for annotations; likely we can
+    # optimize this further
     text_part_urns = [f"{version.urn}{ref}" for ref in refs]
-    to_update = []
     tokens = Token.objects.filter(text_part__urn__in=text_part_urns).select_related(
         "text_part"
     )
 
-    fields_to_update = set()
+    to_create = []
     for token in tokens:
+        # TODO: Update if not set was assuming we would have fields that could get clobbered; no longer true!
         key = (token.text_part.ref, token.position)
         data = lookup[key]
-        update_if_not_set(token, data, fields_to_update)
-        to_update.append(token)
 
-    # NOTE: With the PRAGMA directives from SQLite, it ends up being faster to use
-    # multiple UPDATE statements within a single transaction rather than use Django's
-    # built-in bulk update mechanism
-    if fields_to_update and to_update:
-        for token in to_update:
-            token.save(update_fields=fields_to_update)
-    return len(to_update)
+        if not data:
+            continue
+
+        to_create.append(
+            TokenAnnotation(token=token, data=data, collection=collection,)
+        )
+    return len(TokenAnnotation.objects.bulk_create(to_create))
 
 
-def apply_token_annotations():
+def apply_token_annotations(reset=True):
     """
     @@@ this is just to get the treebank data loaded and queryable;
     want to revisit how this entire extraction works in the future
@@ -89,7 +89,17 @@ def apply_token_annotations():
     for path in paths:
         lookup, refs = extract_lookup_and_refs(path)
         version = resolve_version(path)
-        updated_count = update_version_tokens(version, lookup, refs)
+
+        # FIXME: Update annotations in data repos to v2 format
+        collection_urn = "urn:cite2:beyond-tranlsation:token_annotation_collection.atlas_v1:il_1_crane_shamsian"
+        if reset:
+            TokenAnnotationCollection.objects.filter(urn=collection_urn).delete()
+
+        # TODO: Set attribution information
+        collection = TokenAnnotationCollection.objects.create(
+            urn=collection_urn, label="Iliad Annotations", metadata={}
+        )
+        annotations_count = create_token_annotations(collection, version, lookup, refs)
         print(
-            f'Updated token annotations [version="{version.urn}" count={updated_count}]'
+            f'Created token annotations [version="{version.urn}" count={annotations_count}]'
         )

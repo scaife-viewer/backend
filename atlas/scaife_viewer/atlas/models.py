@@ -457,6 +457,38 @@ class Node(MP_Node):
         ).order_by("path")
 
 
+# TODO: Consider CITE obj syntax here
+# Also need to figure out if CITE declrations would be helpful
+# for GraphQL hints.  See comment below
+class TokenAnnotationCollection(models.Model):
+    # TODO: Review fields throughout
+    urn = models.CharField(max_length=255, unique=True)
+    label = models.CharField(max_length=255)
+
+    metadata = JSONField(default=dict, blank=True, null=True)
+
+
+class TokenAnnotation(models.Model):
+    token = models.ForeignKey(
+        "scaife_viewer_atlas.Token",
+        related_name="annotations",
+        on_delete=models.CASCADE,
+    )
+    data = JSONField(default=dict, blank=True, null=True)
+
+    # TODO: Determine if this needs to be CITEable / addressable
+    # Also determine if we need more of an EAV approach for addressable
+    # fields like lemma, etc, or if we do this in the GraphQL schema
+    # idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    # urn = models.CharField(max_length=255, unique=True)
+
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.TokenAnnotationCollection",
+        related_name="annotations",
+        on_delete=models.CASCADE,
+    )
+
+
 class Token(models.Model):
     text_part = models.ForeignKey(
         "Node", related_name="tokens", on_delete=models.CASCADE
@@ -479,18 +511,6 @@ class Token(models.Model):
         null=True,
         help_text="the value for the CTS subreference targeting a particular token",
     )
-    lemma = models.CharField(
-        max_length=255, blank=True, null=True, help_text="the lemma for the token value"
-    )
-    gloss = models.CharField(
-        max_length=255, blank=True, null=True, help_text="the interlinear gloss"
-    )
-    part_of_speech = models.CharField(max_length=255, blank=True, null=True)
-    tag = models.CharField(
-        max_length=255, blank=True, null=True, help_text="part-of-speech tag"
-    )
-    case = models.CharField(max_length=255, blank=True, null=True)
-    mood = models.CharField(max_length=255, blank=True, null=True)
 
     position = models.IntegerField()
     idx = models.IntegerField(help_text="0-based index")
