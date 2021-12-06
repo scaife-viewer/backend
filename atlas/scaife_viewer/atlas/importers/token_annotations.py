@@ -1,13 +1,16 @@
 import csv
 import os
 import re
+from pathlib import Path
+
+import yaml
 
 from scaife_viewer.atlas.conf import settings
 
 from ..models import Node, Token, TokenAnnotation, TokenAnnotationCollection
 
 
-ANNOTATIONS_DATA_PATH = os.path.join(
+ANNOTATIONS_DATA_PATH = Path(
     settings.SV_ATLAS_DATA_DIR, "annotations", "token-annotations"
 )
 
@@ -18,11 +21,10 @@ VE_REF_PATTTERN = re.compile(r"(?P<ref>.*).t(?P<token>.*)")
 def get_paths():
     if not os.path.exists(ANNOTATIONS_DATA_PATH):
         return []
-    return [
-        os.path.join(ANNOTATIONS_DATA_PATH, f)
-        for f in os.listdir(ANNOTATIONS_DATA_PATH)
-        if f.endswith(".csv")
-    ]
+    for path in ANNOTATIONS_DATA_PATH.iterdir():
+        if not path.is_dir():
+            continue
+        yield path
 
 
 def resolve_version(path):
@@ -87,19 +89,30 @@ def apply_token_annotations(reset=True):
 
     paths = get_paths()
     for path in paths:
-        lookup, refs = extract_lookup_and_refs(path)
-        version = resolve_version(path)
+        metadata_path = Path(path, "metadata.yml")
+        collection = yaml.safe_load(metadata_path.open())
 
-        # FIXME: Update annotations in data repos to v2 format
-        collection_urn = "urn:cite2:beyond-tranlsation:token_annotation_collection.atlas_v1:il_1_crane_shamsian"
         if reset:
-            TokenAnnotationCollection.objects.filter(urn=collection_urn).delete()
+            TokenAnnotationCollection.objects.filter(urn=collection["urn"]).delete()
+
+        # TODO: Standardize use of `values` for ATLAS files
+        values = collection.get("values")
+        if not values or not values.endswith("csv"):
+            continue
+
+        values_path = Path(path, values)
+        lookup, refs = extract_lookup_and_refs(values_path)
+        # TODO: Move this to metadata and or values
+        version = resolve_version(values_path)
 
         # TODO: Set attribution information
-        collection = TokenAnnotationCollection.objects.create(
-            urn=collection_urn, label="Iliad Annotations", metadata={}
+        metadata = collection.pop("metadata", {})
+        collection_obj = TokenAnnotationCollection.objects.create(
+            urn=collection["urn"], label=collection["label"], metadata=metadata
         )
-        annotations_count = create_token_annotations(collection, version, lookup, refs)
+        annotations_count = create_token_annotations(
+            collection_obj, version, lookup, refs
+        )
         print(
             f'Created token annotations [version="{version.urn}" count={annotations_count}]'
         )
