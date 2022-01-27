@@ -921,9 +921,9 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
 
         if RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS:
             # TODO: revisit normalization here with @jtauber
-            passage_lemmas = Token.objects.filter(
-                text_part__in=textparts_queryset
-            ).values_list("lemma", flat=True)
+            passage_lemmas = TokenAnnotation.objects.filter(
+                token__text_part__in=textparts_queryset
+            ).values_list("data__lemma", flat=True)
             matches = queryset.filter(headword__in=passage_lemmas)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
