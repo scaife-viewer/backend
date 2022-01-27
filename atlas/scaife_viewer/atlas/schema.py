@@ -911,31 +911,50 @@ class DictionaryNode(DjangoObjectType):
 class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
     lemma = django_filters.CharFilter(method="lemma_filter")
+    resolve_using_lemmas = django_filters.BooleanFilter(
+        method="resolve_using_lemmas_filter"
+    )
 
     class Meta:
         model = DictionaryEntry
         fields = {"urn": ["exact"], "headword": ["exact", "istartswith"]}
 
+    def resolve_using_lemmas_filter(self, queryset, name, value):
+        # This is a no-op to provide a boolean value to reference filter;
+        # this may be better implemented as another GraphQL type
+        # TODO: Research prior art in graphene-django codebases
+        return queryset
+
+    # cited references vs containing references
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-
-        if RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS:
+        resolve_using_lemmas = self.data.get("resolve_using_lemmas", None)
+        if resolve_using_lemmas:
             # TODO: revisit normalization here with @jtauber
+            # Like, really revisit with these examples:
+            # προιάπτω
+            # urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.3
+            # Πηληϊάδης
+            # Πηληιάδης
+            # urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.1
             passage_lemmas = TokenAnnotation.objects.filter(
                 token__text_part__in=textparts_queryset
             ).values_list("data__lemma", flat=True)
-            matches = queryset.filter(headword__in=passage_lemmas)
+            normalized_lemmas = [normalize_string(l) for l in passage_lemmas]
+            matches = queryset.filter(headword_normalized__in=normalized_lemmas)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
-        elif RESOLVE_CITATIONS_VIA_TEXT_PARTS:
+        elif resolve_using_lemmas is False:
             matches = queryset.filter(
                 senses__citations__text_parts__in=textparts_queryset
             )
         else:
+            # FIXME: Determine if we need this query or if we can go ahead and make BI
             matches = queryset.filter(
                 senses__citations__data__urn__in=textparts_queryset.values_list("urn")
             )
-        return queryset.filter(pk__in=matches)
+        # TODO: Expose ordering options?
+        return queryset.filter(pk__in=matches).order_by("headword_normalized")
 
     def lemma_filter(self, queryset, name, value):
         value_normalized = normalize_string(value)
@@ -994,6 +1013,7 @@ class SenseFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
 
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
+        # FIXME: Deprecate RESOLVE_CITATIONS_VIA_TEXT_PARTS
         if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
             matches = queryset.filter(citations__text_parts__in=textparts_queryset)
         else:
@@ -1027,6 +1047,7 @@ class CitationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
+        # FIXME: Deprecate RESOLVE_CITATIONS_VIA_TEXT_PARTS
         if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
             matches = queryset.filter(text_parts__in=textparts_queryset).distinct()
         else:
