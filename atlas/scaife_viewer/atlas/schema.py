@@ -48,6 +48,7 @@ from .passage import (
 from .utils import (
     extract_version_urn_and_ref,
     filter_via_ref_predicate,
+    get_lowest_citable_nodes,
     get_textparts_from_passage_reference,
 )
 
@@ -415,6 +416,55 @@ class VersionNode(AbstractTextPartNode):
 
 class TextPartNode(AbstractTextPartNode):
     lowest_citable_part = String()
+
+
+class TextPartByLemmaFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    # TODO: Expose an ordering control
+    version_urn = django_filters.CharFilter(
+        method="version_urn_filter",
+        label="URN of CTS Version to filter against (required)",
+    )
+    lemma = django_filters.CharFilter(method="lemma_filter")
+
+    class Meta:
+        model = TextPart
+        fields = []
+
+    @property
+    def version(self):
+        if not hasattr(self, "_version"):
+            VERSION_URN = "versionUrn"
+            raise Exception(
+                f"{VERSION_URN} argument is required to retrieve text parts by lemma"
+            )
+        return self._version
+
+    @version.setter
+    def version(self, value):
+        self._version = value
+
+    def version_urn_filter(self, queryset, name, value):
+        # NOTE: this filter is a no-op to support the VERSION_URN arg
+        # another pattern would be to retrieve from self.data on the form, within
+        # lemma_filter
+        self.version = Node.objects.get(urn=value)
+        return queryset
+
+    def lemma_filter(self, queryset, name, value, *lemma_args, **lemma_kwargs):
+        # NOTE: If `self.version` is not defined, we will raise a validation error
+        # TODO: Determine if we want to normalization against this or look for exact matches
+        # TODO: Perform additional indexing against lemmas
+        nodes = get_lowest_citable_nodes(self.version)
+        return nodes.filter(tokens__annotations__data__lemma=value)
+
+
+class TextPartByLemmaNode(DjangoObjectType):
+    label = String()
+
+    class Meta:
+        model = TextPart
+        interfaces = (relay.Node,)
+        filterset_class = TextPartByLemmaFilterSet
 
 
 class PassageTextPartNode(DjangoObjectType):
@@ -1093,6 +1143,9 @@ class Query(ObjectType):
 
     text_part = relay.Node.Field(TextPartNode)
     text_parts = LimitedConnectionField(TextPartNode)
+
+    # TODO: Generalize this type of lookup within the text_parts field
+    text_parts_by_lemma = LimitedConnectionField(TextPartByLemmaNode)
 
     # No passage_text_part endpoint available here like the others because we
     # will only support querying by reference.
