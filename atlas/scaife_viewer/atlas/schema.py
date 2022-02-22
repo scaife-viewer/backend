@@ -458,6 +458,7 @@ class TextPartByLemmaFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         return nodes.filter(tokens__annotations__data__lemma=value)
 
 
+# TODO: Consider removing this
 class TextPartByLemmaNode(DjangoObjectType):
     label = String()
 
@@ -878,6 +879,63 @@ class TokenAnnotationNode(DjangoObjectType):
         return camelize(obj.data)
 
 
+class TokenAnnotationByLemmaFilterSet(django_filters.FilterSet):
+    version_urn = django_filters.CharFilter(
+        method="version_urn_filter",
+        label="URN of CTS Version to filter against (required)",
+    )
+    lemma = django_filters.CharFilter(method="lemma_filter")
+
+    class Meta:
+        model = TextPart
+        fields = []
+
+    @property
+    def version(self):
+        if not hasattr(self, "_version"):
+            VERSION_URN = "versionUrn"
+            raise Exception(
+                f"{VERSION_URN} argument is required to retrieve text parts by lemma"
+            )
+        return self._version
+
+    @version.setter
+    def version(self, value):
+        self._version = value
+
+    def version_urn_filter(self, queryset, name, value):
+        # NOTE: this filter is a no-op to support the VERSION_URN arg
+        # another pattern would be to retrieve from self.data on the form, within
+        # lemma_filter
+        self.version = Node.objects.get(urn=value)
+        return queryset
+
+    def lemma_filter(self, queryset, name, value, *lemma_args, **lemma_kwargs):
+        # NOTE: If `self.version` is not defined, we will raise a validation error
+        # TODO: Determine if we want to normalization against this or look for exact matches
+        # TODO: Perform additional indexing against lemmas
+        nodes = get_lowest_citable_nodes(self.version)
+        queryset = queryset.filter(token__text_part__in=nodes)
+        return queryset.filter(data__lemma=value)
+
+
+class TokenAnnotationByLemmaNode(TokenAnnotationNode):
+    text_part_urn = String()
+    # TODO: Further code re-use with TokenAnnotationNode
+    class Meta:
+        model = TokenAnnotation
+        interfaces = (relay.Node,)
+        filterset_class = TokenAnnotationByLemmaFilterSet
+
+    def resolve_text_part_urn(obj, info, **kwargs):
+        # TODO: Denorm this further
+        return obj.token.text_part.urn
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.select_related("token__text_part")
+
+
 class NamedEntityCollectionFilterSet(
     TextPartsReferenceFilterMixin, django_filters.FilterSet
 ):
@@ -1190,6 +1248,9 @@ class Query(ObjectType):
 
     token_annotation = relay.Node.Field(TokenAnnotationNode)
     token_annotations = LimitedConnectionField(TokenAnnotationNode)
+
+    # TODO: Generalize this type of lookup within the token or token annotations field
+    token_annotations_by_lemma = LimitedConnectionField(TokenAnnotationByLemmaNode)
 
     named_entity_collection = relay.Node.Field(NamedEntityCollectionNode)
     named_entity_collections = LimitedConnectionField(NamedEntityCollectionNode)
