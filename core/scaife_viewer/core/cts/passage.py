@@ -100,6 +100,7 @@ class Passage:
         tokens = []
         idx = defaultdict(int)
         offset = 0
+        passage_idx = 0
         for w in token_re.findall(self.content):
             if w:
                 wl = len(w)
@@ -120,6 +121,13 @@ class Passage:
                 for wk in (w[i : j + 1] for i in range(wl) for j in range(i, wl)):
                     idx[wk] += 1
                 token = {"w": w, "i": idx[w], "t": t, "o": offset}
+
+                if t == "w":
+                    # Set / increment passageIdx for word tokens only
+                    # TODO: revisit key size; prefer for readability
+                    token["passageIdx"] = passage_idx
+                    passage_idx += 1
+
                 tokens.append(token)
         return tokens
 
@@ -189,6 +197,7 @@ class TEIRenderer:
         self.tei = tei
         self.indexes = defaultdict(int)
         self.offset = 0
+        self.passage_idx = 0
 
     def __str__(self):
         return self.render()
@@ -205,6 +214,7 @@ class TEIRenderer:
                     (func_ns, "token_type"): self.token_type,
                     (func_ns, "token_index"): self.token_index,
                     (func_ns, "token_offset"): self.token_offset,
+                    (func_ns, "token_passage_idx"): self.token_passage_idx,
                 },
             )
             try:
@@ -222,10 +232,11 @@ class TEIRenderer:
                 ts.append(unicodedata.normalize("NFC", token))
         return ts
 
-    def token_type(self, context, value):
+    def token_type(self, ctx, value):
         v = "".join(value)
         if w_re.match(v):
             self.offset += len(v)
+            ctx.eval_context["is_word"] = True
             return "w"
         if p_re.match(v):
             self.offset += len(v)
@@ -243,3 +254,13 @@ class TEIRenderer:
         for k in (v[i : j + 1] for i in range(lv) for j in range(i, lv)):
             self.indexes[k] += 1
         return self.indexes[v]
+
+    def token_passage_idx(self, ctx, value):
+        if ctx.eval_context.get("is_word"):
+            # Store the current value
+            ctx.eval_context["passage_idx"] = self.passage_idx
+            # Increment for the next value
+            self.passage_idx += 1
+            # Return the current value
+            return ctx.eval_context["passage_idx"]
+        return ""
