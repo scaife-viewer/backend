@@ -29,6 +29,7 @@ class Passage:
     def __init__(self, text, reference):
         self.text = text
         self.reference = reference
+        self.token_lookup = {}
         if not isinstance(self.reference, Reference):
             self.reference = Reference(self.reference)
 
@@ -166,41 +167,50 @@ class Passage:
             content = self.node_as_content(text_part_node)
             text_part_position = 1
             for w in token_re.findall(content):
-            if w:
-                wl = len(w)
-                if w_re.match(w):
-                    offset += wl
-                    if not words:
-                        continue
-                    t = "w"
-                if p_re.match(w):
-                    offset += wl
-                    if not punctuation:
-                        continue
-                    t = "p"
-                if ws_re.match(w):
-                    if not whitespace:
-                        continue
-                    t = "s"
-                for wk in (w[i : j + 1] for i in range(wl) for j in range(i, wl)):
-                    idx[wk] += 1
-                token = {"w": w, "i": idx[w], "t": t, "o": offset}
+                if w:
+                    wl = len(w)
+                    if w_re.match(w):
+                        offset += wl
+                        if not words:
+                            continue
+                        t = "w"
+                    if p_re.match(w):
+                        offset += wl
+                        if not punctuation:
+                            continue
+                        t = "p"
+                    if ws_re.match(w):
+                        if not whitespace:
+                            continue
+                        t = "s"
+                    for wk in (w[i : j + 1] for i in range(wl) for j in range(i, wl)):
+                        idx[wk] += 1
+                    token = {"w": w, "i": idx[w], "t": t, "o": offset}
 
-                if t == "w":
-                    # Set / increment passageIdx for word tokens only
-                    # TODO: revisit key size; prefer for readability
-                    token["passageIdx"] = passage_idx
+                    if t == "w":
+                        # Set / increment passageIdx for word tokens only
+                        # TODO: revisit key size; prefer for readability
+                        token["passageIdx"] = passage_idx
                         token["veRef"] = f"{ref}.t{text_part_position}"
-                    passage_idx += 1
+                        passage_idx += 1
                         text_part_position += 1
 
-                tokens.append(token)
+                    tokens.append(token)
         return tokens
+
+    def populate_token_lookup(self, word_tokens):
+        for token in word_tokens:
+            self.token_lookup[token["passageIdx"]] = token["veRef"]
 
     @lru_cache()
     def render(self):
         tei = self.textual_node().resource
-        return TEIRenderer(tei)
+        # TODO: Revisit lru_cache decorator with word_tokens; needs
+        # to be hashable to pass as an arg, so we are setting it
+        # in `populate_token_lookup`
+        # prior to calling render
+        # TODO: Determine which args are being used as the cache key here
+        return TEIRenderer(tei, token_lookup=self.token_lookup)
 
     def ancestors(self):
         toc = self.text.toc()
@@ -249,21 +259,27 @@ class Passage:
             ],
         }
         if with_content:
+            word_tokens = self.tokenize(punctuation=False, whitespace=False)
+            self.populate_token_lookup(word_tokens)
             o.update(
                 {
                     "text_html": str(self.render()),
-                    "word_tokens": self.tokenize(punctuation=False, whitespace=False),
+                    "word_tokens": word_tokens,
                 }
             )
         return o
 
 
 class TEIRenderer:
-    def __init__(self, tei):
+    def __init__(self, tei, token_lookup=None):
         self.tei = tei
         self.indexes = defaultdict(int)
         self.offset = 0
         self.passage_idx = 0
+
+        if token_lookup is None:
+            token_lookup = {}
+        self.token_lookup = token_lookup
 
     def __str__(self):
         return self.render()
@@ -281,6 +297,7 @@ class TEIRenderer:
                     (func_ns, "token_index"): self.token_index,
                     (func_ns, "token_offset"): self.token_offset,
                     (func_ns, "token_passage_idx"): self.token_passage_idx,
+                    (func_ns, "token_ve_ref"): self.token_ve_ref,
                 },
             )
             try:
@@ -325,8 +342,20 @@ class TEIRenderer:
         if ctx.eval_context.get("is_word"):
             # Store the current value
             ctx.eval_context["passage_idx"] = self.passage_idx
+
             # Increment for the next value
             self.passage_idx += 1
+
+            # Set `ve_ref` using passage_idx
+            ctx.eval_context["ve_ref"] = self.token_lookup.get(ctx.eval_context["passage_idx"], "")
+
             # Return the current value
             return ctx.eval_context["passage_idx"]
+        return ""
+
+    def token_ve_ref(self, ctx, value):
+        if ctx.eval_context.get("is_word"):
+            # TODO: If possible, it would be better to resolve
+            # the veRef from the XSLT loop
+            return ctx.eval_context.pop("ve_ref", "")
         return ""
