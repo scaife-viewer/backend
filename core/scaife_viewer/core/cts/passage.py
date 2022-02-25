@@ -8,8 +8,9 @@ from django.conf import settings
 import anytree
 import regex
 from lxml import etree
-from MyCapytain.common.constants import Mimetypes
+from MyCapytain.common.constants import Mimetypes, XPATH_NAMESPACES
 from MyCapytain.common.reference import CtsReference as Reference
+from MyCapytain.common.utils import normalize
 
 from .capitains import default_resolver
 from .reference import URN
@@ -74,10 +75,38 @@ class Passage:
             ref_range["end"] = self.text.toc().lookup(".".join(self.reference.end.list))
         return ref_range
 
+    def normalized_text(self, text):
+        return unicodedata.normalize("NFC", text)
+
+    def plain_text_export(self, node):
+        """
+        Mimics self.textual_node().export(Mimetypes.PLAINTEXT) on
+        a provided Node
+        """
+        exclude = ""
+        plaintext_string_join = " "
+        return normalize(
+            plaintext_string_join.join(
+                [
+                    element
+                    for element
+                    in node.xpath(
+                        ".//descendant-or-self::text(){}".format(exclude),
+                        namespaces=XPATH_NAMESPACES,
+                        smart_strings=False
+                    )
+                ]
+            )
+        )
+
+    def node_as_content(self, node):
+        text = self.plain_text_export(node)
+        return self.normalized_text(text)
+
     @property
     def content(self):
         text = self.textual_node().export(Mimetypes.PLAINTEXT)
-        return unicodedata.normalize("NFC", text)
+        return self.normalized_text(text)
 
     @property
     def xml(self):
@@ -96,12 +125,47 @@ class Passage:
         if reference:
             return Passage(self.text, reference)
 
+    @property
+    def textpart_refs_range(self):
+        """
+        Returns the range of refs from self.refs
+        """
+        refs = [self.refs["start"]]
+        if "end" in self.refs:
+            for sibling in self.refs["start"].siblings:
+                refs.append(sibling)
+                if sibling == self.refs["end"]:
+                    break
+        return refs
+
+    def get_leaf_textpart_nodes(self, citation_label=None):
+        # Re-uses the refsDecl parsing from MyCapytain
+        # https://github.com/Capitains/MyCapytain/blob/60e699bba291b83859fd6499b0a2b9a13b1f91d7/MyCapytain/common/reference/_capitains_cts.py#L828
+        # https://github.com/Capitains/MyCapytain/blob/60e699bba291b83859fd6499b0a2b9a13b1f91d7/MyCapytain/common/reference/_capitains_cts.py#L942
+        node_selector = self.textual_node().citation.fill()
+        return self.textual_node().xml.xpath(node_selector, namespaces=XPATH_NAMESPACES)
+
     def tokenize(self, words=True, punctuation=True, whitespace=True):
         tokens = []
         idx = defaultdict(int)
         offset = 0
         passage_idx = 0
-        for w in token_re.findall(self.content):
+
+        refs_range = self.textpart_refs_range
+        # citation_label = refs_range[0].label
+        # leaf_nodes = self.get_leaf_textpart_nodes(citation_label)
+        leaf_nodes = self.get_leaf_textpart_nodes()
+
+
+        # NOTE: To populate each token's veRef (<ref>.t<1-based token position>),
+        # we must iterate through each text part.
+        # `self.node_as_content` should have identical output to `self.content`.
+        # For the top-level text part (e.g. Book), this will produce all tokens
+        # at the top-level exemplar
+        for (ref, text_part_node) in zip(refs_range, leaf_nodes):
+            content = self.node_as_content(text_part_node)
+            text_part_position = 1
+            for w in token_re.findall(content):
             if w:
                 wl = len(w)
                 if w_re.match(w):
@@ -126,7 +190,9 @@ class Passage:
                     # Set / increment passageIdx for word tokens only
                     # TODO: revisit key size; prefer for readability
                     token["passageIdx"] = passage_idx
+                        token["veRef"] = f"{ref}.t{text_part_position}"
                     passage_idx += 1
+                        text_part_position += 1
 
                 tokens.append(token)
         return tokens
