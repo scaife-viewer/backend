@@ -3,14 +3,14 @@ import unicodedata
 from collections import defaultdict
 from functools import lru_cache
 
-from django.conf import settings
-
 import anytree
 import regex
 from lxml import etree
 from MyCapytain.common.constants import Mimetypes, XPATH_NAMESPACES
 from MyCapytain.common.reference import CtsReference as Reference
 from MyCapytain.common.utils import normalize
+
+from ..conf import settings
 
 from .capitains import default_resolver
 from .reference import URN
@@ -57,23 +57,34 @@ class Passage:
         return URN(f"{self.text.urn}:{self.reference}")
 
     @property
+    def sanitized_reference(self):
+        if not settings.SCAIFE_VIEWER_CORE_NORMALIZE_SUBREFERENCES:
+            return self.reference
+
+        # NOTE: Returns a version of the reference where all
+        # subreferences have been stripped
+        parts = str(self.reference).split("-")
+        reference = "-".join([r.split("@")[0] for r in parts])
+        return Reference(reference)
+
+    @property
     def lsb(self):
-        return str(self.reference).split(".")[-1]
+        return str(self.sanitized_reference).split(".")[-1]
 
     @lru_cache()
     def textual_node(self):
         # MyCapytain bug: local resolver getTextualNode can't take a Reference
         return default_resolver().getTextualNode(
-            self.text.urn, subreference=str(self.reference)
+            self.text.urn, subreference=str(self.sanitized_reference)
         )
 
     @property
     def refs(self):
         ref_range = {
-            "start": self.text.toc().lookup(".".join(self.reference.start.list))
+            "start": self.text.toc().lookup(".".join(self.sanitized_reference.start.list))
         }
-        if self.reference.end:
-            ref_range["end"] = self.text.toc().lookup(".".join(self.reference.end.list))
+        if self.sanitized_reference.end:
+            ref_range["end"] = self.text.toc().lookup(".".join(self.sanitized_reference.end.list))
         return ref_range
 
     def normalized_text(self, text):
@@ -214,13 +225,13 @@ class Passage:
 
     def ancestors(self):
         toc = self.text.toc()
-        toc_ref = toc.lookup(str(self.reference.start))
+        toc_ref = toc.lookup(str(self.sanitized_reference.start))
         for ancestor in toc_ref.ancestors[1:]:
             yield Passage(self.text, ancestor.reference)
 
     def children(self):
         toc = self.text.toc()
-        toc_ref = toc.lookup(str(self.reference.start))
+        toc_ref = toc.lookup(str(self.sanitized_reference.start))
         for child in toc_ref.children:
             yield Passage(self.text, child.reference)
 

@@ -36,7 +36,11 @@ class CoreAppConf(AppConf):
     # Resolver cache settings
     RESOLVER_CACHE_LABEL = "cts-resolver"
 
+    NORMALIZE_SUBREFERENCES = False
+    # TODO: Also need a HEAL_SUBREFERENCES flag
+
     class Meta:
+        # TODO: unify prefixes
         prefix = "scaife_viewer_core"
 
     def configure_hookset(self, value):
