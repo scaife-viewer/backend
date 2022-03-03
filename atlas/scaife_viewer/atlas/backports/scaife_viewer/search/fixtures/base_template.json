@@ -75,6 +75,14 @@
             "icu_folding"
           ]
         }
+      },
+       "normalizer": {
+        "fulltext_normalizer": {
+          "type": "custom",
+          "filter": [
+            "icu_folding"
+          ]
+        }
       }
     }
   }

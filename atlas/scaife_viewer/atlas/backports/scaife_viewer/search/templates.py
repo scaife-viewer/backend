@@ -4,12 +4,17 @@ from scaife_viewer.atlas.conf import settings
 
 
 def text_field_template():
+    # TODO: make this opt in
     return {
         "type": "text",
         "fields": {
-            "keyword": {"ignore_above": 256, "type": "keyword",},
-            "analyzer": "fulltext_analyzer",
+            "keyword": {
+                "ignore_above": 256,
+                "type": "keyword",
+                "normalizer": "fulltext_normalizer",
+            },
         },
+        "analyzer": "fulltext_analyzer",
     }
 
 
