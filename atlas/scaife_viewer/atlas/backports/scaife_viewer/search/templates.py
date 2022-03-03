@@ -6,7 +6,10 @@ from scaife_viewer.atlas.conf import settings
 def text_field_template():
     return {
         "type": "text",
-        "fields": {"keyword": {"ignore_above": 256, "type": "keyword"}},
+        "fields": {
+            "keyword": {"ignore_above": 256, "type": "keyword",},
+            "analyzer": "fulltext_analyzer",
+        },
     }
 
 
