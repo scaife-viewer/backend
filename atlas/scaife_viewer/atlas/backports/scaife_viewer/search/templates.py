@@ -11,6 +11,10 @@ def text_field_template():
             "keyword": {
                 "ignore_above": 256,
                 "type": "keyword",
+            },
+            "normalizedKeyword": {
+                "ignore_above": 256,
+                "type": "keyword",
                 "normalizer": "fulltext_normalizer",
             },
         },
