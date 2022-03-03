@@ -70,7 +70,12 @@ def create_token_annotations(collection, version, lookup, refs):
     for token in tokens:
         # TODO: Update if not set was assuming we would have fields that could get clobbered; no longer true!
         key = (token.text_part.ref, token.position)
-        data = lookup[key]
+
+        # TODO: Add further error logging for this
+        try:
+            data = lookup[key]
+        except KeyError:
+            data = None
 
         if not data:
             continue
