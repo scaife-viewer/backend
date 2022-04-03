@@ -1,5 +1,7 @@
 import json
-import os
+from pathlib import Path
+
+import jsonlines
 
 from scaife_viewer.atlas.conf import settings
 
@@ -10,24 +12,38 @@ from ..models import (
 )
 
 
-ANNOTATIONS_DATA_PATH = os.path.join(
+ANNOTATIONS_DATA_PATH = Path(
     settings.SV_ATLAS_DATA_DIR, "annotations", "text-annotations"
 )
-SYNTAX_TREES_ANNOTATIONS_PATH = os.path.join(
+SYNTAX_TREES_ANNOTATIONS_PATH = Path(
     settings.SV_ATLAS_DATA_DIR, "annotations", "syntax-trees"
 )
 
 
 def get_paths(path):
-    if not os.path.exists(path):
+    if not path.exists():
         return []
-    return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
+    allowed_suffixes = [
+        ".json",
+        ".jsonl",
+    ]
+    return [p for p in path.rglob("*") if p.suffix in allowed_suffixes]
+
+
+def load_data(path):
+    if path.suffix == ".jsonl":
+        with jsonlines.open(path) as reader:
+            for row in reader.iter():
+                yield row
+    else:
+        data = json.load(path.open())
+        for row in data:
+            yield row
 
 
 def _prepare_text_annotations(path, counters, kind):
-    data = json.load(open(path))
     to_create = []
-    for row in data:
+    for row in load_data(path):
         urn = row.pop("urn")
         to_create.append(
             TextAnnotation(kind=kind, idx=counters["idx"], urn=urn, data=row,)
