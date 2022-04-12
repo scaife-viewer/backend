@@ -213,15 +213,25 @@ class Passage:
         for token in word_tokens:
             self.token_lookup[token["passageIdx"]] = token["veRef"]
 
+    def get_citations(self, citation):
+        citations = []
+        citations.append(citation)
+        while citation.child:
+            citations.append(citation.child)
+            citation = citation.child
+        return citations
+
     @lru_cache()
     def render(self):
-        tei = self.textual_node().resource
+        tn = self.textual_node()
+        tei = tn.resource
+        citations = self.get_citations(tn._text.citation)
         # TODO: Revisit lru_cache decorator with word_tokens; needs
         # to be hashable to pass as an arg, so we are setting it
         # in `populate_token_lookup`
         # prior to calling render
         # TODO: Determine which args are being used as the cache key here
-        return TEIRenderer(tei, token_lookup=self.token_lookup)
+        return TEIRenderer(tei, citations=citations, token_lookup=self.token_lookup)
 
     def ancestors(self):
         toc = self.text.toc()
@@ -282,11 +292,16 @@ class Passage:
 
 
 class TEIRenderer:
-    def __init__(self, tei, token_lookup=None):
+    def __init__(self, tei, citations=None, token_lookup=None):
         self.tei = tei
+        self.citations = citations
         self.indexes = defaultdict(int)
         self.offset = 0
         self.passage_idx = 0
+
+        self.node_citations_lookup = {}
+        self.depth_map = {}
+        self.depths = reversed(range(1, citations[0].root.depth + 1))
 
         if token_lookup is None:
             token_lookup = {}
@@ -303,6 +318,9 @@ class TEIRenderer:
             transform = etree.XSLT(
                 etree.XML(f.read()),
                 extensions={
+                    (func_ns, "is_citable_node"): self.is_citable_node,
+                    (func_ns, "has_descendants"): self.has_descendants,
+                    (func_ns, "cts_reference"): self.cts_reference,
                     (func_ns, "tokens"): self.tokens,
                     (func_ns, "token_type"): self.token_type,
                     (func_ns, "token_index"): self.token_index,
@@ -370,3 +388,99 @@ class TEIRenderer:
             # the veRef from the XSLT loop
             return ctx.eval_context.pop("ve_ref", "")
         return ""
+
+    def get_ref_nodes_subset(self, node, citation, citation_child):
+        fill_args = []
+        for depth in self.depths:
+            value = self.depth_map.get(depth)
+            if value:
+                fill_args.append(value)
+            else:
+                fill_args.append(node.attrib["n"])
+            if depth == citation.depth:
+                break
+
+        fill_args.append("")
+
+        xpathish = citation_child.fill(fill_args).replace("@n=''", "@n")
+
+        return node.xpath(xpathish, namespaces={"tei": "http://www.tei-c.org/ns/1.0"})
+
+    def seed_citations_lookup(self, node, citation):
+        citation_child = citation.child
+        print(
+            f'Seeding {citation_child.name} descendants [citation="{citation.name}" n="{node.attrib["n"]}"]'
+        )
+
+        # NOTE: Resolving the xpath to populate children actually seemed to have worse
+        # performance; should compare with MyCapytain
+
+        # ref_nodes = self.get_ref_nodes_subset(node, citation, citation_child)
+
+        ref_nodes = node.xpath(
+            citation_child.fill(), namespaces={"tei": "http://www.tei-c.org/ns/1.0"}
+        )
+        # NOTE: I had tried to memoize all citations, but the memory locations
+        # of each node changed during XSLT processing and this resulted in a great
+        # deal of cache misses
+        for node in ref_nodes:
+            key = node.__hash__()
+            self.node_citations_lookup[key] = citation_child
+
+    def get_citation(self, node):
+        key = node.__hash__()
+        citation = self.node_citations_lookup.get(key)
+        if citation:
+            print(f"Memoized [citation={citation.name} n={node.attrib['n']}]")
+            return citation
+
+        for citation in self.citations:
+            result = node.xpath(
+                citation.fill(), namespaces={"tei": "http://www.tei-c.org/ns/1.0"}
+            )
+            ref_nodes = set(result)
+            if node in ref_nodes:
+                if citation.child:
+                    self.seed_citations_lookup(node, citation)
+                return citation
+        return
+
+    def is_citable_node(self, ctx, value):
+        # Original selector t:div[@type='textpart' and @n]|t:l
+        node = value[0]
+        citation = self.get_citation(node)
+        if not citation:
+            return
+
+        ctx.eval_context["citation"] = citation
+        return bool(citation)
+
+    def has_descendants(self, ctx, value):
+        citation = ctx.eval_context["citation"]
+        if not citation:
+            return False
+        return bool(citation.child)
+
+    def resolve_reference_from_citations(self, citation, node):
+        citable_nodes = []
+        for a_node in node.iterancestors():
+            a_citation = self.get_citation(a_node)
+            if a_citation:
+                citable_nodes.append((a_citation, a_node))
+        citable_nodes.append((citation, node))
+        return ".".join([node.attrib["n"] for (_, node) in citable_nodes])
+
+    def cts_reference(self, ctx, value):
+        # TODO: Traverse via the DOM?
+        # traverse up looking for parent elements on click (or on render if we really need to....)
+        target_node = value[0]
+        citation = ctx.eval_context["citation"]
+        self.depth_map[citation.depth] = target_node.attrib["n"]
+        # TODO: This assumes things are sequential; we had places in Digital Sira
+        #  where they were assuredly _not_
+        parts = []
+        for depth in self.depths:
+            parts.append(self.depth_map.get(depth))
+            if depth == citation.depth:
+                break
+        return ".".join(parts)
