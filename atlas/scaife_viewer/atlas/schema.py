@@ -1053,13 +1053,11 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
         elif resolve_using_lemmas is False:
-            matches = queryset.filter(
-                senses__citations__text_parts__in=textparts_queryset
-            )
+            matches = queryset.filter(citations__text_parts__in=textparts_queryset)
         else:
             # FIXME: Determine if we need this query or if we can go ahead and make BI
             matches = queryset.filter(
-                senses__citations__data__urn__in=textparts_queryset.values_list("urn")
+                citations__data__urn__in=textparts_queryset.values_list("urn")
             )
         # TODO: Expose ordering options?
         return queryset.filter(pk__in=matches).order_by("headword_normalized")

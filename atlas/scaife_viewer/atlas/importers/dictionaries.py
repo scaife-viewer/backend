@@ -33,7 +33,7 @@ def get_paths(path):
     return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
 
 
-def _prepare_citation_objs(sense, citations):
+def _prepare_citation_objs(lookup_dict, citations):
     idx = 0
     to_create = []
     for citation in citations:
@@ -46,7 +46,8 @@ def _prepare_citation_objs(sense, citations):
         )
         # FIXME: This is a bit hacky; we likely want a parallel data structure
         # that passes FKs for "deferred" purposes
-        citation_obj.sense_urn = sense.urn
+        citation_obj.entry_urn = lookup_dict.get("entry_urn")
+        citation_obj.sense_urn = lookup_dict.get("sense_urn")
         idx += 1
         to_create.append(citation_obj)
     return to_create
@@ -114,7 +115,11 @@ def _process_sense(entry, s, idx, parent=None, last_sibling=None):
 
     senses.append(obj)
 
-    citations.extend(_prepare_citation_objs(obj, s.get("citations", [])))
+    citations.extend(
+        _prepare_citation_objs(
+            dict(entry_urn=entry.urn, sense_urn=obj.urn), s.get("citations", [])
+        )
+    )
     idx += 1
 
     for ss in s.get("children", []):
@@ -173,6 +178,9 @@ def _defer_entry(deferred, entry, data, s_idx):
     """
     senses = []
     citations = []
+    citations.extend(
+        _prepare_citation_objs(dict(entry_urn=entry.urn), data.get("citations", []))
+    )
     for sense in data["senses"]:
         new_senses, new_citations = _process_sense(entry, sense, s_idx, parent=None)
         senses.extend(new_senses)
@@ -213,11 +221,14 @@ def _create_dictionaries(path):
     chunked_bulk_create(DictionaryEntry, deferred["entries"])
 
     logger.info("Setting entry_id on Sense objects")
-    entry_ids = (
+    entry_urn_pk_lookup = {}
+    entry_urn_pk_lookup.update(
         DictionaryEntry.objects.filter(dictionary_id=dictionary.id)
         .order_by("pk")
-        .values_list("pk", flat=True)
+        .values_list("urn", "pk")
     )
+
+    entry_ids = entry_urn_pk_lookup.values()
     for entry_id, entry_senses in zip(entry_ids, deferred["senses"]):
         for s in entry_senses:
             s.entry_id = entry_id
@@ -236,7 +247,9 @@ def _create_dictionaries(path):
     )
     for citations in deferred["citations"]:
         for citation in citations:
-            sense_id = sense_urn_pk_lookup[citation.sense_urn]
+            entry_id = entry_urn_pk_lookup.get(citation.entry_urn, None)
+            citation.entry_id = entry_id
+            sense_id = sense_urn_pk_lookup.get(citation.sense_urn, None)
             citation.sense_id = sense_id
 
     logger.info("Inserting Citation objects")

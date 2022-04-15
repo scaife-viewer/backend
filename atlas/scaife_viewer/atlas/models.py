@@ -740,11 +740,23 @@ class Citation(models.Model):
     urn = models.CharField(
         max_length=255, unique=True, help_text="urn:cite2:<site>:citations.atlas_v1"
     )
+    entry = models.ForeignKey(
+        "scaife_viewer_atlas.DictionaryEntry",
+        blank=True,
+        null=True,
+        related_name="citations",
+        on_delete=models.CASCADE,
+    )
     sense = models.ForeignKey(
-        "scaife_viewer_atlas.Sense", related_name="citations", on_delete=models.CASCADE,
+        "scaife_viewer_atlas.Sense",
+        blank=True,
+        null=True,
+        related_name="citations",
+        on_delete=models.CASCADE,
     )
     data = JSONField(default=dict, blank=True)
     # TODO: There may be additional optimizations we can do on the text part / citation relation
+    # TODO: Higher-order URNs?
     text_parts = SortedManyToManyField(
         "scaife_viewer_atlas.Node", related_name="sense_citations"
     )
