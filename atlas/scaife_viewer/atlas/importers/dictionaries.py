@@ -1,8 +1,9 @@
 import json
 import logging
-import os
 from collections import defaultdict
+from pathlib import Path
 
+import jsonlines
 from tqdm import tqdm
 
 from scaife_viewer.atlas.conf import settings
@@ -20,17 +21,19 @@ PATH_SET = set()
 CitationThroughModel = Citation.text_parts.through
 RESOLVE_CITATIONS_AS_TEXT_PARTS = True
 
-ANNOTATIONS_DATA_PATH = os.path.join(
-    settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries",
-)
+ANNOTATIONS_DATA_PATH = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries")
 
 logger = logging.getLogger(__name__)
 
 
+# TODO: Customize this using a hookset, like
+# we have for other annotation formats
 def get_paths(path):
-    if not os.path.exists(path):
+    if not path.exists():
         return []
-    return [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".json")]
+    for path in ANNOTATIONS_DATA_PATH.iterdir():
+        if path.suffix == ".json" or path.is_dir():
+            yield path
 
 
 def _prepare_citation_objs(lookup_dict, citations):
@@ -190,19 +193,12 @@ def _defer_entry(deferred, entry, data, s_idx):
     deferred["citations"].append(citations)
 
 
-def _create_dictionaries(path):
-    # TODO: Prefer JSONL spec to avoid memory headaches
-    msg = f"Loading dictionary from {path}"
-    logger.info(msg)
-    data = json.load(open(path))
-    dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
+def process_entries(dictionary, entries, entry_count=None):
     s_idx = 0
-    entry_count = len(data["entries"])
     deferred = defaultdict(list)
-
     logger.info("Extracting entries, senses and citations")
     with tqdm(total=entry_count) as pbar:
-        for e_idx, e in enumerate(data["entries"]):
+        for e_idx, e in enumerate(entries):
             pbar.update(1)
             headword = e["headword"]
             headword_normalized = normalize_string(headword)
@@ -263,10 +259,58 @@ def _create_dictionaries(path):
         _resolve_citation_textparts(citations_with_urns)
 
 
+def _iter_values(jsonl_path):
+    with jsonlines.open(jsonl_path) as reader:
+        for row in reader.iter():
+            yield row
+
+
+def _create_dictionary(path):
+    msg = f"Loading dictionary from {path}"
+    logger.info(msg)
+    data = json.load(open(path))
+    dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
+    return dictionary, data
+
+
+def _process_jsonl_entries(path):
+    metadata_path = Path(path, "metadata.json")
+    if not metadata_path.exists():
+        return
+    dictionary, data = _create_dictionary(metadata_path)
+
+    entries_path = data.get("entries")
+    if not entries_path:
+        return
+
+    jsonl_path = Path(path, entries_path)
+    entries = _iter_values(jsonl_path)
+    return process_entries(dictionary, entries, entry_count=None)
+
+
+def _process_json_entries(path):
+    dictionary, data = _create_dictionary(path)
+    entries = data["entries"]
+    entry_count = len(entries)
+    return process_entries(dictionary, entries, entry_count)
+
+
+def _process_dictionary_path(path):
+    # TODO: Deprecate JSON?
+    # TODO: Prefer JSONL spec to avoid memory headaches
+    if path.is_dir():
+        return _process_jsonl_entries(path)
+    else:
+        return _process_json_entries(path)
+
+
+# TODO: Standardize metadata, token annotations and dictionaries
+# values, JSON vs YML, etc
 def import_dictionaries(reset=False):
     if reset:
         Dictionary.objects.all().delete()
 
     dictionary_paths = get_paths(ANNOTATIONS_DATA_PATH)
+
     for path in dictionary_paths:
-        _create_dictionaries(path)
+        _process_dictionary_path(path)
