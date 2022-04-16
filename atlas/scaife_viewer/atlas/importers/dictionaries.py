@@ -259,10 +259,11 @@ def process_entries(dictionary, entries, entry_count=None):
         _resolve_citation_textparts(citations_with_urns)
 
 
-def _iter_values(jsonl_path):
-    with jsonlines.open(jsonl_path) as reader:
-        for row in reader.iter():
-            yield row
+def _iter_values(paths):
+    for path in paths:
+        with jsonlines.open(path) as reader:
+            for row in reader.iter():
+                yield row
 
 
 def _create_dictionary(path):
@@ -279,12 +280,13 @@ def _process_jsonl_entries(path):
         return
     dictionary, data = _create_dictionary(metadata_path)
 
-    entries_path = data.get("entries")
-    if not entries_path:
+    entries = data.get("entries")
+    if not entries:
         return
-
-    jsonl_path = Path(path, entries_path)
-    entries = _iter_values(jsonl_path)
+    if not isinstance(entries, list):
+        entries = [entries]
+    entry_paths = [Path(path, e) for e in entries]
+    entries = _iter_values(entry_paths)
     return process_entries(dictionary, entries, entry_count=None)
 
 
