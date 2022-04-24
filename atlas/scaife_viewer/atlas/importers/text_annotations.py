@@ -1,30 +1,21 @@
 import json
 import logging
-from pathlib import Path
 
 import jsonlines
-
-from scaife_viewer.atlas.conf import settings
 
 # FIXME: Hooksets
 from ..constants import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
 )
+from ..hooks import hookset
 from ..models import Node, TextAnnotation
-from ..utils import chunked_bulk_create, get_paths_matching_suffixes
+from ..utils import chunked_bulk_create
 
 
 logger = logging.getLogger(__name__)
 
 TextAnnotationThroughModel = TextAnnotation.text_parts.through
-
-ANNOTATIONS_DATA_PATH = Path(
-    settings.SV_ATLAS_DATA_DIR, "annotations", "text-annotations"
-)
-SYNTAX_TREES_ANNOTATIONS_PATH = Path(
-    settings.SV_ATLAS_DATA_DIR, "annotations", "syntax-trees"
-)
 
 
 def load_data(path):
@@ -100,16 +91,14 @@ def import_text_annotations(reset=False):
     to_create = []
     counters = dict(idx=0)
 
-    # FIXME: hooksets
-    scholia_annotation_paths = get_paths_matching_suffixes(ANNOTATIONS_DATA_PATH)
+    # FIXME: hooksets for generic text annotations
+    scholia_annotation_paths = hookset.get_text_annotation_paths()
     for path in scholia_annotation_paths:
         to_create.extend(
             _prepare_text_annotations(path, counters, kind=TEXT_ANNOTATION_KIND_SCHOLIA)
         )
 
-    syntax_tree_annotation_paths = get_paths_matching_suffixes(
-        SYNTAX_TREES_ANNOTATIONS_PATH
-    )
+    syntax_tree_annotation_paths = hookset.get_syntax_tree_annotation_paths()
     for path in syntax_tree_annotation_paths:
         to_create.extend(
             _prepare_text_annotations(
