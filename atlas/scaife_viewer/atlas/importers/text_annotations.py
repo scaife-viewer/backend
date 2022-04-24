@@ -12,7 +12,7 @@ from ..constants import (
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
 )
 from ..models import Node, TextAnnotation
-from ..utils import chunked_bulk_create
+from ..utils import chunked_bulk_create, get_paths_matching_suffixes
 
 
 logger = logging.getLogger(__name__)
@@ -25,16 +25,6 @@ ANNOTATIONS_DATA_PATH = Path(
 SYNTAX_TREES_ANNOTATIONS_PATH = Path(
     settings.SV_ATLAS_DATA_DIR, "annotations", "syntax-trees"
 )
-
-
-def get_paths(path):
-    if not path.exists():
-        return []
-    allowed_suffixes = [
-        ".json",
-        ".jsonl",
-    ]
-    return [p for p in path.rglob("*") if p.suffix in allowed_suffixes]
 
 
 def load_data(path):
@@ -111,13 +101,15 @@ def import_text_annotations(reset=False):
     counters = dict(idx=0)
 
     # FIXME: hooksets
-    scholia_annotation_paths = get_paths(ANNOTATIONS_DATA_PATH)
+    scholia_annotation_paths = get_paths_matching_suffixes(ANNOTATIONS_DATA_PATH)
     for path in scholia_annotation_paths:
         to_create.extend(
             _prepare_text_annotations(path, counters, kind=TEXT_ANNOTATION_KIND_SCHOLIA)
         )
 
-    syntax_tree_annotation_paths = get_paths(SYNTAX_TREES_ANNOTATIONS_PATH)
+    syntax_tree_annotation_paths = get_paths_matching_suffixes(
+        SYNTAX_TREES_ANNOTATIONS_PATH
+    )
     for path in syntax_tree_annotation_paths:
         to_create.extend(
             _prepare_text_annotations(
