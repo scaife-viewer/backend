@@ -914,13 +914,24 @@ class TokenAnnotationByLemmaFilterSet(django_filters.FilterSet):
         # NOTE: If `self.version` is not defined, we will raise a validation error
         # TODO: Determine if we want to normalization against this or look for exact matches
         # TODO: Perform additional indexing against lemmas
-        nodes = get_lowest_citable_nodes(self.version)
-        queryset = queryset.filter(token__text_part__in=nodes)
-        return queryset.filter(data__lemma=value)
+        # FIXME: This is a hack for demo only
+        work = self.version.get_parent()
+        textgroup = work.get_parent()
+        versions = textgroup.get_descendants().filter(depth=5).filter(urn__endswith=".perseus-grc2:")
+        queryset = queryset.filter(data__lemma=value)
+        predicate = Q()
+        for version in versions:
+            nodes = get_lowest_citable_nodes(version)
+            predicate.add(
+                Q(token__text_part__in=nodes), Q.OR
+            )
+        queryset = queryset.filter(predicate)
+        return queryset
 
 
 class TokenAnnotationByLemmaNode(TokenAnnotationNode):
     text_part_urn = String()
+
     # TODO: Further code re-use with TokenAnnotationNode
     class Meta:
         model = TokenAnnotation
