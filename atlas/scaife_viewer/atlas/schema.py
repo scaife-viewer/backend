@@ -1067,13 +1067,17 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
             passage_lemmas = TokenAnnotation.objects.filter(
                 token__text_part__in=textparts_queryset
             ).values_list("data__lemma", flat=True)
+
             if normalize_lemmas:
                 # If we're explicitly asked to use normalization, do so.
                 normalized_lemmas = [normalize_string(l) for l in passage_lemmas]
                 matches = queryset.filter(headword_normalized__in=normalized_lemmas)
+                # FIXME: Determine if we want to set normalized lemmas
+                # in the passage_lemmas context variable
             else:
                 # Otherwise, only match for the lemmas explicitly resolved for the passage
                 matches = queryset.filter(headword__in=passage_lemmas)
+                self.request.passage_lemmas = set(passage_lemmas)
 
             if resolve_using_lemmas_and_citations:
                 matches = matches | queryset.filter(
@@ -1115,6 +1119,14 @@ class DictionaryEntryNode(DjangoObjectType):
     sense_tree = generic.GenericScalar(
         description="A nested structure returning the URN(s) of senses attached to this entry"
     )
+    matches_passage_lemma = Boolean(
+        description="A nested structure returning the URN(s) of senses attached to this entry"
+    )
+
+    def resolve_matches_passage_lemma(obj, info, **kwargs):
+        # HACK: Pass data without using context?
+        passage_lemmas = getattr(info.context, "passage_lemmas", {})
+        return obj.headword in passage_lemmas
 
     def resolve_sense_tree(obj, info, **kwargs):
         # TODO: Proper GraphQL field for crushed tree nodes
