@@ -1028,36 +1028,63 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
     reference = django_filters.CharFilter(method="reference_filter")
     lemma = django_filters.CharFilter(method="lemma_filter")
     resolve_using_lemmas = django_filters.BooleanFilter(
-        method="resolve_using_lemmas_filter"
+        method="resolve_using_filter",
+        label="If resolving via reference, filter entries against lemmas within the passage reference",
+    )
+    resolve_using_lemmas_and_citations = django_filters.BooleanFilter(
+        method="resolve_using_filter",
+        label="If resolving via reference and using lemmas, also include results resolved via citations",
+    )
+    normalize_lemmas = django_filters.BooleanFilter(
+        method="resolve_normalize_lemmas",
+        label="If resolving via reference and using lemmas, use the normalized lemma values.",
     )
 
     class Meta:
         model = DictionaryEntry
         fields = {"urn": ["exact"], "headword": ["exact", "istartswith"]}
 
-    def resolve_using_lemmas_filter(self, queryset, name, value):
+    def resolve_using_filter(self, queryset, name, value):
         # This is a no-op to provide a boolean value to reference filter;
         # this may be better implemented as another GraphQL type
         # TODO: Research prior art in graphene-django codebases
         return queryset
 
+    def resolve_normalize_lemmas(self, queryset, name, value):
+        # This is a no-op to provide a boolean value to reference filter;
+        # this may be better implemented as another GraphQL type
+        return self.resolve_using_filter(queryset, name, value)
+
     # cited references vs containing references
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         resolve_using_lemmas = self.data.get("resolve_using_lemmas", None)
+        resolve_using_lemmas_and_citations = self.data.get(
+            "resolve_using_lemmas_and_citations", True
+        )
+        normalize_lemmas = self.data.get("normalize_lemmas", False)
         if resolve_using_lemmas:
-            # TODO: revisit normalization here with @jtauber
-            # Like, really revisit with these examples:
-            # προιάπτω
-            # urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.3
-            # Πηληϊάδης
-            # Πηληιάδης
-            # urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.1
             passage_lemmas = TokenAnnotation.objects.filter(
                 token__text_part__in=textparts_queryset
             ).values_list("data__lemma", flat=True)
-            normalized_lemmas = [normalize_string(l) for l in passage_lemmas]
-            matches = queryset.filter(headword_normalized__in=normalized_lemmas)
+            if normalize_lemmas:
+                # If we're explicitly asked to use normalization, do so.
+                normalized_lemmas = [normalize_string(l) for l in passage_lemmas]
+                matches = queryset.filter(headword_normalized__in=normalized_lemmas)
+            else:
+                # Otherwise, only match for the lemmas explicitly resolved for the passage
+                matches = queryset.filter(headword__in=passage_lemmas)
+
+            if resolve_using_lemmas_and_citations:
+                matches = matches | queryset.filter(
+                    senses__citations__text_parts__in=textparts_queryset
+                )
+
+            # TODO: Determine if we need to support querying for normalized lemmas as a fallback
+            # when no results exist?
+            # Review the use case for `urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.146` with Cunliffe
+            # AND with Cunliffe + LSJ
+
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
         else:
@@ -1066,6 +1093,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         return queryset.filter(pk__in=matches).order_by("headword_normalized")
 
     def lemma_filter(self, queryset, name, value):
+        # FIXME: Should we re-use the above `normalize_lemmas` argument here?
         value_normalized = normalize_string(value)
         lemma_pattern = (
             rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
