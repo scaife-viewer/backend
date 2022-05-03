@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from scaife_viewer.atlas.conf import settings
 
-from ..language_utils import normalize_string
+from ..language_utils import normalize_and_strip_marks
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
 from ..utils import chunked_bulk_create
 
@@ -201,7 +201,7 @@ def process_entries(dictionary, entries, entry_count=None):
         for e_idx, e in enumerate(entries):
             pbar.update(1)
             headword = e["headword"]
-            headword_normalized = normalize_string(headword)
+            headword_normalized = normalize_and_strip_marks(headword)
             entry = DictionaryEntry(
                 headword=headword,
                 headword_normalized=headword_normalized,

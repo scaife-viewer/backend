@@ -15,7 +15,7 @@ from . import constants
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
 from .hooks import hookset
-from .language_utils import normalize_string
+from .language_utils import normalize_and_strip_marks
 
 # from .models import Node as TextPart
 from .models import (
@@ -1070,7 +1070,9 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
 
             if normalize_lemmas:
                 # If we're explicitly asked to use normalization, do so.
-                normalized_lemmas = [normalize_string(l) for l in passage_lemmas]
+                normalized_lemmas = [
+                    normalize_and_strip_marks(pl) for pl in passage_lemmas
+                ]
                 matches = queryset.filter(headword_normalized__in=normalized_lemmas)
                 # FIXME: Determine if we want to set normalized lemmas
                 # in the passage_lemmas context variable
@@ -1098,7 +1100,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
 
     def lemma_filter(self, queryset, name, value):
         # FIXME: Should we re-use the above `normalize_lemmas` argument here?
-        value_normalized = normalize_string(value)
+        value_normalized = normalize_and_strip_marks(value)
         lemma_pattern = (
             rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
         )
