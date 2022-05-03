@@ -57,9 +57,6 @@ from .utils import (
 RESOLVE_CITATIONS_VIA_TEXT_PARTS = bool(
     int(os.environ.get("SV_ATLAS_RESOLVE_CITATIONS_VIA_TEXT_PARTS", 1))
 )
-RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS = bool(
-    int(os.environ.get("SV_ATLAS_RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS", 0))
-)
 
 # @@@ alias Node because relay.Node is quite different
 TextPart = Node
@@ -1063,13 +1060,8 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
             matches = queryset.filter(headword_normalized__in=normalized_lemmas)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
-        elif resolve_using_lemmas is False:
-            matches = queryset.filter(citations__text_parts__in=textparts_queryset)
         else:
-            # FIXME: Determine if we need this query or if we can go ahead and make BI
-            matches = queryset.filter(
-                citations__data__urn__in=textparts_queryset.values_list("urn")
-            )
+            matches = queryset.filter(citations__text_parts__in=textparts_queryset)
         # TODO: Expose ordering options?
         return queryset.filter(pk__in=matches).order_by("headword_normalized")
 
