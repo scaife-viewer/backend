@@ -700,8 +700,14 @@ class AttributionRecord(models.Model):
 
 
 class DictionaryEntry(models.Model):
-    headword = models.CharField(max_length=255)
-    headword_normalized = models.CharField(max_length=255, blank=True, null=True)
+    headword = models.CharField(max_length=255, db_index=True)
+    headword_normalized = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True
+    )
+    headword_normalized_stripped = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True
+    )
+
     data = JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index")
