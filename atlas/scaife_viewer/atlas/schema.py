@@ -15,7 +15,7 @@ from . import constants
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
 from .hooks import hookset
-from .language_utils import normalize_and_strip_marks
+from .language_utils import normalize_and_strip_marks, normalized_no_digits
 
 # from .models import Node as TextPart
 from .models import (
@@ -1035,10 +1035,12 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         method="resolve_using_filter",
         label="If resolving via reference and using lemmas, also include results resolved via citations",
     )
+    # TODO: Refactor this as no marks normalize
     normalize_lemmas = django_filters.BooleanFilter(
         method="resolve_normalize_lemmas",
-        label="If resolving via reference and using lemmas, use the normalized lemma values.",
+        label="If resolving via lemmas, query using the no-marks normalized lemma values.",
     )
+    # TODO: Determine if we have a use case for _no_ normalization
 
     class Meta:
         model = DictionaryEntry
@@ -1067,18 +1069,23 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
             passage_lemmas = TokenAnnotation.objects.filter(
                 token__text_part__in=textparts_queryset
             ).values_list("data__lemma", flat=True)
+            passage_lemmas = [normalized_no_digits(pl) for pl in passage_lemmas]
 
             if normalize_lemmas:
+                # TODO: Change to no marks normalize
                 # If we're explicitly asked to use normalization, do so.
-                normalized_lemmas = [
+                headword_candidates = [
                     normalize_and_strip_marks(pl) for pl in passage_lemmas
                 ]
-                matches = queryset.filter(headword_normalized__in=normalized_lemmas)
+                matches = queryset.filter(
+                    headword_normalized_stripped__in=headword_candidates
+                )
                 # FIXME: Determine if we want to set normalized lemmas
                 # in the passage_lemmas context variable
             else:
-                # Otherwise, only match for the lemmas explicitly resolved for the passage
-                matches = queryset.filter(headword__in=passage_lemmas)
+                # Otherwise we match by the normalized passage lemmas
+                # but we maintain marks
+                matches = queryset.filter(headword_normalized__in=passage_lemmas)
                 self.request.passage_lemmas = set(passage_lemmas)
 
             if resolve_using_lemmas_and_citations:
@@ -1099,12 +1106,18 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         return queryset.filter(pk__in=matches).order_by("headword_normalized")
 
     def lemma_filter(self, queryset, name, value):
-        # FIXME: Should we re-use the above `normalize_lemmas` argument here?
-        value_normalized = normalize_and_strip_marks(value)
-        lemma_pattern = (
-            rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
-        )
-        return queryset.filter(headword_normalized__regex=lemma_pattern)
+        # FIXME: Make this default consistent with the other filter
+        # (That will be a BI change)
+        normalize_lemmas = self.data.get("normalize_lemmas", False)
+        if normalize_lemmas:
+            # FIXME: Prefer explicit normalize_and_strip_marks argument
+            # (Another BI change)
+            value_normalized = normalize_and_strip_marks(value)
+            lemma_pattern = rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
+            return queryset.filter(headword_normalized__regex=lemma_pattern)
+        # TODO: Should we have an explicit ordering?
+        value = normalized_no_digits(value)
+        return queryset.filter(headword_normalized=value)
 
 
 def _crush_sense(tree):
@@ -1128,7 +1141,7 @@ class DictionaryEntryNode(DjangoObjectType):
     def resolve_matches_passage_lemma(obj, info, **kwargs):
         # HACK: Pass data without using context?
         passage_lemmas = getattr(info.context, "passage_lemmas", {})
-        return obj.headword in passage_lemmas
+        return obj.headword_normalized in passage_lemmas
 
     def resolve_sense_tree(obj, info, **kwargs):
         # TODO: Proper GraphQL field for crushed tree nodes
