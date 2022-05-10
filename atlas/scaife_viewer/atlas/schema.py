@@ -1044,7 +1044,11 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
 
     class Meta:
         model = DictionaryEntry
-        fields = {"urn": ["exact"], "headword": ["exact", "istartswith"]}
+        fields = {
+            "urn": ["exact"],
+            "headword": ["exact", "istartswith"],
+            "dictionary__urn": ["exact"],
+        }
 
     def resolve_using_filter(self, queryset, name, value):
         # This is a no-op to provide a boolean value to reference filter;
