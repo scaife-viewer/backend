@@ -1103,7 +1103,7 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
         else:
             matches = queryset.filter(citations__text_parts__in=textparts_queryset)
         # TODO: Expose ordering options?
-        return queryset.filter(pk__in=matches).order_by("headword_normalized")
+        return queryset.filter(pk__in=matches).order_by("headword_normalized_stripped")
 
     def lemma_filter(self, queryset, name, value):
         # FIXME: Make this default consistent with the other filter
