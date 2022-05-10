@@ -6,6 +6,7 @@ import regex
 # FIXME: Determine if we hould prefer Punct vs Mark
 # UNICODE_MARK_CATEGORY_REGEX = regex.compile(r"\p{Punct}")
 UNICODE_MARK_CATEGORY_REGEX = regex.compile(r"\p{M}")
+DIGITS_REGEX = regex.compile(r"\d")
 
 
 def nfkc(s):
@@ -40,3 +41,7 @@ def normalize_string(s):
 # normalization pattern
 def normalize_value(value):
     return nfkc(nfd(value)).lower()
+
+
+def normalized_no_digits(value):
+    return DIGITS_REGEX.sub("", normalize_value(value))
