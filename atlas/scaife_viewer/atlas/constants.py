@@ -85,6 +85,7 @@ NAMED_ENTITY_KINDS = [
 HUMAN_FRIENDLY_LANGUAGE_MAP = {
     "eng": "English",
     "fa": "Farsi",
+    "far": "Farsi",
     "fre": "French",
     "ger": "German",
     "grc": "Greek",

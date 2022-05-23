@@ -611,6 +611,12 @@ class TextAlignmentMetadata(dict):
         options = self.alignment.metadata.get("display_options", {})
         return camelize(options)
 
+    @property
+    def language_map(self):
+        data = {}
+        for version in self.alignment.versions.all():
+            data[version.urn] = version.metadata["lang"]
+        return data
 
 class TextAlignmentMetadataNode(ObjectType):
     passage_references = generic.GenericScalar(
@@ -620,6 +626,7 @@ class TextAlignmentMetadataNode(ObjectType):
     # TODO: And possibly make this something to be provided at ingestion time?
     display_hint = String()
     display_options = generic.GenericScalar()
+    language_map = generic.GenericScalar()
 
     def resolve_passage_references(self, info, *args, **kwargs):
         return self.passage_references
@@ -629,6 +636,9 @@ class TextAlignmentMetadataNode(ObjectType):
 
     def resolve_display_options(self, info, *args, **kwargs):
         return self.display_options
+
+    def resolve_language_map(self, info, *args, **kwargs):
+        return self.language_map
 
 
 class TextAlignmentConnection(Connection):
