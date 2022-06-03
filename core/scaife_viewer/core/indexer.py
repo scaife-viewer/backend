@@ -22,6 +22,7 @@ morphology = None
 DASK_CONFIG_NUM_WORKERS = int(
     os.environ.get("DASK_CONFIG_NUM_WORKERS", multiprocessing.cpu_count() - 1)
 )
+DASK_PARTITIONS = int(os.environ.get("DASK_PARTITIONS", "100"))
 LEMMA_CONTENT = bool(int(os.environ.get("LEMMA_CONTENT", 0)))
 
 
@@ -114,10 +115,8 @@ class Indexer:
 
         print(f"Indexing {len(passages)} passages")
         indexer_kwargs = dict(lemma_content=LEMMA_CONTENT and bool(morphology))
-        # @@@ revisit partitions based on `DASK_CONFIG_NUM_WORKERS`; also partitions sorted by
-        # token size for consistent memory usage
         word_counts = (
-            dask.bag.from_sequence(passages)
+            dask.bag.from_sequence(passages, npartitions=DASK_PARTITIONS)
             .map_partitions(self.indexer, **indexer_kwargs)
             .compute(**compute_kwargs())
         )
