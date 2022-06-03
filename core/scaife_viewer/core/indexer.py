@@ -111,7 +111,7 @@ class Indexer:
         urn_obj = self.get_urn_obj()
         prefix_filter = self.get_urn_prefix_filter(urn_obj)
 
-        passages = self.prepare_passage(urn_prefix=prefix_filter)
+        passages = self.prepare_passages(urn_prefix=prefix_filter)
 
         print(f"Indexing {len(passages)} passages")
         indexer_kwargs = dict(lemma_content=LEMMA_CONTENT and bool(morphology))
