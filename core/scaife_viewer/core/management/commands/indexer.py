@@ -23,11 +23,12 @@ class IndexerCommand(BaseCommand):
         parser.add_argument("--pubsub-project")
         parser.add_argument("--pubsub-topic")
         parser.add_argument("--morphology-path", type=str, default="")
+        parser.add_argument("--index-name", type=str, default=None)
 
     def handle(self, *args, **options):
         # executor = concurrent.futures.ProcessPoolExecutor(max_workers=options["max_workers"])
         if options["pusher"] == "direct":
-            pusher = DirectPusher()
+            pusher = DirectPusher(index_name=options.get("index_name"))
         elif options["pusher"] == "pubsub":
             pusher = PubSubPusher(options["pubsub_project"], options["pubsub_topic"])
         indexer = Indexer(

@@ -282,9 +282,11 @@ def chunker(iterable, n):
 
 
 class DirectPusher:
-    def __init__(self, chunk_size=500):
+    def __init__(self, chunk_size=500, index_name=None):
         self.chunk_size = chunk_size
-        self.index_name = settings.ELASTICSEARCH_INDEX_NAME
+        if index_name is None:
+            index_name = settings.ELASTICSEARCH_INDEX_NAME
+        self.index_name = index_name
         self.es.indices.create(index=self.index_name, ignore=400)
 
     @property
