@@ -15,7 +15,11 @@ from . import constants
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
 from .hooks import hookset
-from .language_utils import normalize_and_strip_marks, normalized_no_digits
+from .language_utils import (
+    icu_transliterator,
+    normalize_and_strip_marks,
+    normalized_no_digits,
+)
 
 # from .models import Node as TextPart
 from .models import (
@@ -826,10 +830,15 @@ class TokenFilterSet(django_filters.FilterSet):
 
 
 class TokenNode(DjangoObjectType):
+    transliterated_word_value = String()
+
     class Meta:
         model = Token
         interfaces = (relay.Node,)
         filterset_class = TokenFilterSet
+
+    def resolve_transliterated_word_value(obj, *args, **kwargs):
+        return icu_transliterator.transliterate(obj.word_value or "")
 
 
 class TokenAnnotationCollectionFilterSet(

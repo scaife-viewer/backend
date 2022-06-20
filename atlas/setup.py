@@ -39,6 +39,8 @@ setup(
         "PyYAML==5.4.1",
         "regex>=2020.11.13",
         "tqdm>= 4.48.2,<5",
+        # FIXME: Make an extras package
+        "PyICU>=2.9,<3"
     ],
     tests_require=tests_require,
     extras_require={

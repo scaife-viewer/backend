@@ -1,5 +1,6 @@
 import unicodedata
 
+import icu
 import regex
 
 
@@ -45,3 +46,8 @@ def normalize_value(value):
 
 def normalized_no_digits(value):
     return DIGITS_REGEX.sub("", normalize_value(value))
+
+
+# FIXME: Wrap as a lazy instantiation
+# or allow multiple flags for ICU IDs
+icu_transliterator = icu.Transliterator.createInstance("Any-Latin")
