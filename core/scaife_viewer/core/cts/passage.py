@@ -130,12 +130,12 @@ class Passage:
     def next(self):
         reference = self.textual_node().nextId
         if reference:
-            return Passage(self.text, reference)
+            return self.__class__(self.text, reference)
 
     def prev(self):
         reference = self.textual_node().prevId
         if reference:
-            return Passage(self.text, reference)
+            return self.__class__(self.text, reference)
 
     @property
     def textpart_refs_range(self):
@@ -235,6 +235,21 @@ class Passage:
         for child in toc_ref.children:
             yield Passage(self.text, child.reference)
 
+    def get_text_as_json(self, text):
+        if text is None:
+            text = self.text
+        return {
+            "urn": str(self.text.urn),
+            "label": self.text.label,
+            "ancestors": [
+                {"urn": str(ancestor.urn), "label": ancestor.label}
+                for ancestor in self.text.ancestors()
+            ],
+            "lang": self.text.lang,
+            "human_lang": self.text.human_lang,
+            "kind": self.text.kind,
+        }
+
     def as_json(self, with_content=True) -> dict:
         refs = {
             "start": {
@@ -249,17 +264,7 @@ class Passage:
             }
         o = {
             "urn": str(self.urn),
-            "text": {
-                "urn": str(self.text.urn),
-                "label": self.text.label,
-                "ancestors": [
-                    {"urn": str(ancestor.urn), "label": ancestor.label}
-                    for ancestor in self.text.ancestors()
-                ],
-                "lang": self.text.lang,
-                "human_lang": self.text.human_lang,
-                "kind": self.text.kind,
-            },
+            "text": self.get_text_as_json(),
             "refs": refs,
             "ancestors": [
                 {"reference": str(ancestor.reference)} for ancestor in self.ancestors()

@@ -1,8 +1,11 @@
 from typing import List, Tuple
 
-from .passage import Passage
+from ..hooks import hookset
 from .toc import RefNode
 from .utils import natural_keys
+
+
+Passage = hookset.passage_class()
 
 
 # TODO: This needs to take subreferences into account

@@ -8,10 +8,12 @@ from MyCapytain.resources.prototypes.cts import inventory as cts
 
 from ..hooks import hookset
 from .capitains import default_resolver
-from .passage import Passage
 from .reference import URN
 from .toc import RefTree
 from .typing import CtsCollectionMetadata
+
+
+Passage = hookset.passage_class()
 
 
 @lru_cache(maxsize=1)

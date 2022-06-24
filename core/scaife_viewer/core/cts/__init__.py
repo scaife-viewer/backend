@@ -1,7 +1,7 @@
 from MyCapytain.errors import UnknownCollection
 
 from ..conf import settings
-
+from ..hooks import hookset
 from .capitains import default_resolver  # noqa
 from .collections import (  # noqa
     Collection,
@@ -18,8 +18,10 @@ from .exceptions import (  # noqa
     PassageDoesNotExist,
 )
 from .heal import heal
-from .passage import Passage
 from .reference import URN
+
+
+Passage = hookset.passage_class()
 
 
 def text_inventory() -> TextInventory:

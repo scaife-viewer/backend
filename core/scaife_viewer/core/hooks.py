@@ -8,6 +8,16 @@ class DefaultHookSet:
     def sort_texts(self, texts):
         return sorted(texts, key=lambda t: (t.kind, t.label))
 
+    @staticmethod
+    def passage_class():
+        """
+        Allows site developers to customize the `Passage`
+        class (providing, for example, additional payload in
+        `as_json`).
+        """
+        from .cts.passage import Passage
+        return Passage
+
 
 class HookProxy:
     def __getattr__(self, attr):
