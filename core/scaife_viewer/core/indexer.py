@@ -1,4 +1,5 @@
 import json
+import logging
 import multiprocessing
 import os
 from collections import Counter, deque
@@ -18,6 +19,7 @@ from .morphology import Morphology
 from .search import default_es_client_config
 
 
+logger = logging.getLogger(__name__)
 morphology = None
 DASK_CONFIG_NUM_WORKERS = int(
     os.environ.get("DASK_CONFIG_NUM_WORKERS", multiprocessing.cpu_count() - 1)
@@ -310,6 +312,11 @@ class DirectPusher:
             self.commit_docs()
 
     def commit_docs(self):
+        msg = f"Committing {len(self.docs)} doc(s) to {self.index_name}"
+        # FIXME: Prefer logger, but am not seeing messages locally
+        print(msg)
+        # logger.info(msg)
+
         metadata = {"_op_type": "index", "_index": self.index_name, "_type": "text"}
         docs = ({"_id": doc["urn"], **metadata, **doc} for doc in self.docs)
         elasticsearch.helpers.bulk(self.es, docs)
@@ -322,7 +329,6 @@ class DirectPusher:
         # we need to ensure the deque is cleared if less than
         # `chunk_size`
         self.commit_docs()
-        print("Committing documents to ElasticSearch")
 
     def __getstate__(self):
         s = self.__dict__.copy()
