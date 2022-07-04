@@ -1,0 +1,11 @@
+<GetPassage xmlns="http://chs.harvard.edu/xmlns/cts">
+    <request>
+        <requestName>GetPassage</requestName>
+        <requestUrn></requestUrn>
+    </request>
+    <reply>
+        <urn></urn>
+        <passage>
+        </passage>
+    </reply>
+</GetPassage>

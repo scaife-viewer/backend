@@ -1,6 +1,9 @@
 import datetime
 import json
 import os
+from copy import deepcopy
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlencode
 
 from django.http import (
@@ -15,6 +18,8 @@ from django.views.generic.base import TemplateView
 
 import dateutil.parser
 import requests
+from lxml import etree
+from MyCapytain.common.constants import XPATH_NAMESPACES
 
 from . import cts
 from .conf import settings
@@ -470,3 +475,26 @@ def morpheus(request):
         data_body.append(entry)
     data = {"Body": data_body}
     return JsonResponse(data)
+
+
+@lru_cache(maxsize=1)
+def get_cts_xml_api_wrapper():
+    fixture_path = Path(__file__).parent / "fixtures/cts_xml_api_wrapper.xml"
+    return etree.parse(fixture_path.open("rb"))
+
+
+class CTSApiGetPassageView(LibraryPassageView):
+    def as_xml(self):
+        root = deepcopy(get_cts_xml_api_wrapper())
+        root.xpath("//ti:requestUrn", namespaces=XPATH_NAMESPACES)[0].text = str(
+            self.passage.urn
+        )
+        root.xpath("//ti:reply/ti:urn", namespaces=XPATH_NAMESPACES)[0].text = str(
+            self.passage.urn
+        )
+        passage_elem = root.xpath("//ti:reply/ti:passage", namespaces=XPATH_NAMESPACES)[
+            0
+        ]
+        passage_elem.append(etree.fromstring(self.passage.xml))
+        content = etree.tostring(root, encoding="utf-8")
+        return HttpResponse(content, content_type="text/xml")
