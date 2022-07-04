@@ -27,7 +27,8 @@ LEMMA_CONTENT = bool(int(os.environ.get("LEMMA_CONTENT", 0)))
 
 
 def compute_kwargs(**params):
-    kwargs = {"num_workers": DASK_CONFIG_NUM_WORKERS}
+    max_workers = params.get("max_workers", DASK_CONFIG_NUM_WORKERS)
+    kwargs = {"num_workers": max_workers}
     kwargs.update(params)
     return kwargs
 
@@ -47,12 +48,14 @@ class Indexer:
         chunk_size=100,
         limit=None,
         dry_run=False,
+        max_workers=None,
     ):
         self.pusher = pusher
         self.urn_prefix = urn_prefix
         self.chunk_size = chunk_size
         self.limit = limit
         self.dry_run = dry_run
+        self.max_workers = max_workers
         self.load_morphology(morphology_path)
 
     def load_morphology(self, path):
@@ -118,7 +121,7 @@ class Indexer:
         word_counts = (
             dask.bag.from_sequence(passages, npartitions=DASK_PARTITIONS)
             .map_partitions(self.indexer, **indexer_kwargs)
-            .compute(**compute_kwargs())
+            .compute(**compute_kwargs(max_workers=self.max_workers))
         )
         total_word_counts = Counter()
         for (lang, count) in word_counts:

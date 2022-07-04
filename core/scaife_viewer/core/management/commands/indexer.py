@@ -28,7 +28,10 @@ class IndexerCommand(BaseCommand):
     def handle(self, *args, **options):
         # executor = concurrent.futures.ProcessPoolExecutor(max_workers=options["max_workers"])
         if options["pusher"] == "direct":
-            pusher = DirectPusher(index_name=options.get("index_name"))
+            pusher = DirectPusher(
+                index_name=options.get("index_name"),
+                chunk_size=options.get("chunk_size"),
+            )
         elif options["pusher"] == "pubsub":
             pusher = PubSubPusher(options["pubsub_project"], options["pubsub_topic"])
         indexer = Indexer(
@@ -38,6 +41,7 @@ class IndexerCommand(BaseCommand):
             chunk_size=options["chunk_size"],
             limit=options["limit"],
             dry_run=options["dry_run"],
+            max_workers=options["max_workers"],
         )
         with Timer() as timer:
             indexer.index()
@@ -50,7 +54,6 @@ if settings.SCAIFE_VIEWER_CORE_USE_CLOUD_INDEXER:
     # onto the indexing command
     class Command(CloudJob, IndexerCommand):
         pass
-
 
 else:
 
