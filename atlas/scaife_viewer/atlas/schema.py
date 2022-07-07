@@ -777,6 +777,16 @@ class SyntaxTreeNode(AbstractTextAnnotationNode):
     def get_queryset(cls, queryset, info):
         return queryset.filter(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
 
+    def resolve_data(obj, *args, **kwargs):
+        # FIXME: Don't overload obj.data,
+        # but prefer a further-typed syntax tree
+        for word in obj.data.get("words", []):
+            # FIXME: Transliterate only on Greek
+            twv = icu_transliterator.transliterate(word.get("value") or "")
+            word["transliterated_word_value"] = twv
+        # TODO: Figure out a better way to override these methods
+        return camelize(obj.data)
+
 
 class MetricalAnnotationNode(DjangoObjectType):
     data = generic.GenericScalar()
