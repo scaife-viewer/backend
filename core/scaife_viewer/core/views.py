@@ -513,3 +513,16 @@ class CorporaReposView(View):
         with manifest.open("rb") as f:
             data = yaml.safe_load(f)
             return JsonResponse(data)
+
+
+class CorpusMetadata(View):
+    """
+    Backport of `/corpus-metadata` route from scaife-cts-api.
+    """
+
+    def get(self, request, **kwargs):
+        cts_data_path = Path(settings.CTS_LOCAL_DATA_PATH)
+        metadata = cts_data_path / ".scaife-viewer.json"
+        with open(metadata, "rb") as f:
+            data = json.load(f)
+            return JsonResponse(data, safe=False)
