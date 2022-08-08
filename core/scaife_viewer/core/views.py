@@ -21,8 +21,11 @@ import requests
 from lxml import etree
 from MyCapytain.common.constants import XPATH_NAMESPACES
 
+import yaml
+
 from . import cts
 from .conf import settings
+from .hooks import hookset
 from .http import ConditionMixin
 from .precomputed import library_view_json
 from .search import SearchQuery
@@ -498,3 +501,15 @@ class CTSApiGetPassageView(LibraryPassageView):
         passage_elem.append(etree.fromstring(self.passage.xml))
         content = etree.tostring(root, encoding="utf-8")
         return HttpResponse(content, content_type="text/xml")
+
+
+class CorporaReposView(View):
+    """
+    Backport of `/repos` route from scaife-cts-api.
+    """
+
+    def get(self, request, **kwargs):
+        manifest = hookset.content_manifest_path
+        with manifest.open("rb") as f:
+            data = yaml.safe_load(f)
+            return JsonResponse(data)

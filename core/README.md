@@ -24,6 +24,10 @@ Default: `"scaife_viewer.core.hooks.DefaultHookSet"`
 
 The path to a hookset that can be used to customize package functionality.
 
+#### hookset.content_manifest_path
+
+Default: Callable returning `pathlib.Path` resolving to `data/content-manifests/production.yaml`
+
 **RESOLVER_CACHE_LABEL**
 
 Default: `"cts-resolver"`
