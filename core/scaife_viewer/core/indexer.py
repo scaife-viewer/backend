@@ -145,6 +145,9 @@ class Indexer:
 
         if process_lemmas:
             print(f"Processing lemmas")
+            # FIXME: Refactor without globals;
+            # may cause an issue with lru_cache and our staticmethod
+            global TOKEN_ANNOTATIONS_PATH
             if TOKEN_ANNOTATIONS_PATH:
                 TOKEN_ANNOTATIONS_PATH = Path(TOKEN_ANNOTATIONS_PATH)
                 print(f"Will load annotations from {TOKEN_ANNOTATIONS_PATH}")
