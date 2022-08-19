@@ -1,10 +1,13 @@
+import csv
 import json
 import logging
 import multiprocessing
 import os
 from collections import Counter, deque
+from functools import lru_cache
 from itertools import zip_longest
 from operator import attrgetter
+from pathlib import Path
 from typing import Iterable, List, NamedTuple
 
 from django.conf import settings
@@ -26,6 +29,9 @@ DASK_CONFIG_NUM_WORKERS = int(
 )
 DASK_PARTITIONS = int(os.environ.get("DASK_PARTITIONS", "100"))
 LEMMA_CONTENT = bool(int(os.environ.get("LEMMA_CONTENT", 0)))
+
+NO_LEMMA = "�"
+TOKEN_ANNOTATIONS_PATH = os.environ.get("TOKEN_ANNOTATIONS_PATH")
 
 
 def compute_kwargs(**params):
@@ -99,16 +105,32 @@ class Indexer:
             self.texts(urn_prefix.upTo(cts.URN.NO_PASSAGE) if urn_prefix else None)
         )
 
-        if LEMMA_CONTENT:
-            # only retrieve greek texts
-            texts = texts.filter(lambda t: t.lang == "grc")
-
         passages = []
         for text in texts:
             passages.extend(self.passages_from_text(text))
         if self.limit is not None:
             passages = passages[0 : self.limit]
         return passages
+
+    @staticmethod
+    # TODO: Make maxsize configurable; this really exists
+    # so we can use a threadlocal within each process
+    @lru_cache(maxsize=1)
+    def get_lemma_lookup(version_urn):
+        workparts = str(version_urn).rsplit(":", maxsplit=1)[1]
+        tg, work, _ = workparts.split(".")
+        inf = Path(TOKEN_ANNOTATIONS_PATH, f"{tg}/{work}/{workparts}.tsv")
+        if not inf.exists():
+            print(f"{inf.name} not found")
+            return None
+
+        # TODO: Experiment with loading this lookup
+        # in a similar fashion as the `morphology` global, or via
+        # Pandas or via SQLite
+        lemma_lookup = {}
+        for row in csv.DictReader(inf.open(), delimiter="\t"):
+            lemma_lookup[row["subref"]] = row["lemma"]
+        return lemma_lookup
 
     def index(self):
         cts.TextInventory.load()
@@ -119,7 +141,23 @@ class Indexer:
         passages = self.prepare_passages(urn_prefix=prefix_filter)
 
         print(f"Indexing {len(passages)} passages")
-        indexer_kwargs = dict(lemma_content=LEMMA_CONTENT and bool(morphology))
+        process_lemmas = LEMMA_CONTENT
+
+        if process_lemmas:
+            print(f"Processing lemmas")
+            if TOKEN_ANNOTATIONS_PATH:
+                TOKEN_ANNOTATIONS_PATH = Path(TOKEN_ANNOTATIONS_PATH)
+                print(f"Will load annotations from {TOKEN_ANNOTATIONS_PATH}")
+            elif bool(morphology):
+                print(f"Will load annotations from `morphology` global")
+            else:
+                # Nothing to populate lemmas with
+                process_lemmas = False
+                print(
+                    "`morphology` and `TOKEN_ANNOTATIONS_PATH` are falsey; aborting lemma processing"
+                )
+
+        indexer_kwargs = dict(lemma_content=process_lemmas)
         word_counts = (
             dask.bag.from_sequence(passages, npartitions=DASK_PARTITIONS)
             .map_partitions(self.indexer, **indexer_kwargs)
@@ -220,6 +258,25 @@ class Indexer:
         return n
 
     def lemma_content(self, passage, tokens) -> str:
+        if TOKEN_ANNOTATIONS_PATH:
+            urn = str(passage.urn)
+            version_urn, ref = str(urn).rsplit(":", maxsplit=1)
+
+            lemma_lookup = self.get_lemma_lookup(version_urn)
+            if not lemma_lookup:
+                return None
+
+            lemma_tokens = []
+            for svt in tokens:
+                token = svt["w"]
+                subref_count = svt["i"]
+                subref = f"{ref}@{token}"
+                if subref_count != 1:
+                    subref = f"{subref}[{subref_count}]"
+                lt = lemma_lookup.get(subref) or NO_LEMMA
+                lemma_tokens.append(lt)
+            return " ".join(lemma_tokens)
+
         if morphology is None:
             return ""
         short_key = morphology.short_keys.get(str(passage.text.urn))
@@ -254,26 +311,29 @@ class Indexer:
     def passage_to_doc(self, passage, sort_idx, tokens, word_stats, lemma_content):
         urn = str(passage.urn)
         language, word_count = word_stats
-        if lemma_content:
+
+        lc = None
+        # TODO: Support lemmas in other languages
+        if language == "grc" and lemma_content:
             lc = self.lemma_content(passage, tokens)
-            return {"urn": urn, "lemma_content": lc}
-        else:
-            return {
-                "urn": urn,
-                "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
-                "work": str(passage.text.urn.upTo(cts.URN.WORK)),
-                "text": {
-                    "urn": str(passage.text.urn),
-                    "label": passage.text.label,
-                    "description": passage.text.description,
-                },
-                "reference": str(passage.reference),
-                "sort_idx": sort_idx,
-                "content": " ".join([token["w"] for token in tokens]),
-                "raw_content": passage.content,
-                "language": language,
-                "word_count": word_count,
-            }
+
+        return {
+            "urn": urn,
+            "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
+            "work": str(passage.text.urn.upTo(cts.URN.WORK)),
+            "text": {
+                "urn": str(passage.text.urn),
+                "label": passage.text.label,
+                "description": passage.text.description,
+            },
+            "reference": str(passage.reference),
+            "sort_idx": sort_idx,
+            "content": " ".join([token["w"] for token in tokens]),
+            "raw_content": passage.content,
+            "lemma_content": lc,
+            "language": language,
+            "word_count": word_count,
+        }
 
 
 def consume(it):
