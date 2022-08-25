@@ -19,7 +19,7 @@ from django.views.generic.base import TemplateView
 import dateutil.parser
 import requests
 from lxml import etree
-from MyCapytain.common.constants import XPATH_NAMESPACES
+from MyCapytain.common.constants import XPATH_NAMESPACES, Mimetypes
 
 import yaml
 
@@ -130,7 +130,7 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
         try:
             return JsonResponse(self.json_paylod)
         except ValueError as e:
-            """"
+            """
             TODO: good idea to refactor this to send back consistent error
             messages and codes that the client is aware of
 
@@ -487,6 +487,10 @@ def get_cts_xml_api_wrapper():
 
 
 class CTSApiGetPassageView(LibraryPassageView):
+    """
+    Mirrors the output of the Nautilus `GetPassage` endpoint.
+    """
+
     def as_xml(self):
         root = deepcopy(get_cts_xml_api_wrapper())
         root.xpath("//ti:requestUrn", namespaces=XPATH_NAMESPACES)[0].text = str(
@@ -499,6 +503,52 @@ class CTSApiGetPassageView(LibraryPassageView):
             0
         ]
         passage_elem.append(etree.fromstring(self.passage.xml))
+        content = etree.tostring(root, encoding="utf-8")
+        return HttpResponse(content, content_type="text/xml")
+
+
+class CTSApiGetVersionView(LibraryConditionMixin, View):
+    """
+    Mirrors the output of the Nautilus `GetPassage` endpoint.
+    """
+
+    # TODO: Add rate limiting or serving response from filesystem
+    def get_version(self):
+        urn = normalize_urn(self.kwargs["urn"])
+        try:
+            cts_obj = cts.collection(urn)
+        except cts.CollectionDoesNotExist:
+            raise Http404()
+        if not isinstance(cts_obj, cts.Text):
+            raise cts.InvalidURN(
+                f'This endpoint only supports URNs at the version or exemplar level [urn="{cts_obj.urn}"]'
+            )
+        return cts_obj
+
+    def get(self, request, **kwargs):
+        try:
+            version = self.get_version()
+        except cts.InvalidURN as e:
+            return HttpResponse(
+                json.dumps({"reason": str(e)}),
+                status=404,
+                content_type="application/json",
+            )
+
+        root = deepcopy(get_cts_xml_api_wrapper())
+        root.xpath("//ti:requestUrn", namespaces=XPATH_NAMESPACES)[0].text = str(
+            version.urn
+        )
+        root.xpath("//ti:reply/ti:urn", namespaces=XPATH_NAMESPACES)[0].text = str(
+            version.urn
+        )
+        passage_elem = root.xpath("//ti:reply/ti:passage", namespaces=XPATH_NAMESPACES)[
+            0
+        ]
+        capitains_resolver = cts.capitains.default_resolver()
+        textual_node = capitains_resolver.getTextualNode(version.urn)
+        passage_elem.append(textual_node.xml)
+        # TODO: Serve from resolver versus a wrapper around the filesystem?
         content = etree.tostring(root, encoding="utf-8")
         return HttpResponse(content, content_type="text/xml")
 
