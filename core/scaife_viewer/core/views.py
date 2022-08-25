@@ -486,23 +486,84 @@ def get_cts_xml_api_wrapper():
     return etree.parse(fixture_path.open("rb"))
 
 
-class CTSApiGetPassageView(LibraryPassageView):
+class CTSApiGetPassageView(LibraryConditionMixin, View):
     """
     Mirrors the output of the Nautilus `GetPassage` endpoint.
     """
 
-    def as_xml(self):
+    def get_version(self, urn):
+        try:
+            cts_obj = cts.collection(urn)
+        except cts.CollectionDoesNotExist:
+            raise Http404()
+
+        if not isinstance(cts_obj, cts.Text):
+            raise cts.InvalidURN(
+                f'This endpoint only supports passage or version-level URNs [urn="{cts_obj.urn}"]'
+            )
+        return cts_obj
+
+    def get_passage(self, urn):
+        return cts.passage(urn)
+
+    def resolve_urn(self):
+        urn = normalize_urn(self.kwargs["urn"])
+        urn_obj = cts.URN(urn)
+        if not urn_obj.reference:
+            return self.get_version(urn)
+        else:
+            return self.get_passage(urn)
+
+    def get(self, request, **kwargs):
+        try:
+            cts_obj = self.resolve_urn()
+        except cts.InvalidURN as e:
+            return HttpResponse(
+                json.dumps({"reason": str(e)}),
+                status=404,
+                content_type="application/json",
+            )
+        if isinstance(cts_obj, cts.Text):
+            return self.get_version_response(cts_obj)
+        return self.get_passage_response(cts_obj)
+
+    def get_passage_response(self, passage):
+        xml_elem = passage.textual_node().resource
+        return self.as_xml(passage.urn, xml_elem)
+
+    def get_version_response(self, version):
+        capitains_resolver = cts.capitains.default_resolver()
+        textual_node = capitains_resolver.getTextualNode(version.urn)
+        # TODO: Serve from resolver versus a wrapper around the filesystem?
+        return self.as_xml(version.urn, textual_node.xml)
+
+    def as_xml(self, passage_urn, xml_elem):
         root = deepcopy(get_cts_xml_api_wrapper())
         root.xpath("//ti:requestUrn", namespaces=XPATH_NAMESPACES)[0].text = str(
-            self.passage.urn
+            passage_urn
         )
         root.xpath("//ti:reply/ti:urn", namespaces=XPATH_NAMESPACES)[0].text = str(
-            self.passage.urn
+            passage_urn
         )
         passage_elem = root.xpath("//ti:reply/ti:passage", namespaces=XPATH_NAMESPACES)[
             0
         ]
-        passage_elem.append(etree.fromstring(self.passage.xml))
+        passage_elem.append(xml_elem)
+        content = etree.tostring(root, encoding="utf-8")
+        return HttpResponse(content, content_type="text/xml")
+
+    def render_passage_response(self, passage):
+        root = deepcopy(get_cts_xml_api_wrapper())
+        root.xpath("//ti:requestUrn", namespaces=XPATH_NAMESPACES)[0].text = str(
+            passage.urn
+        )
+        root.xpath("//ti:reply/ti:urn", namespaces=XPATH_NAMESPACES)[0].text = str(
+            passage.urn
+        )
+        passage_elem = root.xpath("//ti:reply/ti:passage", namespaces=XPATH_NAMESPACES)[
+            0
+        ]
+        passage_elem.append(etree.fromstring(passage.xml))
         content = etree.tostring(root, encoding="utf-8")
         return HttpResponse(content, content_type="text/xml")
 
@@ -524,33 +585,6 @@ class CTSApiGetVersionView(LibraryConditionMixin, View):
                 f'This endpoint only supports URNs at the version or exemplar level [urn="{cts_obj.urn}"]'
             )
         return cts_obj
-
-    def get(self, request, **kwargs):
-        try:
-            version = self.get_version()
-        except cts.InvalidURN as e:
-            return HttpResponse(
-                json.dumps({"reason": str(e)}),
-                status=404,
-                content_type="application/json",
-            )
-
-        root = deepcopy(get_cts_xml_api_wrapper())
-        root.xpath("//ti:requestUrn", namespaces=XPATH_NAMESPACES)[0].text = str(
-            version.urn
-        )
-        root.xpath("//ti:reply/ti:urn", namespaces=XPATH_NAMESPACES)[0].text = str(
-            version.urn
-        )
-        passage_elem = root.xpath("//ti:reply/ti:passage", namespaces=XPATH_NAMESPACES)[
-            0
-        ]
-        capitains_resolver = cts.capitains.default_resolver()
-        textual_node = capitains_resolver.getTextualNode(version.urn)
-        passage_elem.append(textual_node.xml)
-        # TODO: Serve from resolver versus a wrapper around the filesystem?
-        content = etree.tostring(root, encoding="utf-8")
-        return HttpResponse(content, content_type="text/xml")
 
 
 class CorporaReposView(View):
