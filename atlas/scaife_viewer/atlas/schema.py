@@ -366,6 +366,7 @@ class VersionNode(AbstractTextPartNode):
     lang = String()
     human_lang = String()
     kind = String()
+    display_mode_hints = generic.GenericScalar()
 
     @classmethod
     def get_queryset(cls, queryset, info):
@@ -413,6 +414,43 @@ class VersionNode(AbstractTextPartNode):
             }
         )
         return camelize(metadata)
+
+    # TODO: These are pretty strongly tied to the constants defined in
+    # scaife-viewer/frontend:
+    # https://github.com/scaife-viewer/frontend/blob/355522a29b2e3013ee217b590205f778203d72eb/packages/store/src/constants.js#L38
+    def resolve_display_mode_hints(obj, *args, **kwargs):
+        # TODO: Memoize these lookups; for now, we'll rely on the frontend to cache
+        # the displayModeHints queries
+        has_token_annotations = TokenAnnotation.objects.filter(
+            token__text_part__urn__startswith=obj.urn
+        ).exists()
+        data = {
+            "default": True,
+            "syntax-trees": TextAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            )
+            .filter(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
+            .exists(),
+            "interlinear": has_token_annotations,
+            "metrical": MetricalAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            ).exists(),
+            "dictionary-entries": has_token_annotations
+            or Citation.objects.filter(text_parts__urn__startswith=obj.urn).exists(),
+            "commentaries": TextAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            )
+            .filter(kind=constants.TEXT_ANNOTATION_KIND_SCHOLIA)
+            .exists(),
+            "named-entities": NamedEntity.objects.filter(
+                tokens__text_part__urn__startswith=obj.urn
+            ).exists(),
+            "folio": ImageAnnotation.objects.filter(
+                roi__text_parts__urn__startswith=obj.urn
+            ).exists(),
+            "alignments": obj.text_alignments.exists(),
+        }
+        return camelize(data)
 
 
 class TextPartNode(AbstractTextPartNode):
