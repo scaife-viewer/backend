@@ -766,3 +766,59 @@ class Citation(models.Model):
     text_parts = SortedManyToManyField(
         "scaife_viewer_atlas.Node", related_name="sense_citations"
     )
+
+
+# Grammar
+# Grammatical Entry
+# Sense
+# Citation
+# https://dariah-eric.github.io/lexicalresources/pages/TEILex0/TEILex0.html#entries
+# http://www.perseus.tufts.edu/hopper/text?doc=Perseus%3Atext%3A1999.04.0007%3Apart%3D4%3Achapter%3D60%3Asection%3D198
+# https://dariah-eric.github.io/lexicalresources/pages/TEILex0/TEILex0.html#entries
+
+# Grammar seems to have hybrid modeling to commentary, dictionary entry, and named entity
+# It would seem we want to be able to browse entries which have smarter "senses",
+# but the structure and markup isn't quite there yet to be parsed by `Sense` and `Citation`
+# instances; suggest using XSLT like we have done with things like LSJ.
+
+# Suggest starting with ingesting each entry as a text annotation, similar to commentary
+# Model the additional token annotations as occurrences (similar to named entities)
+# And then query based on the occurrences
+# TEXT_ANNOTATION_KIND_GRAMMAR
+
+# TODO: Generic collection / set model
+class GrammaticalEntryCollection(models.Model):
+    """
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+    # TODO: Move out to attributions model
+    data = JSONField(default=dict, blank=True)
+
+    urn = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:grammatical_entry_collection.atlas_v1",
+    )
+
+
+# TODO: Refactor with a common pattern
+class GrammaticalEntry(models.Model):
+    label = models.CharField(blank=True, null=True, max_length=255)
+    data = JSONField(default=dict, blank=True)
+
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(max_length=255, unique=True)
+
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.GrammaticalEntryCollection",
+        related_name="entries",
+        on_delete=models.CASCADE,
+    )
+
+    tokens = models.ManyToManyField(
+        "scaife_viewer_atlas.Token", related_name="grammatical_entries"
+    )
+
+    def __str__(self):
+        return f"{self.urn} :: {self.label}"
