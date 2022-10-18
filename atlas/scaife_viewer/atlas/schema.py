@@ -428,6 +428,9 @@ class VersionNode(AbstractTextPartNode):
         ).exists()
         data = {
             "default": True,
+            "grammatical-entries": GrammaticalEntry.objects.filter(
+                tokens__text_part__urn__startswith=obj.urn
+            ).exists(),
             "syntax-trees": TextAnnotation.objects.filter(
                 text_parts__urn__startswith=obj.urn
             )
