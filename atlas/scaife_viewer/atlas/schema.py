@@ -28,6 +28,8 @@ from .models import (
     Citation,
     Dictionary,
     DictionaryEntry,
+    GrammaticalEntry,
+    GrammaticalEntryCollection,
     ImageAnnotation,
     MetricalAnnotation,
     NamedEntity,
@@ -1316,6 +1318,54 @@ class CitationNode(DjangoObjectType):
         filterset_class = CitationFilterSet
 
 
+class GrammaticalEntryCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = GrammaticalEntryCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            entries__tokens__text_part__in=textparts_queryset
+        ).distinct()
+
+
+class GrammaticalEntryCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = GrammaticalEntryCollection
+        interfaces = (relay.Node,)
+        filterset_class = GrammaticalEntryCollectionFilterSet
+
+
+class GrammaticalEntryFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = GrammaticalEntry
+        fields = ["urn", "collection__urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(tokens__text_part__in=textparts_queryset).distinct()
+
+
+class GrammaticalEntryNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = GrammaticalEntry
+        interfaces = (relay.Node,)
+        filterset_class = GrammaticalEntryFilterSet
+
+
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
     text_groups = LimitedConnectionField(TextGroupNode)
@@ -1402,6 +1452,14 @@ class Query(ObjectType):
 
     citation = relay.Node.Field(CitationNode)
     citations = LimitedConnectionField(CitationNode)
+
+    grammatical_entry_collection = relay.Node.Field(GrammaticalEntryCollectionNode)
+    grammatical_entry_collections = LimitedConnectionField(
+        GrammaticalEntryCollectionNode
+    )
+
+    grammatical_entry = relay.Node.Field(GrammaticalEntryNode)
+    grammatical_entries = LimitedConnectionField(GrammaticalEntryNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
