@@ -40,6 +40,7 @@ setup(
         "rdflib==4.2.2",
         "regex>=2020.11.13",
         "requests==2.22.0",
+        "ruamel.yaml==0.17.21",
         "wrapt==1.11.1",
     ],
     tests_require=tests_require,
