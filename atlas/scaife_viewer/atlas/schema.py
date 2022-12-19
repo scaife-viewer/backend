@@ -517,6 +517,10 @@ class TextPartByLemmaNode(DjangoObjectType):
 
 class PassageTextPartNode(DjangoObjectType):
     label = String()
+    metadata = generic.GenericScalar()
+
+    def resolve_metadata(obj, *args, **kwargs):
+        return camelize(obj.metadata)
 
     class Meta:
         model = TextPart
