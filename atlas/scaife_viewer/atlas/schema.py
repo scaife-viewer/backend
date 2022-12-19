@@ -426,8 +426,11 @@ class VersionNode(AbstractTextPartNode):
         has_token_annotations = TokenAnnotation.objects.filter(
             token__text_part__urn__startswith=obj.urn
         ).exists()
+        fallback_mode = obj.metadata.get("fallback_display_mode", False)
+        default_mode = not fallback_mode
         data = {
-            "default": True,
+            "default": default_mode,
+            "fallback": fallback_mode,
             "grammatical-entries": GrammaticalEntry.objects.filter(
                 tokens__text_part__urn__startswith=obj.urn
             ).exists(),
