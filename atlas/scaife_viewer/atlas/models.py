@@ -293,6 +293,7 @@ class ImageROI(models.Model):
     text_annotations = SortedManyToManyField(
         "scaife_viewer_atlas.TextAnnotation", related_name="roi"
     )
+    tokens = models.ManyToManyField("scaife_viewer_atlas.Token", related_name="roi")
 
 
 class AudioAnnotation(models.Model):
