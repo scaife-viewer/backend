@@ -784,7 +784,12 @@ class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.Filt
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        return queryset.filter(text_parts__in=textparts_queryset).distinct()
+        # TODO: Determine if there is anything we can configure at a framework level to help
+        # force the use of the db indexes here
+        # return queryset.filter(text_parts__in=textparts_queryset)
+        return queryset.filter(
+            pk__in=TextAnnotation.objects.filter(text_parts__in=textparts_queryset)
+        )
 
 
 class AbstractTextAnnotationNode(DjangoObjectType):
