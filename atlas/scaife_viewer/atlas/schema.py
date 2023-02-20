@@ -760,10 +760,14 @@ class TextAnnotationCollectionFilterSet(
         fields = ["urn"]
 
     def reference_filter(self, queryset, name, value):
+        # TODO: Determine if there is anything we can configure at a framework level to help
+        # force the use of the db indexes here
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         return queryset.filter(
-            annotations__text_parts__in=textparts_queryset
-        ).distinct()
+            pk__in=TextAnnotationCollection.objects.filter(
+                annotations__text_parts__in=textparts_queryset
+            )
+        )
 
 
 class TextAnnotationCollectionNode(DjangoObjectType):
