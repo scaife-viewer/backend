@@ -12,4 +12,4 @@ content should be re-ingested due to BI schema changes, e.g.:
 * Leveraging the `prepare_atlas_db` management command
 * Comparing a site-level setting to the current VERSION constant
 """
-VERSION = base64.b64encode(b"2022-02-17-001\n").decode()
+VERSION = base64.b64encode(b"2022-02-22-001\n").decode()

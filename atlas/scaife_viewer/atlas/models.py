@@ -275,6 +275,9 @@ class ImageAnnotation(models.Model):
 
 
 class ImageROI(models.Model):
+    # TODO: Determine if this needs a URN and what to do in additional datasets
+    urn = models.CharField(max_length=255, blank=True, null=True)
+
     data = JSONField(default=dict, blank=True)
 
     # @@@ denormed from data; could go away when Django's SQLite backend has proper
