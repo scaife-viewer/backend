@@ -94,6 +94,9 @@ class TextAnnotationCollection(models.Model):
         help_text="urn:cite2:<site>:text_annotation_collection.atlas_v1",
     )
 
+    def __str__(self):
+        return f'[urn="{self.urn} label="{self.label}]'
+
 
 class TextAnnotation(models.Model):
     kind = models.CharField(
