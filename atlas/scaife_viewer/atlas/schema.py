@@ -31,6 +31,7 @@ from .models import (
     GrammaticalEntry,
     GrammaticalEntryCollection,
     ImageAnnotation,
+    ImageROI,
     MetricalAnnotation,
     NamedEntity,
     NamedEntityCollection,
@@ -872,6 +873,19 @@ class ImageAnnotationNode(DjangoObjectType):
         model = ImageAnnotation
         interfaces = (relay.Node,)
         filterset_class = ImageAnnotationFilterSet
+
+
+class ImageROINode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = ImageROI
+        fields = [
+            "coordinates_value",
+            "image_identifier",
+            "text_parts",
+            "text_annotations",
+        ]
 
 
 class AudioAnnotationNode(DjangoObjectType):
