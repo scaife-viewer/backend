@@ -102,22 +102,29 @@ def apply_token_annotations(reset=True):
 
         # TODO: Standardize use of `values` for ATLAS files
         values = collection.get("values")
-        if not values or not values.endswith("csv"):
+        if not values:
+            # TODO: Deprecate / document "in-yaml" values
             continue
-
-        values_path = Path(path, values)
-        lookup, refs = extract_lookup_and_refs(values_path)
-        # TODO: Move this to metadata and or values
-        version = resolve_version(values_path)
+        # TODO: Deprecate single value values; think of
+        # metadata collections here and explict is better
+        # than implicit
+        if not isinstance(values, list):
+            values = [values]
 
         # TODO: Set attribution information
         metadata = collection.pop("metadata", {})
         collection_obj = TokenAnnotationCollection.objects.create(
             urn=collection["urn"], label=collection["label"], metadata=metadata
         )
-        annotations_count = create_token_annotations(
-            collection_obj, version, lookup, refs
-        )
-        print(
-            f'Created token annotations [version="{version.urn}" count={annotations_count}]'
-        )
+        print(f'Created token annotation collection [urn="{collection_obj.urn}"]')
+        for value_file in values:
+            values_path = Path(path, value_file)
+            lookup, refs = extract_lookup_and_refs(values_path)
+            # TODO: Move this to metadata and or values
+            version = resolve_version(values_path)
+            annotations_count = create_token_annotations(
+                collection_obj, version, lookup, refs
+            )
+            print(
+                f'Created token annotations [version="{version.urn}" count={annotations_count}]'
+            )
