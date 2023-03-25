@@ -427,8 +427,11 @@ class VersionNode(AbstractTextPartNode):
         has_token_annotations = TokenAnnotation.objects.filter(
             token__text_part__urn__startswith=obj.urn
         ).exists()
+        fallback_mode = obj.metadata.get("fallback_display_mode", False)
+        default_mode = not fallback_mode
         data = {
-            "default": True,
+            "default": default_mode,
+            "fallback": fallback_mode,
             "grammatical-entries": GrammaticalEntry.objects.filter(
                 tokens__text_part__urn__startswith=obj.urn
             ).exists(),
@@ -515,6 +518,10 @@ class TextPartByLemmaNode(DjangoObjectType):
 
 class PassageTextPartNode(DjangoObjectType):
     label = String()
+    metadata = generic.GenericScalar()
+
+    def resolve_metadata(obj, *args, **kwargs):
+        return camelize(obj.metadata)
 
     class Meta:
         model = TextPart
@@ -760,10 +767,14 @@ class TextAnnotationCollectionFilterSet(
         fields = ["urn"]
 
     def reference_filter(self, queryset, name, value):
+        # TODO: Determine if there is anything we can configure at a framework level to help
+        # force the use of the db indexes here
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         return queryset.filter(
-            annotations__text_parts__in=textparts_queryset
-        ).distinct()
+            pk__in=TextAnnotationCollection.objects.filter(
+                annotations__text_parts__in=textparts_queryset
+            )
+        )
 
 
 class TextAnnotationCollectionNode(DjangoObjectType):
@@ -784,7 +795,12 @@ class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.Filt
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        return queryset.filter(text_parts__in=textparts_queryset).distinct()
+        # TODO: Determine if there is anything we can configure at a framework level to help
+        # force the use of the db indexes here
+        # return queryset.filter(text_parts__in=textparts_queryset)
+        return queryset.filter(
+            pk__in=TextAnnotation.objects.filter(text_parts__in=textparts_queryset)
+        )
 
 
 class AbstractTextAnnotationNode(DjangoObjectType):
