@@ -6,8 +6,7 @@ from pathlib import Path
 import jsonlines
 from tqdm import tqdm
 
-from scaife_viewer.atlas.conf import settings
-
+from ..hooks import hookset
 from ..language_utils import normalize_and_strip_marks, normalized_no_digits
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
 from ..utils import chunked_bulk_create
@@ -21,19 +20,7 @@ PATH_SET = set()
 CitationThroughModel = Citation.text_parts.through
 RESOLVE_CITATIONS_AS_TEXT_PARTS = True
 
-ANNOTATIONS_DATA_PATH = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries")
-
 logger = logging.getLogger(__name__)
-
-
-# TODO: Customize this using a hookset, like
-# we have for other annotation formats
-def get_paths(path):
-    if not path.exists():
-        return []
-    for path in ANNOTATIONS_DATA_PATH.iterdir():
-        if path.suffix == ".json" or path.is_dir():
-            yield path
 
 
 def _prepare_citation_objs(lookup_dict, citations):
@@ -314,7 +301,6 @@ def import_dictionaries(reset=False):
     if reset:
         Dictionary.objects.all().delete()
 
-    dictionary_paths = get_paths(ANNOTATIONS_DATA_PATH)
-
+    dictionary_paths = hookset.get_dictionary_annotation_paths()
     for path in dictionary_paths:
         _process_dictionary_path(path)

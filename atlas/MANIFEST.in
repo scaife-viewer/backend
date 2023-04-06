@@ -1,3 +1,4 @@
 include LICENSE
 recursive-include scaife_viewer/atlas/static *
 recursive-include scaife_viewer/atlas/templates *
+recursive-include scaife_viewer/atlas/backports/scaife_viewer/search/fixtures *

@@ -10,6 +10,10 @@ from scaife_viewer.atlas.conf import settings
 from .constants import CTS_URN_DEPTHS
 
 
+CREATE_BATCH_SIZE = 500
+QUERY_BATCH_SIZE = 2000
+
+
 class BaseSiblingChunker:
     def __init__(self, queryset, start_idx, chunk_length, queryset_values=None):
         if queryset_values is None:
@@ -187,16 +191,43 @@ def lazy_iterable(iterable):
         yield item
 
 
-def chunked_bulk_create(model, iterable, total=None, batch_size=500):
+def get_total_from_iterable(iterable):
+    try:
+        return len(iterable)
+    except TypeError:
+        # NOTE: If iterable lacks __len__, short-circuit the progress bar display
+        return None
+
+
+def slice_large_list(iterable, total=None, batch_size=QUERY_BATCH_SIZE):
+    """
+    Used to ensure we don't hit the database backend's MAX_VARIABLE_NUMBER
+    limit on a large IN query.
+
+    e.g. .importers.metadata_collections._bulk_prepare_metadata_through_objects
+
+    See https://docs.djangoproject.com/en/4.1/ref/models/querysets/#iterator.
+    for additional context.
+    """
+    if total is None:
+        total = get_total_from_iterable(iterable)
+
+    generator = lazy_iterable(iterable)
+    with tqdm(total=total) as pbar:
+        while True:
+            subset = list(islice(generator, batch_size))
+            if not subset:
+                break
+            pbar.update(len(subset))
+            yield subset
+
+
+def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZE):
     """
     Use islice to lazily pass subsets of the iterable for bulk creation
     """
     if total is None:
-        try:
-            total = len(iterable)
-        except TypeError:
-            # NOTE: If iterable lacks __len__, short-circuit the progress bar display
-            total = None
+        total = get_total_from_iterable(iterable)
 
     generator = lazy_iterable(iterable)
     with tqdm(total=total) as pbar:
@@ -206,3 +237,14 @@ def chunked_bulk_create(model, iterable, total=None, batch_size=500):
                 break
             created = len(model.objects.bulk_create(subset, batch_size=batch_size))
             pbar.update(created)
+
+
+def get_paths_matching_suffixes(path, suffixes=None):
+    if suffixes is None:
+        suffixes = [
+            ".json",
+            ".jsonl",
+        ]
+    if not path.exists():
+        return []
+    return [p for p in path.rglob("*") if p.suffix in suffixes]
