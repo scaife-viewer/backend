@@ -1,42 +1,52 @@
 import concurrent.futures
 import csv
+import logging
 import sqlite3
 import sys
 import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-# FIXME: Currently required due to how macOS spawns ProcessPool workers
-import django; django.setup();
-
-from django import db
-from django.conf import settings
-from django.utils.text import slugify
+import django
 
 import pandas
-
-from scaife_viewer.atlas.models import Node, Token
-
-from .utils import get_lowest_citable_nodes
+import tqdm
 
 
-# TODO: Prefer logger
+# NOTE: django.setup() is invoked due to how macOS spawns the ProcessPool workers;
+# as a result, the usual django imports are done slightly differently in this file.
+django.setup()
+
+
+logger = logging.getLogger(__name__)
+
+
+def _get_lowest_citable_nodes(urn):
+    # NOTE: This is done to wrap get_lowest_citable_nodes;
+    # due to the use of django.setup() above, this would otherwise cause a
+    # circular import error.
+    from .utils import get_lowest_citable_nodes  # noqa:
+
+    return get_lowest_citable_nodes(urn)
 
 
 def prepare_tokens(version_exemplar_urn):
+    Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
+    Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
+
     # TODO: Consider supporting the `reset` kwarg
-    print("Querying...")
+    logger.info("Querying...")
     version_exemplar = Node.objects.get(urn=version_exemplar_urn)
-    text_parts = get_lowest_citable_nodes(version_exemplar)
+    text_parts = _get_lowest_citable_nodes(version_exemplar)
     counters = {"token_idx": 0}
     to_create = []
-    print("Tokenizing...")
+    logger.info("Tokenizing...")
     # TODO: Prefer a context manager for timing
     start = time.time()
     for text_part in text_parts:
         to_create.extend(Token.tokenize(text_part, counters, as_dict=True))
     end = time.time()
-    print(f"Tokenized {len(to_create)} tokens in {end - start} seconds")
+    logger.info(f"Tokenized {len(to_create)} tokens in {end - start} seconds")
     return to_create
 
 
@@ -44,9 +54,9 @@ def write_to_csv(dirpath, urn, token_instances, fields=None):
     if fields is None:
         fields = token_instances[0].keys()
 
-    print("Preparing CSV...")
+    logger.info("Preparing CSV...")
     start = time.time()
-    path = Path(dirpath, f"{slugify(urn)}.csv")
+    path = Path(dirpath, f"{django.utils.text.slugify(urn)}.csv")
     # TODO: Consider refactoring via SpooledTemporaryFile
     with open(path, "w") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
@@ -54,18 +64,18 @@ def write_to_csv(dirpath, urn, token_instances, fields=None):
         for token in token_instances:
             writer.writerow(token)
     end = time.time()
-    print(f"Prepared [elapsed={end-start}]")
+    logger.info(f"Prepared [elapsed={end-start}]")
     return path
 
 
 def insert_from_csv(path):
-    print("Inserting...")
+    logger.info("Inserting...")
     start = time.time()
     table_name = "scaife_viewer_atlas_token"
-    conn = sqlite3.connect(settings.DATABASES["default"]["NAME"])
+    conn = sqlite3.connect(django.conf.settings.DATABASES["default"]["NAME"])
     pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
     end = time.time()
-    print(f"Inserted tokens [elapsed={end-start}]", file=sys.stderr)
+    logger.info(f"Inserted tokens [elapsed={end-start}]", file=sys.stderr)
 
 
 def tokenize_text_parts(dirpath, node_urn, force=False):
@@ -77,11 +87,14 @@ def tokenize_text_parts(dirpath, node_urn, force=False):
 
 
 def process_csvs(paths):
-    for path in paths:
+    for path in tqdm.tqdm(paths):
         insert_from_csv(path)
 
 
 def tokenize_all_text_parts_parallel(reset=False):
+    Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
+    Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
+
     if reset:
         Token.objects.all()._raw_delete("default")
 
@@ -92,7 +105,7 @@ def tokenize_all_text_parts_parallel(reset=False):
     tempdir = TemporaryDirectory()
     dirpath = Path(tempdir.name)
     with concurrent.futures.ProcessPoolExecutor(
-        max_workers=settings.SV_ATLAS_INGESTION_CONCURRENCY
+        max_workers=django.conf.settings.SV_ATLAS_INGESTION_CONCURRENCY
     ) as executor:
         node_urns = list(
             Node.objects.filter(kind__in=["version", "exemplar"]).values_list(
@@ -100,23 +113,25 @@ def tokenize_all_text_parts_parallel(reset=False):
             )
         )
         # NOTE: avoids locking protocol errors from SQLite
-        db.connections.close_all()
+        django.db.connections.close_all()
         urn_futures = {
             executor.submit(tokenize_text_parts, dirpath, urn, force=reset): urn
             for urn in node_urns
         }
-        for f in concurrent.futures.as_completed(urn_futures):
+        for f in tqdm.tqdm(
+            concurrent.futures.as_completed(urn_futures), total=len(node_urns)
+        ):
             urn = urn_futures[f]
             try:
                 paths_to_ingest.append(f.result())
             except Exception as exc:
                 exceptions.append(exc)
-                print("{} generated an exception: {}".format(urn, exc))
+                logger.info("{} generated an exception: {}".format(urn, exc))
     if exceptions:
         raise exceptions[0]
 
     process_csvs(paths_to_ingest)
     end = time.time()
-    print(f"Elapsed: {end-start}")
+    logger.info(f"Elapsed: {end-start}")
     # TODO: call `cleanup` on failure too
     tempdir.cleanup()

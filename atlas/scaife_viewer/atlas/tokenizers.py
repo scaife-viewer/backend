@@ -33,7 +33,7 @@ def tokenize_all_text_parts(reset=False):
     token_callable = tokenize_all_text_parts_serial
     # TODO: We may want to make pandas an explicit dependency of ATLAS
     try:
-        print("Loading parallel tokenizer")
+        print("Using parallel tokenizer via pandas.read_csv")
         from .parallel_tokenizers import (
             tokenize_all_text_parts_parallel as token_callable,
         )
