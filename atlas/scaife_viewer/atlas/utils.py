@@ -11,6 +11,7 @@ from .constants import CTS_URN_DEPTHS
 
 
 CREATE_BATCH_SIZE = 500
+QUERY_BATCH_SIZE = 2000
 
 
 class BaseSiblingChunker:
@@ -196,6 +197,29 @@ def get_total_from_iterable(iterable):
     except TypeError:
         # NOTE: If iterable lacks __len__, short-circuit the progress bar display
         return None
+
+
+def slice_large_list(iterable, total=None, batch_size=QUERY_BATCH_SIZE):
+    """
+    Used to ensure we don't hit the database backend's MAX_VARIABLE_NUMBER
+    limit on a large IN query.
+
+    e.g. .importers.metadata_collections._bulk_prepare_metadata_through_objects
+
+    See https://docs.djangoproject.com/en/4.1/ref/models/querysets/#iterator.
+    for additional context.
+    """
+    if total is None:
+        total = get_total_from_iterable(iterable)
+
+    generator = lazy_iterable(iterable)
+    with tqdm(total=total) as pbar:
+        while True:
+            subset = list(islice(generator, batch_size))
+            if not subset:
+                break
+            pbar.update(len(subset))
+            yield subset
 
 
 def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZE):

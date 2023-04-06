@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from ..hooks import hookset
 from ..models import Metadata, Node
-from ..utils import chunked_bulk_create
+from ..utils import chunked_bulk_create, slice_large_list
 
 
 MetadataThroughModel = Metadata.cts_relations.through
@@ -28,10 +28,13 @@ def _bulk_prepare_metadata_through_objects(qs, through_lookup):
     urn_id_values = qs.values_list("urn", "id")
 
     logger.info("Building URN to Node pk lookup")
-    node_urn_pk_values = Node.objects.filter(urn__in=urns).values_list("urn", "pk")
     node_lookup = {}
-    for urn, pk in node_urn_pk_values:
-        node_lookup[urn] = pk
+    for slice in slice_large_list(urns):
+        node_urn_pk_values = (
+            Node.objects.filter(urn__in=slice).values_list("urn", "pk").iterator()
+        )
+        for urn, pk in node_urn_pk_values:
+            node_lookup[urn] = pk
 
     logger.info("Preparing through objects for insert")
     to_create = []
