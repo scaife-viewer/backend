@@ -6,12 +6,12 @@ import jsonlines
 
 from scaife_viewer.atlas.conf import settings
 
-from ..models import (
+# FIXME: Hooksets
+from ..constants import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
-    Node,
-    TextAnnotation,
 )
+from ..models import Node, TextAnnotation
 from ..utils import chunked_bulk_create
 
 
@@ -110,6 +110,7 @@ def import_text_annotations(reset=False):
     to_create = []
     counters = dict(idx=0)
 
+    # FIXME: hooksets
     scholia_annotation_paths = get_paths(ANNOTATIONS_DATA_PATH)
     for path in scholia_annotation_paths:
         to_create.extend(
