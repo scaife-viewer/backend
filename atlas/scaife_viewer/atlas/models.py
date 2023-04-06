@@ -825,6 +825,8 @@ class GrammaticalEntry(models.Model):
 
     def __str__(self):
         return f"{self.urn} :: {self.label}"
+
+
 # TODO: Determine how strict we want to be on object vs value; need object type for entry.texts
 
 
