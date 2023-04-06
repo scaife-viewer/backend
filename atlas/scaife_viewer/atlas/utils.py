@@ -10,6 +10,9 @@ from scaife_viewer.atlas.conf import settings
 from .constants import CTS_URN_DEPTHS
 
 
+CREATE_BATCH_SIZE = 500
+
+
 class BaseSiblingChunker:
     def __init__(self, queryset, start_idx, chunk_length, queryset_values=None):
         if queryset_values is None:
@@ -187,16 +190,20 @@ def lazy_iterable(iterable):
         yield item
 
 
-def chunked_bulk_create(model, iterable, total=None, batch_size=500):
+def get_total_from_iterable(iterable):
+    try:
+        return len(iterable)
+    except TypeError:
+        # NOTE: If iterable lacks __len__, short-circuit the progress bar display
+        return None
+
+
+def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZE):
     """
     Use islice to lazily pass subsets of the iterable for bulk creation
     """
     if total is None:
-        try:
-            total = len(iterable)
-        except TypeError:
-            # NOTE: If iterable lacks __len__, short-circuit the progress bar display
-            total = None
+        total = get_total_from_iterable(iterable)
 
     generator = lazy_iterable(iterable)
     with tqdm(total=total) as pbar:
