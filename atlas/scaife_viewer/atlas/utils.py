@@ -206,3 +206,14 @@ def chunked_bulk_create(model, iterable, total=None, batch_size=500):
                 break
             created = len(model.objects.bulk_create(subset, batch_size=batch_size))
             pbar.update(created)
+
+
+def get_paths_matching_suffixes(path, suffixes=None):
+    if suffixes is None:
+        suffixes = [
+            ".json",
+            ".jsonl",
+        ]
+    if not path.exists():
+        return []
+    return [p for p in path.rglob("*") if p.suffix in suffixes]

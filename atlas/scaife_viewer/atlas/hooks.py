@@ -1,8 +1,10 @@
 import logging
 import os
+from pathlib import Path
 
 from . import constants
 from .resolvers.default import resolve_library
+from .utils import get_paths_matching_suffixes
 
 
 logger = logging.getLogger(__name__)
@@ -122,6 +124,18 @@ class DefaultHookSet:
         from .ingestion_pipeline import run_ingestion_pipeline
 
         return run_ingestion_pipeline(outf)
+
+    def get_text_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "text-annotations",)
+        return get_paths_matching_suffixes(path)
+
+    def get_syntax_tree_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "syntax-trees",)
+        return get_paths_matching_suffixes(path)
 
     def get_metadata_collection_annotation_paths(self):
         from .conf import settings  # noqa; avoids race condition
