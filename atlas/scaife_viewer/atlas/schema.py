@@ -655,8 +655,14 @@ class TextAlignmentMetadata(dict):
         # TODO: Formalize how prototype is enabled
         if self.alignment.metadata.get("enable_prototype"):
             return "regroupedRecords"
-        elif self.alignment.urn == "urn:cite2:scaife-viewer:alignment.v1:hafez-farsi-german-farsi-english-word-alignments-temp":
-            if self["passage"].version.urn == "urn:cts:farsiLit:hafez.divan.perseus-far1-hemis:":
+        elif (
+            self.alignment.urn
+            == "urn:cite2:scaife-viewer:alignment.v1:hafez-farsi-german-farsi-english-word-alignments-temp"
+        ):
+            if (
+                self["passage"].version.urn
+                == "urn:cts:farsiLit:hafez.divan.perseus-far1-hemis:"
+            ):
                 return "regroupedRecords"
         if self.alignment.urn.count("word"):
             return "textParts"
@@ -673,6 +679,7 @@ class TextAlignmentMetadata(dict):
         for version in self.alignment.versions.all():
             data[version.urn] = version.metadata["lang"]
         return data
+
 
 class TextAlignmentMetadataNode(ObjectType):
     passage_references = generic.GenericScalar(
@@ -1017,14 +1024,16 @@ class TokenAnnotationByLemmaFilterSet(django_filters.FilterSet):
         # FIXME: This is a hack for demo only
         work = self.version.get_parent()
         textgroup = work.get_parent()
-        versions = textgroup.get_descendants().filter(depth=5).filter(urn__endswith=".perseus-grc2:")
+        versions = (
+            textgroup.get_descendants()
+            .filter(depth=5)
+            .filter(urn__endswith=".perseus-grc2:")
+        )
         queryset = queryset.filter(data__lemma=value)
         predicate = Q()
         for version in versions:
             nodes = get_lowest_citable_nodes(version)
-            predicate.add(
-                Q(token__text_part__in=nodes), Q.OR
-            )
+            predicate.add(Q(token__text_part__in=nodes), Q.OR)
         queryset = queryset.filter(predicate)
         return queryset
 
