@@ -1229,8 +1229,10 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
             # FIXME: Prefer explicit normalize_and_strip_marks argument
             # (Another BI change)
             value_normalized = normalize_and_strip_marks(value)
+            # TODO: Review this pattern and determine if it is too data-specific
+            # to LGO
             lemma_pattern = rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
-            return queryset.filter(headword_normalized__regex=lemma_pattern)
+            return queryset.filter(headword_normalized_stripped__regex=lemma_pattern)
         # TODO: Should we have an explicit ordering?
         value = normalized_no_digits(value)
         return queryset.filter(headword_normalized=value)
