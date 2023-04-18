@@ -79,6 +79,25 @@ class TextAlignmentRecordRelation(models.Model):
     )
 
 
+class TextAnnotationCollection(models.Model):
+    """
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+    # TODO: Move out to attributions model
+    data = JSONField(default=dict, blank=True)
+    # TODO: Do we denorm kind here?
+
+    urn = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:text_annotation_collection.atlas_v1",
+    )
+
+    def __str__(self):
+        return f'[urn="{self.urn} label="{self.label}]'
+
+
 class TextAnnotation(models.Model):
     kind = models.CharField(
         max_length=255,
@@ -93,6 +112,15 @@ class TextAnnotation(models.Model):
     )
 
     urn = models.CharField(max_length=255, blank=True, null=True)
+
+    # FIXME: Backwards compatibility with other text annotations
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.TextAnnotationCollection",
+        related_name="annotations",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+    )
 
     def resolve_references(self):
         if "references" not in self.data:
@@ -432,6 +460,38 @@ class Node(MP_Node):
         ).order_by("path")
 
 
+# TODO: Consider CITE obj syntax here
+# Also need to figure out if CITE declrations would be helpful
+# for GraphQL hints.  See comment below
+class TokenAnnotationCollection(models.Model):
+    # TODO: Review fields throughout
+    urn = models.CharField(max_length=255, unique=True)
+    label = models.CharField(max_length=255)
+
+    metadata = JSONField(default=dict, blank=True, null=True)
+
+
+class TokenAnnotation(models.Model):
+    token = models.ForeignKey(
+        "scaife_viewer_atlas.Token",
+        related_name="annotations",
+        on_delete=models.CASCADE,
+    )
+    data = JSONField(default=dict, blank=True, null=True)
+
+    # TODO: Determine if this needs to be CITEable / addressable
+    # Also determine if we need more of an EAV approach for addressable
+    # fields like lemma, etc, or if we do this in the GraphQL schema
+    # idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    # urn = models.CharField(max_length=255, unique=True)
+
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.TokenAnnotationCollection",
+        related_name="annotations",
+        on_delete=models.CASCADE,
+    )
+
+
 class Token(models.Model):
     text_part = models.ForeignKey(
         "Node", related_name="tokens", on_delete=models.CASCADE
@@ -454,18 +514,6 @@ class Token(models.Model):
         null=True,
         help_text="the value for the CTS subreference targeting a particular token",
     )
-    lemma = models.CharField(
-        max_length=255, blank=True, null=True, help_text="the lemma for the token value"
-    )
-    gloss = models.CharField(
-        max_length=255, blank=True, null=True, help_text="the interlinear gloss"
-    )
-    part_of_speech = models.CharField(max_length=255, blank=True, null=True)
-    tag = models.CharField(
-        max_length=255, blank=True, null=True, help_text="part-of-speech tag"
-    )
-    case = models.CharField(max_length=255, blank=True, null=True)
-    mood = models.CharField(max_length=255, blank=True, null=True)
 
     position = models.IntegerField()
     idx = models.IntegerField(help_text="0-based index")
@@ -482,7 +530,7 @@ class Token(models.Model):
         return re.sub(r"[^\w]", "", value)
 
     @classmethod
-    def tokenize(cls, text_part_node, counters):
+    def tokenize(cls, text_part_node, counters, as_dict=False):
         # @@@ compare with passage-based tokenization on
         # scaife-viewer/scaife-viewer.  See discussion on
         # https://github.com/scaife-viewer/scaife-viewer/issues/162
@@ -505,22 +553,42 @@ class Token(models.Model):
             subref_value = f"{w}[{subref_idx}]"
 
             position = pos + 1
-            to_create.append(
-                cls(
-                    text_part=text_part_node,
-                    value=piece,
-                    word_value=w,
-                    position=position,
-                    ve_ref=f"{text_part_node.ref}.t{position}",
-                    idx=counters["token_idx"],
-                    subref_value=subref_value,
-                )
+            # TODO: Further decouple `as_dict` so we could
+            # for example append to a file buffer using CSV
+            data = dict(
+                text_part_id=text_part_node.pk,
+                value=piece,
+                word_value=w,
+                position=position,
+                ve_ref=f"{text_part_node.ref}.t{position}",
+                idx=counters["token_idx"],
+                subref_value=subref_value,
             )
+            if as_dict:
+                to_create.append(data)
+            else:
+                to_create.append(cls(**data))
             counters["token_idx"] += 1
         return to_create
 
     def __str__(self):
         return f"{self.text_part.urn} :: {self.value}"
+
+
+# TODO: Generic collection / set model
+class NamedEntityCollection(models.Model):
+    """
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+    # TODO: Move out to attributions model
+    data = JSONField(default=dict, blank=True)
+
+    urn = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:named_entity_collection.atlas_v1",
+    )
 
 
 class NamedEntity(models.Model):
@@ -532,6 +600,12 @@ class NamedEntity(models.Model):
 
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
     urn = models.CharField(max_length=255, unique=True)
+
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.NamedEntityCollection",
+        related_name="entities",
+        on_delete=models.CASCADE,
+    )
 
     # @@@ we may also want structure these references using URNs
     tokens = models.ManyToManyField(
@@ -629,8 +703,14 @@ class AttributionRecord(models.Model):
 
 
 class DictionaryEntry(models.Model):
-    headword = models.CharField(max_length=255)
-    headword_normalized = models.CharField(max_length=255, blank=True, null=True)
+    headword = models.CharField(max_length=255, db_index=True)
+    headword_normalized = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True
+    )
+    headword_normalized_stripped = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True
+    )
+
     data = JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index")
@@ -669,14 +749,82 @@ class Citation(models.Model):
     urn = models.CharField(
         max_length=255, unique=True, help_text="urn:cite2:<site>:citations.atlas_v1"
     )
+    entry = models.ForeignKey(
+        "scaife_viewer_atlas.DictionaryEntry",
+        blank=True,
+        null=True,
+        related_name="citations",
+        on_delete=models.CASCADE,
+    )
     sense = models.ForeignKey(
-        "scaife_viewer_atlas.Sense", related_name="citations", on_delete=models.CASCADE,
+        "scaife_viewer_atlas.Sense",
+        blank=True,
+        null=True,
+        related_name="citations",
+        on_delete=models.CASCADE,
     )
     data = JSONField(default=dict, blank=True)
     # TODO: There may be additional optimizations we can do on the text part / citation relation
+    # TODO: Higher-order URNs?
     text_parts = SortedManyToManyField(
         "scaife_viewer_atlas.Node", related_name="sense_citations"
     )
+
+
+# Grammar
+# Grammatical Entry
+# Sense
+# Citation
+# https://dariah-eric.github.io/lexicalresources/pages/TEILex0/TEILex0.html#entries
+# http://www.perseus.tufts.edu/hopper/text?doc=Perseus%3Atext%3A1999.04.0007%3Apart%3D4%3Achapter%3D60%3Asection%3D198
+# https://dariah-eric.github.io/lexicalresources/pages/TEILex0/TEILex0.html#entries
+
+# Grammar seems to have hybrid modeling to commentary, dictionary entry, and named entity
+# It would seem we want to be able to browse entries which have smarter "senses",
+# but the structure and markup isn't quite there yet to be parsed by `Sense` and `Citation`
+# instances; suggest using XSLT like we have done with things like LSJ.
+
+# Suggest starting with ingesting each entry as a text annotation, similar to commentary
+# Model the additional token annotations as occurrences (similar to named entities)
+# And then query based on the occurrences
+# TEXT_ANNOTATION_KIND_GRAMMAR
+
+# TODO: Generic collection / set model
+class GrammaticalEntryCollection(models.Model):
+    """
+    """
+
+    label = models.CharField(blank=True, null=True, max_length=255)
+    # TODO: Move out to attributions model
+    data = JSONField(default=dict, blank=True)
+
+    urn = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:grammatical_entry_collection.atlas_v1",
+    )
+
+
+# TODO: Refactor with a common pattern
+class GrammaticalEntry(models.Model):
+    label = models.CharField(blank=True, null=True, max_length=255)
+    data = JSONField(default=dict, blank=True)
+
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(max_length=255, unique=True)
+
+    collection = models.ForeignKey(
+        "scaife_viewer_atlas.GrammaticalEntryCollection",
+        related_name="entries",
+        on_delete=models.CASCADE,
+    )
+
+    tokens = models.ManyToManyField(
+        "scaife_viewer_atlas.Token", related_name="grammatical_entries"
+    )
+
+    def __str__(self):
+        return f"{self.urn} :: {self.label}"
 
 
 # TODO: Determine how strict we want to be on object vs value; need object type for entry.texts

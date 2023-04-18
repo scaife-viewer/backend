@@ -1,6 +1,7 @@
 import os
 
 from django.db.models import Q
+from django.utils.functional import cached_property
 
 import django_filters
 from graphene import Boolean, Connection, Field, ObjectType, String, relay
@@ -14,7 +15,11 @@ from . import constants
 # @@@ ensure convert signal is registered
 from .compat import convert_jsonfield_to_string  # noqa
 from .hooks import hookset
-from .language_utils import normalize_string
+from .language_utils import (
+    icu_transliterator,
+    normalize_and_strip_marks,
+    normalized_no_digits,
+)
 
 # from .models import Node as TextPart
 from .models import (
@@ -23,10 +28,14 @@ from .models import (
     Citation,
     Dictionary,
     DictionaryEntry,
+    GrammaticalEntry,
+    GrammaticalEntryCollection,
     ImageAnnotation,
+    ImageROI,
     Metadata,
     MetricalAnnotation,
     NamedEntity,
+    NamedEntityCollection,
     Node,
     Repo,
     Sense,
@@ -34,7 +43,10 @@ from .models import (
     TextAlignmentRecord,
     TextAlignmentRecordRelation,
     TextAnnotation,
+    TextAnnotationCollection,
     Token,
+    TokenAnnotation,
+    TokenAnnotationCollection,
 )
 from .passage import (
     PassageMetadata,
@@ -44,6 +56,7 @@ from .passage import (
 from .utils import (
     extract_version_urn_and_ref,
     filter_via_ref_predicate,
+    get_lowest_citable_nodes,
     get_textparts_from_passage_reference,
 )
 
@@ -51,9 +64,6 @@ from .utils import (
 # TODO: Make these proper, documented configuration variables
 RESOLVE_CITATIONS_VIA_TEXT_PARTS = bool(
     int(os.environ.get("SV_ATLAS_RESOLVE_CITATIONS_VIA_TEXT_PARTS", 1))
-)
-RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS = bool(
-    int(os.environ.get("SV_ATLAS_RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS", 0))
 )
 
 # @@@ alias Node because relay.Node is quite different
@@ -360,6 +370,7 @@ class VersionNode(AbstractTextPartNode):
     lang = String()
     human_lang = String()
     kind = String()
+    display_mode_hints = generic.GenericScalar()
 
     @classmethod
     def get_queryset(cls, queryset, info):
@@ -408,13 +419,110 @@ class VersionNode(AbstractTextPartNode):
         )
         return camelize(metadata)
 
+    # TODO: These are pretty strongly tied to the constants defined in
+    # scaife-viewer/frontend:
+    # https://github.com/scaife-viewer/frontend/blob/355522a29b2e3013ee217b590205f778203d72eb/packages/store/src/constants.js#L38
+    def resolve_display_mode_hints(obj, *args, **kwargs):
+        # TODO: Memoize these lookups; for now, we'll rely on the frontend to cache
+        # the displayModeHints queries
+        has_token_annotations = TokenAnnotation.objects.filter(
+            token__text_part__urn__startswith=obj.urn
+        ).exists()
+        fallback_mode = obj.metadata.get("fallback_display_mode", False)
+        default_mode = not fallback_mode
+        data = {
+            "default": default_mode,
+            "fallback": fallback_mode,
+            "grammatical-entries": GrammaticalEntry.objects.filter(
+                tokens__text_part__urn__startswith=obj.urn
+            ).exists(),
+            "syntax-trees": TextAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            )
+            .filter(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
+            .exists(),
+            "interlinear": has_token_annotations,
+            "metrical": MetricalAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            ).exists(),
+            "dictionary-entries": has_token_annotations
+            or Citation.objects.filter(text_parts__urn__startswith=obj.urn).exists(),
+            "commentaries": TextAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            )
+            .filter(kind=constants.TEXT_ANNOTATION_KIND_SCHOLIA)
+            .exists(),
+            "named-entities": NamedEntity.objects.filter(
+                tokens__text_part__urn__startswith=obj.urn
+            ).exists(),
+            "folio": ImageAnnotation.objects.filter(
+                roi__text_parts__urn__startswith=obj.urn
+            ).exists(),
+            "alignments": obj.text_alignments.exists(),
+        }
+        return camelize(data)
+
 
 class TextPartNode(AbstractTextPartNode):
     lowest_citable_part = String()
 
 
+class TextPartByLemmaFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    # TODO: Expose an ordering control
+    version_urn = django_filters.CharFilter(
+        method="version_urn_filter",
+        label="URN of CTS Version to filter against (required)",
+    )
+    lemma = django_filters.CharFilter(method="lemma_filter")
+
+    class Meta:
+        model = TextPart
+        fields = []
+
+    @property
+    def version(self):
+        if not hasattr(self, "_version"):
+            VERSION_URN = "versionUrn"
+            raise Exception(
+                f"{VERSION_URN} argument is required to retrieve text parts by lemma"
+            )
+        return self._version
+
+    @version.setter
+    def version(self, value):
+        self._version = value
+
+    def version_urn_filter(self, queryset, name, value):
+        # NOTE: this filter is a no-op to support the VERSION_URN arg
+        # another pattern would be to retrieve from self.data on the form, within
+        # lemma_filter
+        self.version = Node.objects.get(urn=value)
+        return queryset
+
+    def lemma_filter(self, queryset, name, value, *lemma_args, **lemma_kwargs):
+        # NOTE: If `self.version` is not defined, we will raise a validation error
+        # TODO: Determine if we want to normalization against this or look for exact matches
+        # TODO: Perform additional indexing against lemmas
+        nodes = get_lowest_citable_nodes(self.version)
+        return nodes.filter(tokens__annotations__data__lemma=value)
+
+
+# TODO: Consider removing this
+class TextPartByLemmaNode(DjangoObjectType):
+    label = String()
+
+    class Meta:
+        model = TextPart
+        interfaces = (relay.Node,)
+        filterset_class = TextPartByLemmaFilterSet
+
+
 class PassageTextPartNode(DjangoObjectType):
     label = String()
+    metadata = generic.GenericScalar()
+
+    def resolve_metadata(obj, *args, **kwargs):
+        return camelize(obj.metadata)
 
     class Meta:
         model = TextPart
@@ -495,14 +603,25 @@ class TextAlignmentMetadata(dict):
         tokens_list = list(
             tokens_qs.filter(text_part__urn__startswith=version_urn).order_by("idx")
         )
-        text_parts_list = list(
-            TextPart.objects.filter(tokens__in=tokens_list).distinct()
-        )
-        return {
-            "reference": self.get_passage_reference(version_urn, text_parts_list),
-            "start_idx": tokens_list[0].idx,
-            "end_idx": tokens_list[-1].idx,
-        }
+        data = {"token_count": len(tokens_list), "version_urn": version_urn}
+        if tokens_list:
+            text_parts_list = list(
+                TextPart.objects.filter(tokens__in=tokens_list).distinct()
+            )
+            data.update(
+                {
+                    "reference": self.get_passage_reference(
+                        version_urn, text_parts_list
+                    ),
+                    "start_idx": tokens_list[0].idx,
+                    "end_idx": tokens_list[-1].idx,
+                }
+            )
+        return camelize(data)
+
+    @cached_property
+    def alignment(self):
+        return TextAlignment.objects.get(urn=self["alignment_urn"])
 
     @property
     def passage_references(self):
@@ -523,19 +642,66 @@ class TextAlignmentMetadata(dict):
         version_urn, ref = extract_version_urn_and_ref(self["passage"].reference)
         references.append(self.generate_passage_reference(version_urn, tokens_qs))
 
-        alignment = TextAlignment.objects.get(urn=self["alignment_urn"])
-        for version in alignment.versions.exclude(urn=version_urn):
+        for version in self.alignment.versions.exclude(urn=version_urn):
             references.append(self.generate_passage_reference(version.urn, tokens_qs))
         return references
+
+    @property
+    def display_hint(self):
+        # TODO: Proper enum here
+        # textParts
+        # records
+        # other
+        # TODO: Formalize how prototype is enabled
+        if self.alignment.metadata.get("enable_prototype"):
+            return "regroupedRecords"
+        elif (
+            self.alignment.urn
+            == "urn:cite2:scaife-viewer:alignment.v1:hafez-farsi-german-farsi-english-word-alignments-temp"
+        ):
+            if (
+                self["passage"].version.urn
+                == "urn:cts:farsiLit:hafez.divan.perseus-far1-hemis:"
+            ):
+                return "regroupedRecords"
+        if self.alignment.urn.count("word"):
+            return "textParts"
+        return "records"
+
+    @property
+    def display_options(self):
+        options = self.alignment.metadata.get("display_options", {})
+        return camelize(options)
+
+    @property
+    def language_map(self):
+        data = {}
+        for version in self.alignment.versions.all():
+            data[version.urn] = version.metadata["lang"]
+        return data
 
 
 class TextAlignmentMetadataNode(ObjectType):
     passage_references = generic.GenericScalar(
         description="References for the passages being aligned"
     )
+    # TODO: Move this out to the alignment node?
+    # TODO: And possibly make this something to be provided at ingestion time?
+    display_hint = String()
+    display_options = generic.GenericScalar()
+    language_map = generic.GenericScalar()
 
     def resolve_passage_references(self, info, *args, **kwargs):
         return self.passage_references
+
+    def resolve_display_hint(self, info, *args, **kwargs):
+        return self.display_hint
+
+    def resolve_display_options(self, info, *args, **kwargs):
+        return self.display_options
+
+    def resolve_language_map(self, info, *args, **kwargs):
+        return self.language_map
 
 
 class TextAlignmentConnection(Connection):
@@ -571,11 +737,25 @@ class TextAlignmentConnection(Connection):
 
 
 class TextAlignmentRecordNode(DjangoObjectType):
+    label = String()
+    items = generic.GenericScalar()
+
     class Meta:
         model = TextAlignmentRecord
         interfaces = (relay.Node,)
         connection_class = TextAlignmentConnection
         filterset_class = TextAlignmentRecordFilterSet
+
+    def resolve_label(obj, *args, **kwargs):
+        return obj.metadata.get("label", "")
+
+    def resolve_items(obj, *args, **kwargs):
+        # TODO: Introduce `obj.blob` or `obj.items`
+        # as a more generic interface; this works
+        # without requiring a data migration.
+        # Used to support the use case in
+        # https://github.com/scaife-viewer/beyond-translation-site/issues/29
+        return obj.metadata.get("items", None)
 
 
 class TextAlignmentRecordRelationNode(DjangoObjectType):
@@ -585,16 +765,50 @@ class TextAlignmentRecordRelationNode(DjangoObjectType):
         filter_fields = ["tokens__text_part__urn"]
 
 
+class TextAnnotationCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = TextAnnotationCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        # TODO: Determine if there is anything we can configure at a framework level to help
+        # force the use of the db indexes here
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            pk__in=TextAnnotationCollection.objects.filter(
+                annotations__text_parts__in=textparts_queryset
+            )
+        )
+
+
+class TextAnnotationCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = TextAnnotationCollection
+        interfaces = (relay.Node,)
+        filterset_class = TextAnnotationCollectionFilterSet
+
+
 class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
 
     class Meta:
         model = TextAnnotation
-        fields = ["urn"]
+        fields = ["urn", "collection__urn"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
-        return queryset.filter(text_parts__in=textparts_queryset).distinct()
+        # TODO: Determine if there is anything we can configure at a framework level to help
+        # force the use of the db indexes here
+        # return queryset.filter(text_parts__in=textparts_queryset)
+        return queryset.filter(
+            pk__in=TextAnnotation.objects.filter(text_parts__in=textparts_queryset)
+        )
 
 
 class AbstractTextAnnotationNode(DjangoObjectType):
@@ -630,6 +844,16 @@ class SyntaxTreeNode(AbstractTextAnnotationNode):
     @classmethod
     def get_queryset(cls, queryset, info):
         return queryset.filter(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
+
+    def resolve_data(obj, *args, **kwargs):
+        # FIXME: Don't overload obj.data,
+        # but prefer a further-typed syntax tree
+        for word in obj.data.get("words", []):
+            # FIXME: Transliterate only on Greek
+            twv = icu_transliterator.transliterate(word.get("value") or "")
+            word["transliterated_word_value"] = twv
+        # TODO: Figure out a better way to override these methods
+        return camelize(obj.data)
 
 
 class MetricalAnnotationNode(DjangoObjectType):
@@ -668,6 +892,19 @@ class ImageAnnotationNode(DjangoObjectType):
         filterset_class = ImageAnnotationFilterSet
 
 
+class ImageROINode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = ImageROI
+        fields = [
+            "coordinates_value",
+            "image_identifier",
+            "text_parts",
+            "text_annotations",
+        ]
+
+
 class AudioAnnotationNode(DjangoObjectType):
     data = generic.GenericScalar()
 
@@ -684,10 +921,164 @@ class TokenFilterSet(django_filters.FilterSet):
 
 
 class TokenNode(DjangoObjectType):
+    transliterated_word_value = String()
+
     class Meta:
         model = Token
         interfaces = (relay.Node,)
         filterset_class = TokenFilterSet
+
+    def resolve_transliterated_word_value(obj, *args, **kwargs):
+        return icu_transliterator.transliterate(obj.word_value or "")
+
+
+class TokenAnnotationCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = TokenAnnotationCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            annotations__token__text_part__in=textparts_queryset
+        ).distinct()
+
+
+class TokenAnnotationCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = TokenAnnotationCollection
+        interfaces = (relay.Node,)
+        filterset_class = TokenAnnotationCollectionFilterSet
+
+
+class TokenAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = TokenAnnotation
+        fields = [
+            # TODO: Revisit modeling
+            # "urn",
+            # "kind",
+            "collection__urn"
+        ]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(token__text_part__in=textparts_queryset).distinct()
+
+
+class TokenAnnotationNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = TokenAnnotation
+        interfaces = (relay.Node,)
+        filterset_class = TokenAnnotationFilterSet
+
+    def resolve_data(obj, *args, **kwargs):
+        return camelize(obj.data)
+
+
+class TokenAnnotationByLemmaFilterSet(django_filters.FilterSet):
+    version_urn = django_filters.CharFilter(
+        method="version_urn_filter",
+        label="URN of CTS Version to filter against (required)",
+    )
+    lemma = django_filters.CharFilter(method="lemma_filter")
+
+    class Meta:
+        model = TextPart
+        fields = []
+
+    @property
+    def version(self):
+        if not hasattr(self, "_version"):
+            VERSION_URN = "versionUrn"
+            raise Exception(
+                f"{VERSION_URN} argument is required to retrieve text parts by lemma"
+            )
+        return self._version
+
+    @version.setter
+    def version(self, value):
+        self._version = value
+
+    def version_urn_filter(self, queryset, name, value):
+        # NOTE: this filter is a no-op to support the VERSION_URN arg
+        # another pattern would be to retrieve from self.data on the form, within
+        # lemma_filter
+        self.version = Node.objects.get(urn=value)
+        return queryset
+
+    def lemma_filter(self, queryset, name, value, *lemma_args, **lemma_kwargs):
+        # NOTE: If `self.version` is not defined, we will raise a validation error
+        # TODO: Determine if we want to normalization against this or look for exact matches
+        # TODO: Perform additional indexing against lemmas
+        # FIXME: This is a hack for demo only
+        work = self.version.get_parent()
+        textgroup = work.get_parent()
+        versions = (
+            textgroup.get_descendants()
+            .filter(depth=5)
+            .filter(urn__endswith=".perseus-grc2:")
+        )
+        queryset = queryset.filter(data__lemma=value)
+        predicate = Q()
+        for version in versions:
+            nodes = get_lowest_citable_nodes(version)
+            predicate.add(Q(token__text_part__in=nodes), Q.OR)
+        queryset = queryset.filter(predicate)
+        return queryset
+
+
+class TokenAnnotationByLemmaNode(TokenAnnotationNode):
+    text_part_urn = String()
+
+    # TODO: Further code re-use with TokenAnnotationNode
+    class Meta:
+        model = TokenAnnotation
+        interfaces = (relay.Node,)
+        filterset_class = TokenAnnotationByLemmaFilterSet
+
+    def resolve_text_part_urn(obj, info, **kwargs):
+        # TODO: Denorm this further
+        return obj.token.text_part.urn
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.select_related("token__text_part")
+
+
+class NamedEntityCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = NamedEntityCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            entities__tokens__text_part__in=textparts_queryset
+        ).distinct()
+
+
+class NamedEntityCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = NamedEntityCollection
+        interfaces = (relay.Node,)
+        filterset_class = NamedEntityCollectionFilterSet
 
 
 class NamedEntityFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
@@ -695,7 +1086,7 @@ class NamedEntityFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterS
 
     class Meta:
         model = NamedEntity
-        fields = ["urn", "kind"]
+        fields = ["urn", "kind", "collection__urn"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
@@ -748,38 +1139,103 @@ class DictionaryNode(DjangoObjectType):
 class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
     lemma = django_filters.CharFilter(method="lemma_filter")
+    resolve_using_lemmas = django_filters.BooleanFilter(
+        method="resolve_using_filter",
+        label="If resolving via reference, filter entries against lemmas within the passage reference",
+    )
+    resolve_using_lemmas_and_citations = django_filters.BooleanFilter(
+        method="resolve_using_filter",
+        label="If resolving via reference and using lemmas, also include results resolved via citations",
+    )
+    # TODO: Refactor this as no marks normalize
+    normalize_lemmas = django_filters.BooleanFilter(
+        method="resolve_normalize_lemmas",
+        label="If resolving via lemmas, query using the no-marks normalized lemma values.",
+    )
+    # TODO: Determine if we have a use case for _no_ normalization
 
     class Meta:
         model = DictionaryEntry
-        fields = {"urn": ["exact"], "headword": ["exact", "istartswith"]}
+        fields = {
+            "urn": ["exact"],
+            "headword": ["exact", "istartswith"],
+            "dictionary__urn": ["exact"],
+        }
 
+    def resolve_using_filter(self, queryset, name, value):
+        # This is a no-op to provide a boolean value to reference filter;
+        # this may be better implemented as another GraphQL type
+        # TODO: Research prior art in graphene-django codebases
+        return queryset
+
+    def resolve_normalize_lemmas(self, queryset, name, value):
+        # This is a no-op to provide a boolean value to reference filter;
+        # this may be better implemented as another GraphQL type
+        return self.resolve_using_filter(queryset, name, value)
+
+    # cited references vs containing references
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
+        resolve_using_lemmas = self.data.get("resolve_using_lemmas", None)
+        resolve_using_lemmas_and_citations = self.data.get(
+            "resolve_using_lemmas_and_citations", True
+        )
+        normalize_lemmas = self.data.get("normalize_lemmas", False)
+        if resolve_using_lemmas:
+            passage_lemmas = TokenAnnotation.objects.filter(
+                token__text_part__in=textparts_queryset
+            ).values_list("data__lemma", flat=True)
+            passage_lemmas = [normalized_no_digits(pl) for pl in passage_lemmas]
 
-        if RESOLVE_DICTIONARY_ENTRIES_VIA_LEMMAS:
-            # TODO: revisit normalization here with @jtauber
-            passage_lemmas = Token.objects.filter(
-                text_part__in=textparts_queryset
-            ).values_list("lemma", flat=True)
-            matches = queryset.filter(headword__in=passage_lemmas)
+            if normalize_lemmas:
+                # TODO: Change to no marks normalize
+                # If we're explicitly asked to use normalization, do so.
+                headword_candidates = [
+                    normalize_and_strip_marks(pl) for pl in passage_lemmas
+                ]
+                matches = queryset.filter(
+                    headword_normalized_stripped__in=headword_candidates
+                )
+                # FIXME: Determine if we want to set normalized lemmas
+                # in the passage_lemmas context variable
+            else:
+                # Otherwise we match by the normalized passage lemmas
+                # but we maintain marks
+                matches = queryset.filter(headword_normalized__in=passage_lemmas)
+                self.request.passage_lemmas = set(passage_lemmas)
+
+            if resolve_using_lemmas_and_citations:
+                matches = matches | queryset.filter(
+                    senses__citations__text_parts__in=textparts_queryset
+                )
+
+            # TODO: Determine if we need to support querying for normalized lemmas as a fallback
+            # when no results exist?
+            # Review the use case for `urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:1.146` with Cunliffe
+            # AND with Cunliffe + LSJ
+
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
-        elif RESOLVE_CITATIONS_VIA_TEXT_PARTS:
-            matches = queryset.filter(
-                senses__citations__text_parts__in=textparts_queryset
-            )
         else:
-            matches = queryset.filter(
-                senses__citations__data__urn__in=textparts_queryset.values_list("urn")
-            )
-        return queryset.filter(pk__in=matches)
+            matches = queryset.filter(citations__text_parts__in=textparts_queryset)
+        # TODO: Expose ordering options?
+        return queryset.filter(pk__in=matches).order_by("headword_normalized_stripped")
 
     def lemma_filter(self, queryset, name, value):
-        value_normalized = normalize_string(value)
-        lemma_pattern = (
-            rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
-        )
-        return queryset.filter(headword_normalized__regex=lemma_pattern)
+        # FIXME: Make this default consistent with the other filter
+        # (That will be a BI change)
+        normalize_lemmas = self.data.get("normalize_lemmas", False)
+        if normalize_lemmas:
+            # FIXME: Prefer explicit normalize_and_strip_marks argument
+            # (Another BI change)
+            value_normalized = normalize_and_strip_marks(value)
+            # TODO: Review this pattern and determine if it is too data-specific
+            # to LGO
+            lemma_pattern = rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
+            return queryset.filter(headword_normalized_stripped__regex=lemma_pattern)
+        # TODO: Should we have an explicit ordering?
+        value = normalized_no_digits(value)
+        return queryset.filter(headword_normalized=value)
 
 
 def _crush_sense(tree):
@@ -796,6 +1252,14 @@ class DictionaryEntryNode(DjangoObjectType):
     sense_tree = generic.GenericScalar(
         description="A nested structure returning the URN(s) of senses attached to this entry"
     )
+    matches_passage_lemma = Boolean(
+        description="A nested structure returning the URN(s) of senses attached to this entry"
+    )
+
+    def resolve_matches_passage_lemma(obj, info, **kwargs):
+        # HACK: Pass data without using context?
+        passage_lemmas = getattr(info.context, "passage_lemmas", {})
+        return obj.headword_normalized in passage_lemmas
 
     def resolve_sense_tree(obj, info, **kwargs):
         # TODO: Proper GraphQL field for crushed tree nodes
@@ -831,6 +1295,7 @@ class SenseFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
 
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
+        # FIXME: Deprecate RESOLVE_CITATIONS_VIA_TEXT_PARTS
         if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
             matches = queryset.filter(citations__text_parts__in=textparts_queryset)
         else:
@@ -864,6 +1329,7 @@ class CitationFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet)
         textparts_queryset = self.get_lowest_textparts_queryset(value)
         # TODO: Determine why graphene bloats the "simple" query;
         # if we just filter the queryset against ids, we're much better off
+        # FIXME: Deprecate RESOLVE_CITATIONS_VIA_TEXT_PARTS
         if RESOLVE_CITATIONS_VIA_TEXT_PARTS:
             matches = queryset.filter(text_parts__in=textparts_queryset).distinct()
         else:
@@ -895,6 +1361,54 @@ class CitationNode(DjangoObjectType):
         model = Citation
         interfaces = (relay.Node,)
         filterset_class = CitationFilterSet
+
+
+class GrammaticalEntryCollectionFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = GrammaticalEntryCollection
+        fields = ["urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(
+            entries__tokens__text_part__in=textparts_queryset
+        ).distinct()
+
+
+class GrammaticalEntryCollectionNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = GrammaticalEntryCollection
+        interfaces = (relay.Node,)
+        filterset_class = GrammaticalEntryCollectionFilterSet
+
+
+class GrammaticalEntryFilterSet(
+    TextPartsReferenceFilterMixin, django_filters.FilterSet
+):
+    reference = django_filters.CharFilter(method="reference_filter")
+
+    class Meta:
+        model = GrammaticalEntry
+        fields = ["urn", "collection__urn"]
+
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        return queryset.filter(tokens__text_part__in=textparts_queryset).distinct()
+
+
+class GrammaticalEntryNode(DjangoObjectType):
+    data = generic.GenericScalar()
+
+    class Meta:
+        model = GrammaticalEntry
+        interfaces = (relay.Node,)
+        filterset_class = GrammaticalEntryFilterSet
 
 
 class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
@@ -968,6 +1482,9 @@ class Query(ObjectType):
     text_part = relay.Node.Field(TextPartNode)
     text_parts = LimitedConnectionField(TextPartNode)
 
+    # TODO: Generalize this type of lookup within the text_parts field
+    text_parts_by_lemma = LimitedConnectionField(TextPartByLemmaNode)
+
     # No passage_text_part endpoint available here like the others because we
     # will only support querying by reference.
     passage_text_parts = LimitedConnectionField(PassageTextPartNode)
@@ -986,6 +1503,9 @@ class Query(ObjectType):
     text_annotation = relay.Node.Field(TextAnnotationNode)
     text_annotations = LimitedConnectionField(TextAnnotationNode)
 
+    text_annotation_collection = relay.Node.Field(TextAnnotationCollectionNode)
+    text_annotation_collections = LimitedConnectionField(TextAnnotationCollectionNode)
+
     syntax_tree = relay.Node.Field(SyntaxTreeNode)
     syntax_trees = LimitedConnectionField(SyntaxTreeNode)
 
@@ -1002,6 +1522,18 @@ class Query(ObjectType):
 
     token = relay.Node.Field(TokenNode)
     tokens = LimitedConnectionField(TokenNode)
+
+    token_annotation_collection = relay.Node.Field(TokenAnnotationCollectionNode)
+    token_annotation_collections = LimitedConnectionField(TokenAnnotationCollectionNode)
+
+    token_annotation = relay.Node.Field(TokenAnnotationNode)
+    token_annotations = LimitedConnectionField(TokenAnnotationNode)
+
+    # TODO: Generalize this type of lookup within the token or token annotations field
+    token_annotations_by_lemma = LimitedConnectionField(TokenAnnotationByLemmaNode)
+
+    named_entity_collection = relay.Node.Field(NamedEntityCollectionNode)
+    named_entity_collections = LimitedConnectionField(NamedEntityCollectionNode)
 
     named_entity = relay.Node.Field(NamedEntityNode)
     named_entities = LimitedConnectionField(NamedEntityNode)
@@ -1023,6 +1555,14 @@ class Query(ObjectType):
 
     citation = relay.Node.Field(CitationNode)
     citations = LimitedConnectionField(CitationNode)
+
+    grammatical_entry_collection = relay.Node.Field(GrammaticalEntryCollectionNode)
+    grammatical_entry_collections = LimitedConnectionField(
+        GrammaticalEntryCollectionNode
+    )
+
+    grammatical_entry = relay.Node.Field(GrammaticalEntryNode)
+    grammatical_entries = LimitedConnectionField(GrammaticalEntryNode)
 
     metadata_record = relay.Node.Field(MetadataNode)
     metadata_records = LimitedConnectionField(MetadataNode)

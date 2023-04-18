@@ -247,4 +247,4 @@ def get_paths_matching_suffixes(path, suffixes=None):
         ]
     if not path.exists():
         return []
-    return [p for p in path.rglob("*") if p.suffix in suffixes]
+    return [p for p in path.glob("*") if p.suffix in suffixes]

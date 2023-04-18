@@ -1,13 +1,16 @@
 import csv
 import os
 import re
+from pathlib import Path
+
+import yaml
 
 from scaife_viewer.atlas.conf import settings
 
-from ..models import Node, Token
+from ..models import Node, Token, TokenAnnotation, TokenAnnotationCollection
 
 
-ANNOTATIONS_DATA_PATH = os.path.join(
+ANNOTATIONS_DATA_PATH = Path(
     settings.SV_ATLAS_DATA_DIR, "annotations", "token-annotations"
 )
 
@@ -18,11 +21,10 @@ VE_REF_PATTTERN = re.compile(r"(?P<ref>.*).t(?P<token>.*)")
 def get_paths():
     if not os.path.exists(ANNOTATIONS_DATA_PATH):
         return []
-    return [
-        os.path.join(ANNOTATIONS_DATA_PATH, f)
-        for f in os.listdir(ANNOTATIONS_DATA_PATH)
-        if f.endswith(".csv")
-    ]
+    for path in ANNOTATIONS_DATA_PATH.iterdir():
+        if not path.is_dir():
+            continue
+        yield path
 
 
 def resolve_version(path):
@@ -56,30 +58,35 @@ def update_if_not_set(token, data, fields_to_update):
             fields_to_update.add(k)
 
 
-def update_version_tokens(version, lookup, refs):
+def create_token_annotations(collection, version, lookup, refs):
+    # TODO: Relying on an "upsert" for annotations; likely we can
+    # optimize this further
     text_part_urns = [f"{version.urn}{ref}" for ref in refs]
-    to_update = []
     tokens = Token.objects.filter(text_part__urn__in=text_part_urns).select_related(
         "text_part"
     )
 
-    fields_to_update = set()
+    to_create = []
     for token in tokens:
+        # TODO: Update if not set was assuming we would have fields that could get clobbered; no longer true!
         key = (token.text_part.ref, token.position)
-        data = lookup[key]
-        update_if_not_set(token, data, fields_to_update)
-        to_update.append(token)
 
-    # NOTE: With the PRAGMA directives from SQLite, it ends up being faster to use
-    # multiple UPDATE statements within a single transaction rather than use Django's
-    # built-in bulk update mechanism
-    if fields_to_update and to_update:
-        for token in to_update:
-            token.save(update_fields=fields_to_update)
-    return len(to_update)
+        # TODO: Add further error logging for this
+        try:
+            data = lookup[key]
+        except KeyError:
+            data = None
+
+        if not data:
+            continue
+
+        to_create.append(
+            TokenAnnotation(token=token, data=data, collection=collection,)
+        )
+    return len(TokenAnnotation.objects.bulk_create(to_create))
 
 
-def apply_token_annotations():
+def apply_token_annotations(reset=True):
     """
     @@@ this is just to get the treebank data loaded and queryable;
     want to revisit how this entire extraction works in the future
@@ -87,9 +94,30 @@ def apply_token_annotations():
 
     paths = get_paths()
     for path in paths:
-        lookup, refs = extract_lookup_and_refs(path)
-        version = resolve_version(path)
-        updated_count = update_version_tokens(version, lookup, refs)
+        metadata_path = Path(path, "metadata.yml")
+        collection = yaml.safe_load(metadata_path.open())
+
+        if reset:
+            TokenAnnotationCollection.objects.filter(urn=collection["urn"]).delete()
+
+        # TODO: Standardize use of `values` for ATLAS files
+        values = collection.get("values")
+        if not values or not values.endswith("csv"):
+            continue
+
+        values_path = Path(path, values)
+        lookup, refs = extract_lookup_and_refs(values_path)
+        # TODO: Move this to metadata and or values
+        version = resolve_version(values_path)
+
+        # TODO: Set attribution information
+        metadata = collection.pop("metadata", {})
+        collection_obj = TokenAnnotationCollection.objects.create(
+            urn=collection["urn"], label=collection["label"], metadata=metadata
+        )
+        annotations_count = create_token_annotations(
+            collection_obj, version, lookup, refs
+        )
         print(
-            f'Updated token annotations [version="{version.urn}" count={updated_count}]'
+            f'Created token annotations [version="{version.urn}" count={annotations_count}]'
         )

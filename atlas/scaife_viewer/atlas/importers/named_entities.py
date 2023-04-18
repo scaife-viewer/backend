@@ -1,45 +1,51 @@
 import csv
 import os
+from pathlib import Path
 
-import logfmt
+import yaml
 
 from scaife_viewer.atlas.conf import settings
 
-from ..models import NamedEntity, Node
+from ..models import NamedEntity, NamedEntityCollection, Node
 
 
 NAMED_ENTITIES_DATA_PATH = os.path.join(
     settings.SV_ATLAS_DATA_DIR, "annotations", "named-entities"
 )
-ENTITIES_DIR = os.path.join(NAMED_ENTITIES_DATA_PATH, "processed", "entities")
+COLLECTIONS_DIR = os.path.join(NAMED_ENTITIES_DATA_PATH, "processed", "collections")
 STANDOFF_DIR = os.path.join(NAMED_ENTITIES_DATA_PATH, "processed", "standoff")
 
 
-def get_entity_paths():
-    if not os.path.exists(ENTITIES_DIR):
+def get_collection_paths():
+    if not os.path.exists(COLLECTIONS_DIR):
         return []
     return [
-        os.path.join(ENTITIES_DIR, f)
-        for f in os.listdir(ENTITIES_DIR)
-        if f.endswith(".csv")
+        os.path.join(COLLECTIONS_DIR, f)
+        for f in Path(COLLECTIONS_DIR).iterdir()
+        if f.suffix in {".yaml", ".yml"}
     ]
 
 
-def _populate_lookup(path, lookup):
-    with open(path, encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
+def _load_collections(path, lookup):
+    with open(path) as f:
+        collection_data = yaml.safe_load(f)
+        collection = NamedEntityCollection.objects.create(
+            label=collection_data["label"],
+            urn=collection_data["urn"],
+            data=collection_data["metadata"],
+        )
+        for row in collection_data["entities"]:
             urn = row["urn"]
-            kind = "person" if urn.count("pers") > 0 else "place"
-            data = next(logfmt.parse([row.get("data", "")]), dict())
+            # TODO: Revisit this
             named_entity, _ = NamedEntity.objects.get_or_create(
                 urn=urn,
                 defaults={
-                    "title": row["label"],
+                    "title": row["title"],
                     "description": row["description"],
-                    "url": row["link"],
-                    "kind": kind,
-                    "data": data,
+                    "url": row["url"],
+                    "kind": row["kind"],
+                    "data": row.get("data", {}),
+                    "collection": collection,
                 },
             )
             lookup[named_entity.urn] = named_entity
@@ -68,11 +74,11 @@ def _apply_entities(path, lookup):
 
 def apply_named_entities(reset=False):
     if reset:
-        NamedEntity.objects.all().delete()
+        NamedEntityCollection.objects.all().delete()
 
     lookup = {}
-    for path in get_entity_paths():
-        _populate_lookup(path, lookup)
+    for path in get_collection_paths():
+        _load_collections(path, lookup)
 
     for path in get_standoff_paths():
         _apply_entities(path, lookup)
