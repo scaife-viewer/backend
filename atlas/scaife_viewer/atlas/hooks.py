@@ -3,7 +3,7 @@ from pathlib import Path
 
 from . import constants
 from .resolvers.default import resolve_library
-from .utils import get_paths_matching_suffixes
+from .utils import get_paths_matching_predicate
 
 
 logger = logging.getLogger(__name__)
@@ -128,13 +128,13 @@ class DefaultHookSet:
         from .conf import settings  # noqa; avoids race condition
 
         path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "text-annotations",)
-        return get_paths_matching_suffixes(path)
+        return get_paths_matching_predicate(path)
 
     def get_syntax_tree_annotation_paths(self):
         from .conf import settings  # noqa; avoids race condition
 
         path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "syntax-trees")
-        return get_paths_matching_suffixes(path)
+        return get_paths_matching_predicate(path)
 
     def get_metadata_collection_annotation_paths(self):
         from .conf import settings  # noqa; avoids race condition
@@ -142,7 +142,7 @@ class DefaultHookSet:
         path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "metadata-collections")
         if not path.exists():
             return []
-        return get_paths_matching_suffixes(path)
+        return get_paths_matching_predicate(path)
 
     def get_dictionary_annotation_paths(self):
         from .conf import settings  # noqa; avoids race condition
@@ -150,7 +150,10 @@ class DefaultHookSet:
         path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries")
         if not path.exists():
             return []
-        return get_paths_matching_suffixes(path)
+        # FIXME: Standardize "default" annotation formats; currently we have a mixture
+        # of manifest or "all-in-one" files that makes things inconsistent
+        predicate = lambda x: x.suffix == ".json" or x.is_dir()
+        return get_paths_matching_predicate(path, predicate)
 
 
 class HookProxy:

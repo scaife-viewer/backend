@@ -239,12 +239,11 @@ def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZ
             pbar.update(created)
 
 
-def get_paths_matching_suffixes(path, suffixes=None):
-    if suffixes is None:
-        suffixes = [
-            ".json",
-            ".jsonl",
-        ]
-    if not path.exists():
-        return []
-    return [p for p in path.glob("*") if p.suffix in suffixes]
+def get_paths_matching_predicate(path, predicate=None):
+    if predicate is None:
+        predicate = lambda x: x.suffix in [".json", ".jsonl"]
+
+    for candidate in path.iterdir():
+        match = predicate(candidate)
+        if match:
+            yield candidate
