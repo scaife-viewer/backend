@@ -241,7 +241,7 @@ def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZ
 
 def get_paths_matching_predicate(path, predicate=None):
     if predicate is None:
-        predicate = lambda x: x.suffix in [".json", ".jsonl"]
+        predicate = lambda x: x.suffix in [".json", ".jsonl"]  # noqa: E731
 
     for candidate in path.iterdir():
         match = predicate(candidate)

@@ -8,7 +8,7 @@ def text_field_template():
     return {
         "type": "text",
         "fields": {
-            "keyword": {"ignore_above": 256, "type": "keyword",},
+            "keyword": {"ignore_above": 256, "type": "keyword"},
             "normalizedKeyword": {
                 "ignore_above": 256,
                 "type": "keyword",
