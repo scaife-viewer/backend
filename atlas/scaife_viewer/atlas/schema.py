@@ -1129,6 +1129,7 @@ class AttributionRecordNode(DjangoObjectType):
 
 class DictionaryNode(DjangoObjectType):
     # FIXME: Implement access checking for all queries
+    data = generic.GenericScalar()
 
     class Meta:
         model = Dictionary
