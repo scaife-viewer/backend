@@ -9,6 +9,8 @@ from .utils import get_paths_matching_predicate
 
 logger = logging.getLogger(__name__)
 
+ALLOWABLE_CTS_INGESTION_EXCEPTIONS = (KeyError, ValueError, TypeError, AttributeError)
+
 
 def ensure_trailing_colon(urn):
     if not urn.endswith(":"):
@@ -69,7 +71,7 @@ class DefaultHookSet:
     def get_first_passage_urn(self, version):
         try:
             return str(version.first_passage().urn)
-        except (KeyError, ValueError, TypeError):
+        except ALLOWABLE_CTS_INGESTION_EXCEPTIONS:
             msg = f'Could not extract first_passage_urn [urn="{version.urn}"]'
             logger.warning(msg)
             return None
@@ -80,7 +82,7 @@ class DefaultHookSet:
         # TODO: Move textpart level extractors out to another interface within `Library`
         try:
             textpart_metadata = self.extract_cts_textpart_metadata(version)
-        except (KeyError, ValueError, TypeError):
+        except ALLOWABLE_CTS_INGESTION_EXCEPTIONS:
             msg = f'Could not extract textpart_metadata [urn="{version.urn}"]'
             logger.warning(msg)
             textpart_metadata = {}
