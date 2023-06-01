@@ -1249,6 +1249,7 @@ def _crush_sense(tree):
 
 
 class DictionaryEntryNode(DjangoObjectType):
+    headword_display = String()
     data = generic.GenericScalar()
     sense_tree = generic.GenericScalar(
         description="A nested structure returning the URN(s) of senses attached to this entry"
@@ -1256,6 +1257,12 @@ class DictionaryEntryNode(DjangoObjectType):
     matches_passage_lemma = Boolean(
         description="A nested structure returning the URN(s) of senses attached to this entry"
     )
+
+    def resolve_headword_display(obj, info, **kwargs):
+        value = obj.data.get("headword_display")
+        if value is None:
+            value = f"<b>{obj.headword}</b>"
+        return value
 
     def resolve_matches_passage_lemma(obj, info, **kwargs):
         # HACK: Pass data without using context?
