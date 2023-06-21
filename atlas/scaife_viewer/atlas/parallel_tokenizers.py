@@ -78,7 +78,7 @@ def insert_from_csv(path):
     logger.info(f"Inserted tokens [elapsed={end-start}]", file=sys.stderr)
 
 
-def tokenize_text_parts(dirpath, node_urn, force=False):
+def tokenize_text_parts(dirpath, node_urn):
     tokens = prepare_tokens(node_urn)
     # TODO: We may also rewrite this to append to a file or throw onto
     # another processing queue
