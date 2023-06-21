@@ -91,6 +91,30 @@ def process_csvs(paths):
         insert_from_csv(path)
 
 
+def tokenize_textparts_and_insert(dirpath, node_urn, reset=False):
+    """
+    Read text parts from the database, generate token CSV and insert
+    tokens
+
+    Usage:
+
+    ```python
+    from pathlib import Path
+
+    from scaife_viewer.atlas.parallel_tokenizers tokenize_textparts_and_insert
+
+    outdir = Path(".")
+    version_urn = "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:"
+    tokenize_textparts_and_insert(outdir, version_urn, reset=True)
+    ```
+    """
+    Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
+    tokenized_path = tokenize_text_parts(dirpath, node_urn)
+    if reset:
+        Token.objects.filter(text_part__urn__startswith=node_urn).delete()
+    insert_from_csv(tokenized_path)
+
+
 def tokenize_all_text_parts_parallel(reset=False):
     Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
     Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
