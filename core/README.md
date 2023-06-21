@@ -28,6 +28,8 @@ The path to a hookset that can be used to customize package functionality.
 
 Default: Callable returning `pathlib.Path` resolving to `data/content-manifests/production.yaml`
 
+Can be customized via the `CONTENT_MANIFEST_PATH` env var.
+
 **RESOLVER_CACHE_LABEL**
 
 Default: `"cts-resolver"`
