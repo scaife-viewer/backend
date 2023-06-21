@@ -1,14 +1,9 @@
-"""
-Backported from https://github.com/scaife-viewer/scaife-cts-api/blob/0e3d702dcdeae966f8d37935e7c657e16c039cf3/scaife_cts_api/update_corpus_shas.py
-"""
-import os
+from pathlib import Path
 
-from django.core.management.base import BaseCommand
+import click
 
 import ruamel.yaml as yaml
 from github import Github, UnknownObjectException
-
-from ...hooks import hookset
 
 
 class ReleaseResolver:
@@ -70,29 +65,49 @@ class ReleaseResolver:
         return self.emit_status(should_update, diff_url)
 
 
-class Command(BaseCommand):
-    def handle(self, *args, **options):
-        """
-        Small helper script used to update to latest releases
-        of corpus repos.
+@click.group()
+def cli():
+    """
+    Commands used to help develop and manage Scaife Viewer projects
+    """
 
-        If releases are not found, defaults to the last commit
-        on `master`.
-        """
-        ACCESS_TOKEN = os.environ.get("GITHUB_ACCESS_TOKEN", "")
-        if ACCESS_TOKEN:
-            client = Github(ACCESS_TOKEN)
-        else:
-            client = Github()
 
-        statuses = []
-        manifest = hookset.content_manifest_path
-        corpus = yaml.round_trip_load(manifest.open())
-        new_corpus = dict()
-        for repo_name, data in corpus.items():
-            resolver = ReleaseResolver(client, repo_name, data)
+@cli.command()
+@click.option(
+    "--path",
+    envvar="CONTENT_MANIFEST_PATH",
+    default="data/content-manifests/production.yaml",
+    show_default=True,
+)
+@click.option(
+    "--github-access-token", envvar="GITHUB_ACCESS_TOKEN", default="", show_default=True
+)
+def update_manifest(path, github_access_token):
+    """
+    Update each entry in a content manifest to its latest GitHub release
 
-            status_result = resolver.update_corpus(new_corpus)
-            statuses.append(status_result)
+    If releases are not found, defaults to the last commit
+    on `master`.
+    """
 
-        yaml.round_trip_dump(new_corpus, manifest.open("w"))
+    # NOTE: Backported from https://github.com/scaife-viewer/scaife-cts-api/blob/0e3d702dcdeae966f8d37935e7c657e16c039cf3/scaife_cts_api/update_corpus_shas.py
+    if github_access_token:
+        client = Github(github_access_token)
+    else:
+        client = Github()
+
+    statuses = []
+    manifest = Path(path)
+    corpus = yaml.round_trip_load(manifest.open())
+    new_corpus = dict()
+    for repo_name, data in corpus.items():
+        resolver = ReleaseResolver(client, repo_name, data)
+
+        status_result = resolver.update_corpus(new_corpus)
+        statuses.append(status_result)
+
+    yaml.round_trip_dump(new_corpus, manifest.open("w"))
+
+
+if __name__ == "__main__":
+    cli()

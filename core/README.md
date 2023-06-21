@@ -41,3 +41,11 @@ Default: `False`
 
 When `True`, sets GCE-specific metadata for the search index management
 command
+
+## CLI
+
+For information about the CLI:
+
+```shell
+scaife --help
+```

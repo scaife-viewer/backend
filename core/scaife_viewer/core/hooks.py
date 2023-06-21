@@ -1,6 +1,3 @@
-from pathlib import Path
-
-
 class DefaultHookSet:
     def sort_text_groups(self, text_groups):
         return sorted(text_groups, key=lambda tg: tg.urn)
@@ -10,10 +7,6 @@ class DefaultHookSet:
 
     def sort_texts(self, texts):
         return sorted(texts, key=lambda t: (t.kind, t.label))
-
-    @property
-    def content_manifest_path(self):
-        return Path("data/content-manifests/production.yaml")
 
 
 class HookProxy:
