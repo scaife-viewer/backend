@@ -45,7 +45,12 @@ class CTSImporter:
     CTS_URN_SCHEME_EXEMPLAR = constants.CTS_URN_NODES
 
     def __init__(
-        self, library, version_data, nodes=dict(), node_last_child_lookup=None
+        self,
+        library,
+        version_data,
+        nodes=dict(),
+        node_last_child_lookup=None,
+        partial_ingestion=False,
     ):
         self.library = library
         self.version_data = version_data
@@ -53,6 +58,7 @@ class CTSImporter:
         # TODO: Decouple "version_data" further
         self.urn = URN(self.version_data["urn"].strip())
         self.work_urn = self.urn.up_to(self.urn.WORK)
+        self.partial_ingestion = partial_ingestion
 
         try:
             label = get_first_value_for_language(version_data["label"], "eng")
@@ -191,6 +197,13 @@ class CTSImporter:
                 return Node.objects.get(urn=node_data["urn"])
         parent = self.nodes.get(parent_urn)
         if USE_BULK_INGESTION:
+            # NOTE: parent.pk will _only_ be populated if invoked with the
+            # partial_ingestion flag
+            if self.partial_ingestion and parent.pk and parent.depth < 4:
+                # If parent has a database id, and is a workpart,
+                # we should also add the child to the database.
+                # Typically this is going to be a work or version.
+                return self.add_child(parent, node_data)
             return self.add_child_bulk(parent, node_data)
         return self.add_child(parent, node_data)
 
@@ -243,6 +256,15 @@ class CTSImporter:
             urn = f"{self.urn}{ref}"
         return URN(urn), text_content
 
+    def get_or_generate_node(self, idx, node_data, parent_urn):
+        try:
+            node = Node.objects.get(urn=node_data["urn"])
+            print(f'retrieved existing node from db: {node_data["urn"]}')
+        except Node.DoesNotExist:
+            node = self.generate_node(idx, node_data, parent_urn)
+            print(f'inserted node: {node_data["urn"]}')
+        return node
+
     def generate_branch(self, urn=None, line=None):
         if line:
             node_urn, text_content = self.extract_urn_and_text_content(line)
@@ -258,7 +280,10 @@ class CTSImporter:
             if node is None:
                 node_data.update({"idx": self.get_node_idx(node_data)})
                 parent_urn = self.get_parent_urn(idx, branch_data)
-                node = self.generate_node(idx, node_data, parent_urn)
+                if idx < 4 and self.partial_ingestion:
+                    node = self.get_or_generate_node(idx, node_data, parent_urn)
+                else:
+                    node = self.generate_node(idx, node_data, parent_urn)
                 self.nodes[node_data["urn"]] = node
 
     def apply(self):
@@ -288,7 +313,9 @@ def get_first_value_for_language(values, lang, fallback=True):
     return value.get("value")
 
 
-def import_versions(reset=False, predicate=None):
+# TODO: Determine best signature; do we decouple partial_ingestion or
+# infer it based on the predicate?
+def import_versions(reset=False, predicate=None, partial_ingestion=False):
     if reset:
         Node.objects.filter(kind="nid").delete()
     # TODO: Wire up logging
@@ -304,9 +331,9 @@ def import_versions(reset=False, predicate=None):
     if predicate:
         """
         Suggested usage:
-        predicate = lambda x: x["urn"] == "urn:cts:greekLit:tlg0012.tlg001.parrish-eng1:"
+        predicate = lambda x: x["urn"].count("urn:cts:greekLit:tlg0012.tlg001.parrish-eng1:")
         from scaife_viewer.atlas.importers.versions import *
-        import_versions(predicate=predicate)
+        import_versions(predicate=predicate, partial_ingestion=True)
         """
         to_ingest = filter(predicate, to_ingest)
 
@@ -318,7 +345,13 @@ def import_versions(reset=False, predicate=None):
     # counter from tqdm would be more useful.
     with tqdm() as pbar:
         for version_data in to_ingest:
-            importer = importer_class(library, version_data, nodes, lookup)
+            importer = importer_class(
+                library,
+                version_data,
+                nodes,
+                lookup,
+                partial_ingestion=partial_ingestion,
+            )
             deferred_nodes = importer.apply()
 
             to_defer.extend(deferred_nodes)
@@ -331,3 +364,48 @@ def import_versions(reset=False, predicate=None):
     logger.info("Inserting Node tree")
     chunked_bulk_create(Node, to_defer)
     logger.info(f"{Node.objects.count()} total nodes on the tree.")
+
+
+def reset_nodes(version_urn, fast_reset=True):
+    # FIXME: can we do this intelligently during bulk ingestion,
+    # or brute force afterwards?
+    nodes = Node.objects.filter(urn__startswith=version_urn).filter(numchild=0)
+    if not nodes:
+        return
+
+    if fast_reset:
+        parent = nodes.first().get_parent()
+        nodes._raw_delete("default")
+        parent.numchild = parent.get_children().count()
+        parent.save()
+        return
+
+    # FIXME: nodes.delete won't work unless we set the numchild value
+    # https://django-treebeard.readthedocs.io/en/latest/api.html#treebeard.models.Node.delete
+    # TODO: Optimize bulk deletion workflow
+    print(f"Calculating numchild: {version_urn}")
+    to_update = []
+    for node in nodes:
+        node.numchild = node.get_children().count()
+        if node.numchild:
+            to_update.append(node)
+    Node.objects.bulk_update(to_update, fields=["numchild"], batch_size=2000)
+    nodes.delete()
+
+
+def test_partial_ingestion(version_urn):
+    """
+    Usage:
+
+    from scaife_viewer.atlas.importers.versions import test_partial_ingestion
+    test_partial_ingestion("urn:cts:greekLit:tlg0012.tlg001.perseus-grc2")
+    """
+    print(f"Resetting nodes: {version_urn}")
+    reset_nodes(version_urn)
+    print("Done")
+
+    def predicate(obj):
+        return obj["urn"].count(version_urn)
+
+    print(f"Ingesting nodes matching {version_urn}")
+    import_versions(reset=False, predicate=predicate, partial_ingestion=True)
