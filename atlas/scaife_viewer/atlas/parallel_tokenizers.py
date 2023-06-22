@@ -116,6 +116,7 @@ def tokenize_textparts_and_insert(dirpath, node_urn, reset=False):
 
 
 def tokenize_all_text_parts_parallel(reset=False):
+    # NOTE: reset is a no-op
     Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
     Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
 
@@ -139,7 +140,7 @@ def tokenize_all_text_parts_parallel(reset=False):
         # NOTE: avoids locking protocol errors from SQLite
         django.db.connections.close_all()
         urn_futures = {
-            executor.submit(tokenize_text_parts, dirpath, urn, force=reset): urn
+            executor.submit(tokenize_text_parts, dirpath, urn): urn
             for urn in node_urns
         }
         for f in tqdm.tqdm(
