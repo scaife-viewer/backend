@@ -1,11 +1,12 @@
 <GetPassage xmlns="http://chs.harvard.edu/xmlns/cts">
     <request>
         <requestName>GetPassage</requestName>
-        <requestUrn></requestUrn>
+        <requestUrn>{{request_urn}}</requestUrn>
     </request>
     <reply>
-        <urn></urn>
+        <urn>{{full_urn}}</urn>
         <passage>
+            {{passage}}
         </passage>
     </reply>
 </GetPassage>
