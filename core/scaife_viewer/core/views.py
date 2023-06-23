@@ -25,6 +25,8 @@ import yaml
 
 from . import cts
 from .conf import settings
+from .cts.capitains import default_resolver
+from .cts.reference import URN
 from .hooks import hookset
 from .http import ConditionMixin
 from .precomputed import library_view_json
@@ -566,6 +568,37 @@ class CTSApiGetPassageView(LibraryConditionMixin, View):
         passage_elem.append(etree.fromstring(passage.xml))
         content = etree.tostring(root, encoding="utf-8")
         return HttpResponse(content, content_type="text/xml")
+
+
+class CTSApiGetValidReffView(LibraryConditionMixin, View):
+    """
+    Mirrors the output of the Nautilus `GetValidReff` endpoint
+    """
+
+    def get(self, request, **kwargs):
+        urn = normalize_urn(self.kwargs["urn"])
+        urn = URN(urn)
+        subreference = None
+        textId = urn.upTo(URN.NO_PASSAGE)
+        if urn.reference is not None:
+            subreference = str(urn.reference)
+
+        level = int(request.GET.get("level", 1))
+        reffs = default_resolver().getReffs(
+            textId=textId, subreference=subreference, level=level
+        )
+        ctx = {
+            "reffs": reffs,
+            "urn": textId,
+            "level": level,
+            "request_urn": str(urn),
+        }
+        return render(
+            request,
+            "cts_api/get_valid_reffs.xml",
+            ctx,
+            content_type="application/xml",
+        )
 
 
 class CTSApiGetVersionView(LibraryConditionMixin, View):
