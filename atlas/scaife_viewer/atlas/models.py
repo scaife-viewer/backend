@@ -896,3 +896,22 @@ class Metadata(models.Model):
 
     def __str__(self):
         return f"{self.label}: {self.value}"
+
+
+class TOCEntry(MP_Node):
+    urn = models.CharField(max_length=255, unique=True)
+    # TODO: Determine if we want to enforce label constraint;
+    # frontend assumes we have a label, and it is probably
+    # always useful.
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+
+    uri = models.CharField(max_length=255)
+
+    # TODO: Refactor constant name since we're using it elsewhere?
+    # TODO: Document collation issue with PostgreSQL
+    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+
+    cts_relations = SortedManyToManyField(
+        "scaife_viewer_atlas.Node", related_name="toc_entries"
+    )
