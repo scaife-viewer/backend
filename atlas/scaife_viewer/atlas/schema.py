@@ -44,6 +44,7 @@ from .models import (
     TextAlignmentRecordRelation,
     TextAnnotation,
     TextAnnotationCollection,
+    TOCEntry,
     Token,
     TokenAnnotation,
     TokenAnnotationCollection,
@@ -1419,6 +1420,28 @@ class GrammaticalEntryNode(DjangoObjectType):
         filterset_class = GrammaticalEntryFilterSet
 
 
+class TOCEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    class Meta:
+        model = TOCEntry
+        fields = ["depth", "urn"]
+
+
+class TOCEntryNode(DjangoObjectType):
+    urn = String()
+    label = String()
+    description = String()
+    uri = String()
+    tree = generic.GenericScalar()
+
+    def resolve_tree(obj, info, **kwargs):
+        return obj.dump_bulk(obj)
+
+    class Meta:
+        model = TOCEntry
+        interfaces = (relay.Node,)
+        filterset_class = TOCEntryFilterSet
+
+
 class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
     reference = django_filters.CharFilter(method="reference_filter")
     # TODO: Deprecate visible field in favor of visibility
@@ -1574,6 +1597,9 @@ class Query(ObjectType):
 
     metadata_record = relay.Node.Field(MetadataNode)
     metadata_records = LimitedConnectionField(MetadataNode)
+
+    toc_entry = relay.Node.Field(TOCEntryNode)
+    toc_entries = LimitedConnectionField(TOCEntryNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
