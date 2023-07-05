@@ -1,11 +1,16 @@
 import json
+from collections import defaultdict
 from pathlib import Path
 
 from scaife_viewer.atlas.conf import settings
-from scaife_viewer.atlas.models import TOCEntry
+from scaife_viewer.atlas.models import Node, TOCEntry
+from scaife_viewer.atlas.urn import URN
+from scaife_viewer.atlas.utils import chunked_bulk_create
 
 
 ANNOTATIONS_DATA_PATH = Path(settings.SV_ATLAS_DATA_DIR) / "annotations" / "tocs"
+
+CTSThroughModel = TOCEntry.cts_relations.through
 
 
 def get_paths():
@@ -40,6 +45,42 @@ def add_descendants(parent, children):
             add_descendants(child, grandchildren)
 
 
+def link_tocs(reset=True):
+    """
+    Link TOCs to their passages
+    """
+    if reset:
+        CTSThroughModel.objects.all().delete()
+
+    print("Linking TOCs to versions")
+    # Initially, we'll just resolve the top-level TOC to versions
+    version_to_paths_lu = defaultdict(set)
+    path_uris = TOCEntry.objects.filter(uri__startswith="urn:cts").values_list(
+        "path", "uri"
+    )
+    unique_paths = set()
+    for path, uri in path_uris:
+        version_urn = URN(uri).up_to(URN.VERSION)
+        top_level_path = path[0:4]
+        unique_paths.add(top_level_path)
+        version_to_paths_lu[version_urn].add(top_level_path)
+
+    top_level_tocs = TOCEntry.objects.filter(path__in=unique_paths)
+    top_level_path_to_id_lu = {}
+    for path, id in top_level_tocs.values_list("path", "id"):
+        top_level_path_to_id_lu[path] = id
+
+    to_create = []
+    for version in Node.objects.filter(urn__in=version_to_paths_lu):
+        for path in version_to_paths_lu[version.urn]:
+            to_create.append(
+                CTSThroughModel(
+                    node_id=version.id, tocentry_id=top_level_path_to_id_lu[path],
+                )
+            )
+    chunked_bulk_create(CTSThroughModel, to_create)
+
+
 def process_tocs(reset=True):
     if reset:
         TOCEntry.objects.all().delete()
@@ -59,3 +100,5 @@ def process_tocs(reset=True):
             add_descendants(root, children)
         created_count = root.get_descendant_count() + 1
         print(f"Entries created: {created_count}")
+
+    link_tocs(reset=reset)

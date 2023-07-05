@@ -1421,9 +1421,14 @@ class GrammaticalEntryNode(DjangoObjectType):
 
 
 class TOCEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    version = django_filters.CharFilter(method="version_filter")
+
     class Meta:
         model = TOCEntry
         fields = ["depth", "urn"]
+
+    def version_filter(self, queryset, name, value):
+        return queryset.filter(cts_relations__urn=value).distinct()
 
 
 class TOCEntryNode(DjangoObjectType):
