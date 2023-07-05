@@ -52,18 +52,18 @@ def link_tocs(reset=True):
     if reset:
         CTSThroughModel.objects.all().delete()
 
-    print("Linking TOCs to versions")
-    # Initially, we'll just resolve the top-level TOC to versions
-    version_to_paths_lu = defaultdict(set)
+    print("Linking TOCs to works")
+    # Initially, we'll just resolve the top-level TOC to works
+    work_to_paths_lu = defaultdict(set)
     path_uris = TOCEntry.objects.filter(uri__startswith="urn:cts").values_list(
         "path", "uri"
     )
     unique_paths = set()
     for path, uri in path_uris:
-        version_urn = URN(uri).up_to(URN.VERSION)
+        work_urn = URN(uri).up_to(URN.WORK)
         top_level_path = path[0:4]
         unique_paths.add(top_level_path)
-        version_to_paths_lu[version_urn].add(top_level_path)
+        work_to_paths_lu[work_urn].add(top_level_path)
 
     top_level_tocs = TOCEntry.objects.filter(path__in=unique_paths)
     top_level_path_to_id_lu = {}
@@ -71,11 +71,11 @@ def link_tocs(reset=True):
         top_level_path_to_id_lu[path] = id
 
     to_create = []
-    for version in Node.objects.filter(urn__in=version_to_paths_lu):
-        for path in version_to_paths_lu[version.urn]:
+    for work in Node.objects.filter(urn__in=work_to_paths_lu):
+        for path in work_to_paths_lu[work.urn]:
             to_create.append(
                 CTSThroughModel(
-                    node_id=version.id, tocentry_id=top_level_path_to_id_lu[path],
+                    node_id=work.id, tocentry_id=top_level_path_to_id_lu[path],
                 )
             )
     chunked_bulk_create(CTSThroughModel, to_create)
