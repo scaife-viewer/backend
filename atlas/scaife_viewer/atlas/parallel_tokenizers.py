@@ -79,7 +79,8 @@ def insert_from_csv(path):
 
 
 def tokenize_text_parts(dirpath, node_urn):
-    tokens = prepare_tokens(node_urn)
+    from .hooks import hookset
+    tokens = hookset.prepare_version_tokens(node_urn)
     # TODO: We may also rewrite this to append to a file or throw onto
     # another processing queue
     path = write_to_csv(dirpath, node_urn, tokens)
