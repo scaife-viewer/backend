@@ -80,6 +80,7 @@ def insert_from_csv(path):
 
 def tokenize_text_parts(dirpath, node_urn):
     from .hooks import hookset
+
     tokens = hookset.prepare_version_tokens(node_urn)
     # TODO: We may also rewrite this to append to a file or throw onto
     # another processing queue
@@ -141,8 +142,7 @@ def tokenize_all_text_parts_parallel(reset=False):
         # NOTE: avoids locking protocol errors from SQLite
         django.db.connections.close_all()
         urn_futures = {
-            executor.submit(tokenize_text_parts, dirpath, urn): urn
-            for urn in node_urns
+            executor.submit(tokenize_text_parts, dirpath, urn): urn for urn in node_urns
         }
         for f in tqdm.tqdm(
             concurrent.futures.as_completed(urn_futures), total=len(node_urns)
