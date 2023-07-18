@@ -526,7 +526,6 @@ class Token(models.Model):
     )
 
     space_after = models.BooleanField(default=True)
-    punctuation = models.BooleanField(default=False)
 
     @staticmethod
     def get_word_value(value):

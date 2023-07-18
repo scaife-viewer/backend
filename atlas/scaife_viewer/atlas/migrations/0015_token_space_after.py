@@ -12,11 +12,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="token",
-            name="punctuation",
-            field=models.BooleanField(default=False),
-        ),
-        migrations.AddField(
-            model_name="token",
             name="space_after",
             field=models.BooleanField(default=True),
         ),
