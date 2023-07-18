@@ -161,8 +161,9 @@ class DefaultHookSet:
         predicate = lambda x: x.suffix == ".json" or x.is_dir()  # noqa
         return _get_annotation_paths(path, predicate=predicate)
 
-    def prepare_version_tokens(self, version_urn):
+    def get_prepared_tokens(self, version_urn):
         from .parallel_tokenizers import prepare_tokens
+
         return prepare_tokens(version_urn)
 
 
