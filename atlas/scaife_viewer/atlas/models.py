@@ -525,6 +525,9 @@ class Token(models.Model):
         help_text="a human-readable reference to the token via a virtualized exemplar",
     )
 
+    space_after = models.BooleanField(default=True)
+    punctuation = models.BooleanField(default=False)
+
     @staticmethod
     def get_word_value(value):
         return re.sub(r"[^\w]", "", value)
