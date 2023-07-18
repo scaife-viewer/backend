@@ -51,6 +51,9 @@ def prepare_tokens(version_exemplar_urn):
 
 
 def write_to_csv(dirpath, urn, token_instances, fields=None):
+    # NOTE: Boolean fields (such as `space_after`) are encoded in the
+    # CSV as strings, e.g. "True" and "False".
+    # pandas read_csv will convert True and False by default.
     if fields is None:
         fields = token_instances[0].keys()
 
