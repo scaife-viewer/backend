@@ -565,6 +565,7 @@ class Token(models.Model):
                 ve_ref=f"{text_part_node.ref}.t{position}",
                 idx=counters["token_idx"],
                 subref_value=subref_value,
+                space_after=True,
             )
             if as_dict:
                 to_create.append(data)
