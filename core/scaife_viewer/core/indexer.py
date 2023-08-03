@@ -380,7 +380,7 @@ class DirectPusher:
         print(msg)
         # logger.info(msg)
 
-        metadata = {"_op_type": "index", "_index": self.index_name, "_type": "text"}
+        metadata = {"_op_type": "index", "_index": self.index_name}
         docs = ({"_id": doc["urn"], **metadata, **doc} for doc in self.docs)
         elasticsearch.helpers.bulk(self.es, docs)
         self.docs.clear()
