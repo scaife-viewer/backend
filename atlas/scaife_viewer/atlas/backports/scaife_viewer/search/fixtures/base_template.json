@@ -1,63 +1,63 @@
 {
-  "index_patterns" : ["scaife-viewer*"],
+  "index_patterns": [
+    "scaife-viewer*"
+  ],
   "mappings": {
-    "text": {
-      "properties": {
-        "@timestamp": {
-          "type": "date"
-        },
-        "@version": {
-          "type": "keyword"
-        },
-        "urn": {
-          "type": "keyword"
-        },
-        "language": {
-          "type": "keyword"
-        },
-        "word_count": {
-          "type": "integer"
-        },
-        "text_group": {
-          "type": "keyword"
-        },
-        "work": {
-          "type": "keyword"
-        },
-        "text": {
-          "properties": {
-            "urn": {
-              "type": "keyword"
-            },
-            "label": {
-              "type": "text"
-            },
-            "description": {
-              "type": "text"
-            }
+    "properties": {
+      "@timestamp": {
+        "type": "date"
+      },
+      "@version": {
+        "type": "keyword"
+      },
+      "urn": {
+        "type": "keyword"
+      },
+      "language": {
+        "type": "keyword"
+      },
+      "word_count": {
+        "type": "integer"
+      },
+      "text_group": {
+        "type": "keyword"
+      },
+      "work": {
+        "type": "keyword"
+      },
+      "text": {
+        "properties": {
+          "urn": {
+            "type": "keyword"
+          },
+          "label": {
+            "type": "text"
+          },
+          "description": {
+            "type": "text"
           }
-        },
-        "sort_idx": {
-          "type": "integer"
-        },
-        "lemma_content": {
-          "type": "text",
-          "term_vector": "with_positions_offsets",
-          "store": true,
-          "analyzer": "fulltext_analyzer"
-        },
-        "content": {
-          "type": "text",
-          "term_vector": "with_positions_offsets",
-          "store": true,
-          "analyzer": "fulltext_analyzer"
-        },
-        "raw_content": {
-          "type": "text",
-          "term_vector": "with_positions_offsets",
-          "store": true,
-          "analyzer": "fulltext_analyzer"
         }
+      },
+      "sort_idx": {
+        "type": "integer"
+      },
+      "lemma_content": {
+        "type": "text",
+        "term_vector": "with_positions_offsets",
+        "store": true,
+        "analyzer": "fulltext_analyzer"
+      },
+      "content": {
+        "type": "text",
+        "term_vector": "with_positions_offsets",
+        "store": true,
+        "analyzer": "fulltext_analyzer"
+      },
+      "raw_content": {
+        "type": "text",
+        "term_vector": "with_positions_offsets",
+        "store": true,
+        "analyzer": "fulltext_analyzer"
       }
     }
   },
@@ -76,7 +76,7 @@
           ]
         }
       },
-       "normalizer": {
+      "normalizer": {
         "fulltext_normalizer": {
           "type": "custom",
           "filter": [

@@ -90,7 +90,7 @@ def get_search_template():
         template = json.load(f)
     collections = get_collections()
     fields = get_metadata_fields(collections)
-    template["mappings"]["text"]["properties"].update(fields)
+    template["mappings"]["properties"].update(fields)
     return template
 
 
