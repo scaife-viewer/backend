@@ -10,7 +10,7 @@ from scaife_viewer.atlas.conf import settings
 from .constants import CTS_URN_DEPTHS
 
 
-CREATE_BATCH_SIZE = 500
+CREATE_UPDATE_DELETE_BATCH_SIZE = 500
 QUERY_BATCH_SIZE = 2000
 
 
@@ -222,7 +222,9 @@ def slice_large_list(iterable, total=None, batch_size=QUERY_BATCH_SIZE):
             yield subset
 
 
-def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZE):
+def chunked_bulk_create(
+    model, iterable, total=None, batch_size=CREATE_UPDATE_DELETE_BATCH_SIZE
+):
     """
     Use islice to lazily pass subsets of the iterable for bulk creation
     """
@@ -239,7 +241,7 @@ def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZ
             pbar.update(created)
 
 
-def chunked_bulk_delete(queryset, batch_size=CREATE_BATCH_SIZE):
+def chunked_bulk_delete(queryset, batch_size=CREATE_UPDATE_DELETE_BATCH_SIZE):
     """
     Use islice to lazily pass subsets of the QuerySet for bulk deletion
     """
@@ -254,6 +256,28 @@ def chunked_bulk_delete(queryset, batch_size=CREATE_BATCH_SIZE):
                 break
             queryset.model.objects.filter(pk__in=subset).delete()
             pbar.update(len(subset))
+
+
+def chunked_bulk_update(
+    model, iterable, fields=None, total=None, batch_size=CREATE_UPDATE_DELETE_BATCH_SIZE
+):
+    """
+    Use islice to lazily pass subsets of the iterable for bulk creation
+    """
+    if total is None:
+        total = get_total_from_iterable(iterable)
+
+    generator = lazy_iterable(iterable)
+    with tqdm(total=total) as pbar:
+        while True:
+            subset = list(islice(generator, batch_size))
+            if not subset:
+                break
+            model.objects.bulk_update(subset, fields=fields, batch_size=batch_size)
+            updated = model.objects.bulk_update(
+                subset, fields=fields, batch_size=batch_size
+            )
+            pbar.update(updated)
 
 
 def get_paths_matching_predicate(path, predicate=None):
