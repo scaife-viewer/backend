@@ -16,6 +16,7 @@ from scaife_viewer.atlas import constants
 from scaife_viewer.atlas.conf import settings
 
 from .hooks import hookset
+from .managers import NodeManager
 
 
 class TextAlignment(models.Model):
@@ -341,6 +342,8 @@ class Node(MP_Node):
     metadata = JSONField(default=dict, blank=True, null=True)
 
     alphabet = settings.SV_ATLAS_NODE_ALPHABET
+
+    objects = NodeManager()
 
     def __str__(self):
         return f"{self.kind}: {self.urn}"
