@@ -239,6 +239,23 @@ def chunked_bulk_create(model, iterable, total=None, batch_size=CREATE_BATCH_SIZ
             pbar.update(created)
 
 
+def chunked_bulk_delete(queryset, batch_size=CREATE_BATCH_SIZE):
+    """
+    Use islice to lazily pass subsets of the QuerySet for bulk deletion
+    """
+    total = queryset.count()
+    pk_values = queryset.values_list("pk", flat=True)
+
+    generator = lazy_iterable(pk_values.iterator(chunk_size=batch_size))
+    with tqdm(total=total) as pbar:
+        while True:
+            subset = list(islice(generator, batch_size))
+            if not subset:
+                break
+            queryset.model.objects.filter(pk__in=subset).delete()
+            pbar.update(len(subset))
+
+
 def get_paths_matching_predicate(path, predicate=None):
     if predicate is None:
         predicate = lambda x: x.suffix in [".json", ".jsonl"]  # noqa: E731

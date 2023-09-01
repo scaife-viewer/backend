@@ -8,11 +8,16 @@ from tqdm import tqdm
 from treebeard.exceptions import PathOverflow
 
 from scaife_viewer.atlas import constants
+from scaife_viewer.atlas.parallel_tokenizers import tokenize_text_parts_parallel
 
 from ..hooks import hookset
-from ..models import Node
+from ..models import Node, Token
 from ..urn import URN
-from ..utils import chunked_bulk_create, get_lowest_citable_depth
+from ..utils import (
+    chunked_bulk_create,
+    chunked_bulk_delete,
+    get_lowest_citable_depth,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -366,31 +371,23 @@ def import_versions(reset=False, predicate=None, partial_ingestion=False):
     logger.info(f"{Node.objects.count()} total nodes on the tree.")
 
 
-def reset_nodes(version_urn, fast_reset=True):
-    # FIXME: can we do this intelligently during bulk ingestion,
-    # or brute force afterwards?
+def reset_nodes(version_urn, fast_reset=False):
+    # FIXME: Remove customizations from Node so we can use default queryset methods?
     nodes = Node.objects.filter(urn__startswith=version_urn).filter(numchild=0)
     if not nodes:
         return
 
-    if fast_reset:
-        parent = nodes.first().get_parent()
-        nodes._raw_delete("default")
-        parent.numchild = parent.get_children().count()
-        parent.save()
-        return
+    parent = nodes.first().get_parent()
 
-    # FIXME: nodes.delete won't work unless we set the numchild value
-    # https://django-treebeard.readthedocs.io/en/latest/api.html#treebeard.models.Node.delete
-    # TODO: Optimize bulk deletion workflow
-    print(f"Calculating numchild: {version_urn}")
-    to_update = []
-    for node in nodes:
-        node.numchild = node.get_children().count()
-        if node.numchild:
-            to_update.append(node)
-    Node.objects.bulk_update(to_update, fields=["numchild"], batch_size=2000)
-    nodes.delete()
+    # NOTE: fast_reset doesn't work because of ForeignKey cascade issues
+    if fast_reset:
+        nodes._raw_delete("default")
+    else:
+        chunked_bulk_delete(nodes)
+
+    parent.numchild = parent.get_children().count()
+    parent.save()
+    return
 
 
 def test_partial_ingestion(version_urn):
@@ -398,10 +395,10 @@ def test_partial_ingestion(version_urn):
     Usage:
 
     from scaife_viewer.atlas.importers.versions import test_partial_ingestion
-    test_partial_ingestion("urn:cts:greekLit:tlg0012.tlg001.perseus-grc2")
+    test_partial_ingestion("urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:")
     """
     print(f"Resetting nodes: {version_urn}")
-    reset_nodes(version_urn)
+    reset_nodes(version_urn, fast_reset=False)
     print("Done")
 
     def predicate(obj):
@@ -409,3 +406,19 @@ def test_partial_ingestion(version_urn):
 
     print(f"Ingesting nodes matching {version_urn}")
     import_versions(reset=False, predicate=predicate, partial_ingestion=True)
+
+
+def test_partial_tokenizer(version_urn):
+    """
+    Usage:
+
+    from scaife_viewer.atlas.importers.versions import test_partial_tokenizer
+    test_partial_tokenizer("urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:")
+    """
+
+    assert (
+        Token.objects.filter(text_part__urn__startswith=version_urn).exists() is False
+    )
+
+    tokenize_text_parts_parallel([version_urn])
+    assert Token.objects.filter(text_part__urn__startswith=version_urn).exists()
