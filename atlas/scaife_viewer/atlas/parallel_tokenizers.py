@@ -120,14 +120,7 @@ def tokenize_textparts_and_insert(dirpath, node_urn, reset=False):
     insert_from_csv(tokenized_path)
 
 
-def tokenize_all_text_parts_parallel(reset=False):
-    # NOTE: reset is a no-op
-    Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
-    Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
-
-    if reset:
-        Token.objects.all()._raw_delete("default")
-
+def tokenize_text_parts_parallel(node_urns):
     exceptions = []
     start = time.time()
     paths_to_ingest = []
@@ -137,11 +130,6 @@ def tokenize_all_text_parts_parallel(reset=False):
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=django.conf.settings.SV_ATLAS_INGESTION_CONCURRENCY
     ) as executor:
-        node_urns = list(
-            Node.objects.filter(kind__in=["version", "exemplar"]).values_list(
-                "urn", flat=True
-            )
-        )
         # NOTE: avoids locking protocol errors from SQLite
         django.db.connections.close_all()
         urn_futures = {
@@ -164,3 +152,18 @@ def tokenize_all_text_parts_parallel(reset=False):
     logger.info(f"Elapsed: {end-start}")
     # TODO: call `cleanup` on failure too
     tempdir.cleanup()
+
+
+def tokenize_all_text_parts_parallel(node_urns=None, reset=False):
+    Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
+    Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
+
+    if reset:
+        Token.objects.all()._raw_delete("default")
+    if node_urns is None:
+        node_urns = list(
+            Node.objects.filter(kind__in=["version", "exemplar"]).values_list(
+                "urn", flat=True
+            )
+        )
+    return tokenize_text_parts_parallel(node_urns)
