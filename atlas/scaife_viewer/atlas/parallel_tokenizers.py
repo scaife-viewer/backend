@@ -88,10 +88,10 @@ def tokenize_text_parts(dirpath, node_urn):
     from .hooks import hookset
 
     tokens = hookset.get_prepared_tokens(node_urn)
-    # TODO: We may also rewrite this to append to a file or throw onto
-    # another processing queue
-    path = write_to_csv(dirpath, node_urn, tokens)
-    return path
+    if tokens:
+        # TODO: We may also rewrite this to append to a file or throw onto
+        # another processing queue
+        return write_to_csv(dirpath, node_urn, tokens)
 
 
 def process_csvs(paths):
@@ -118,6 +118,10 @@ def tokenize_textparts_and_insert(dirpath, node_urn, reset=False):
     """
     Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
     tokenized_path = tokenize_text_parts(dirpath, node_urn)
+
+    if not tokenized_path:
+        return
+
     if reset:
         Token.objects.filter(text_part__urn__startswith=node_urn).delete()
     insert_from_csv(tokenized_path)
@@ -143,7 +147,9 @@ def tokenize_text_parts_parallel(node_urns):
         ):
             urn = urn_futures[f]
             try:
-                paths_to_ingest.append(f.result())
+                path = f.result()
+                if path:
+                    paths_to_ingest.append(path)
             except Exception as exc:
                 exceptions.append(exc)
                 logger.info("{} generated an exception: {}".format(urn, exc))
@@ -152,7 +158,8 @@ def tokenize_text_parts_parallel(node_urns):
 
     process_csvs(paths_to_ingest)
     end = time.time()
-    logger.info(f"Elapsed: {end-start}")
+    duration = "{:.2f}".format(end - start)
+    logger.info(f"Elapsed: {duration}")
     # TODO: call `cleanup` on failure too
     tempdir.cleanup()
 
