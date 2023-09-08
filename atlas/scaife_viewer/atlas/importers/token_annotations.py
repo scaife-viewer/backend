@@ -29,7 +29,10 @@ def get_paths():
 
 def resolve_version(path):
     versionish = f'{os.path.basename(path).split(".csv")[0]}:'
-    return Node.objects.filter(urn__endswith=versionish).get()
+    version_obj = Node.objects.filter(urn__endswith=versionish).first()
+    if not version_obj:
+        print(f'Could not resolve version for {path.name} [urn="{versionish}"]')
+    return version_obj
 
 
 def extract_ref_and_token_position(row):
@@ -109,6 +112,8 @@ def apply_token_annotations(reset=True):
         lookup, refs = extract_lookup_and_refs(values_path)
         # TODO: Move this to metadata and or values
         version = resolve_version(values_path)
+        if not version:
+            continue
 
         # TODO: Set attribution information
         metadata = collection.pop("metadata", {})

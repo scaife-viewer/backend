@@ -111,6 +111,8 @@ def extract_version_urn_and_ref(value):
 def build_textpart_predicate(queryset, ref, max_rank):
     predicate = Q()
     if not ref:
+        if not queryset.exists():
+            return predicate
         # @@@ get all the text parts in the work; do we want to support this
         # or should we just return the first text part?
         start = queryset.first().ref
