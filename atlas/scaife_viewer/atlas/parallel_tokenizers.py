@@ -75,7 +75,10 @@ def insert_from_csv(path):
     logger.info("Inserting...")
     start = time.time()
     table_name = "scaife_viewer_atlas_token"
-    conn = sqlite3.connect(django.conf.settings.DATABASES["default"]["NAME"])
+    sv_atlas_db_name = django.conf.settings.DATABASES[
+        django.conf.settings.SV_ATLAS_DB_LABEL
+    ]["NAME"]
+    conn = sqlite3.connect(sv_atlas_db_name)
     pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
     end = time.time()
     logger.info(f"Inserted tokens [elapsed={end-start}]", file=sys.stderr)
@@ -155,11 +158,14 @@ def tokenize_text_parts_parallel(node_urns):
 
 
 def tokenize_all_text_parts_parallel(node_urns=None, reset=False):
+    from django.conf import settings
+
     Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
     Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
 
     if reset:
-        Token.objects.all()._raw_delete("default")
+        # NOTE: Using must specify the ATLAS db alias
+        Token.objects.all()._raw_delete(using=settings.SV_ATLAS_DB_LABEL)
     if node_urns is None:
         node_urns = list(
             Node.objects.filter(kind__in=["version", "exemplar"]).values_list(

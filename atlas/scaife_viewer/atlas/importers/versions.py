@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 
+from django.conf import settings
 from django.db import IntegrityError
 from django.utils.translation import ugettext_noop
 
@@ -381,7 +382,7 @@ def reset_nodes(version_urn, fast_reset=False):
 
     # NOTE: fast_reset doesn't work because of ForeignKey cascade issues
     if fast_reset:
-        nodes._raw_delete("default")
+        nodes._raw_delete(using=settings.SV_ATLAS_DB_LABEL)
     else:
         chunked_bulk_delete(nodes)
 
