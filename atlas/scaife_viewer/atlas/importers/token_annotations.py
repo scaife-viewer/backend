@@ -1,30 +1,13 @@
 import csv
 import os
 import re
-from pathlib import Path
 
 import yaml
 
-from scaife_viewer.atlas.conf import settings
-
+from ..hooks import hookset
 from ..models import Node, Token, TokenAnnotation, TokenAnnotationCollection
 
-
-ANNOTATIONS_DATA_PATH = Path(
-    settings.SV_ATLAS_DATA_DIR, "annotations", "token-annotations"
-)
-
-
 VE_REF_PATTTERN = re.compile(r"(?P<ref>.*).t(?P<token>.*)")
-
-
-def get_paths():
-    if not os.path.exists(ANNOTATIONS_DATA_PATH):
-        return []
-    for path in ANNOTATIONS_DATA_PATH.iterdir():
-        if not path.is_dir():
-            continue
-        yield path
 
 
 def resolve_version(path):
@@ -84,7 +67,11 @@ def create_token_annotations(collection, version, lookup, refs):
             continue
 
         to_create.append(
-            TokenAnnotation(token=token, data=data, collection=collection,)
+            TokenAnnotation(
+                token=token,
+                data=data,
+                collection=collection,
+            )
         )
     return len(TokenAnnotation.objects.bulk_create(to_create))
 
@@ -95,9 +82,9 @@ def apply_token_annotations(reset=True):
     want to revisit how this entire extraction works in the future
     """
 
-    paths = get_paths()
+    paths = hookset.get_token_annotation_paths()
     for path in paths:
-        metadata_path = Path(path, "metadata.yml")
+        metadata_path = path / "metadata.yml"
         collection = yaml.safe_load(metadata_path.open())
 
         if reset:
@@ -108,7 +95,7 @@ def apply_token_annotations(reset=True):
         if not values or not values.endswith("csv"):
             continue
 
-        values_path = Path(path, values)
+        values_path = path / values
         lookup, refs = extract_lookup_and_refs(values_path)
         # TODO: Move this to metadata and or values
         version = resolve_version(values_path)

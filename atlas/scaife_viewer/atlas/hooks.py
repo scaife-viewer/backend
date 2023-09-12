@@ -136,10 +136,28 @@ class DefaultHookSet:
 
         return run_ingestion_pipeline(outf)
 
+    def get_token_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(
+            settings.SV_ATLAS_DATA_DIR,
+            "annotations",
+            "token-annotations",
+        )
+
+        def isdir(path):
+            return path.is_dir()
+
+        return _get_annotation_paths(path, predicate=isdir)
+
     def get_text_annotation_paths(self):
         from .conf import settings  # noqa; avoids race condition
 
-        path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "text-annotations",)
+        path = Path(
+            settings.SV_ATLAS_DATA_DIR,
+            "annotations",
+            "text-annotations",
+        )
         return _get_annotation_paths(path)
 
     def get_syntax_tree_annotation_paths(self):
