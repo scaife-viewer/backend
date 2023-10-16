@@ -1,5 +1,6 @@
 from typing import List, Tuple
 
+from ..hooks import hookset
 from .passage import Passage
 from .toc import RefNode
 from .utils import natural_keys
@@ -17,7 +18,15 @@ def heal_recursive(node: RefNode, reference_list: List[str]) -> RefNode:
     first, *rest = reference_list
     healthy_node = heal_node(node, first)
     if rest:
-        return heal_recursive(healthy_node, rest)
+
+        if hookset.enable_canonical_pdlrefwk_flags:
+            try:
+                return heal_recursive(healthy_node, rest)
+            except:
+                return healthy_node
+        else:
+            return heal_recursive(healthy_node, rest)
+
     else:
         return healthy_node
 

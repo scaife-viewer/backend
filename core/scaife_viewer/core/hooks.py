@@ -19,6 +19,10 @@ class DefaultHookSet:
         )
         return Path(path)
 
+    @property
+    def enable_canonical_pdlrefwk_flags(self):
+        return False
+
 
 class HookProxy:
     def __getattr__(self, attr):

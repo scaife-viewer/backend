@@ -4,6 +4,7 @@ from operator import attrgetter, itemgetter, methodcaller
 
 import anytree
 
+from ..hooks import hookset
 from .exceptions import InvalidPassageReference
 from .utils import chunker, natural_keys
 
@@ -153,6 +154,10 @@ class RefNode(anytree.NodeMixin):
         for ancestor in self.ancestors[1:]:
             bits.append(ancestor.num)
         bits.append(self.num)
+
+        if hookset.enable_canonical_pdlrefwk_flags:
+            return ".".join([b for b in bits if b])
+
         return ".".join(bits)
 
     @property

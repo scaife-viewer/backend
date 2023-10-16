@@ -174,7 +174,12 @@ class Text(Collection):
     @lru_cache()
     def toc(self):
         citation = self.metadata.citation
-        depth = citation.depth
+
+        if hookset.enable_canonical_pdlrefwk_flags:
+            depth = 1
+        else:
+            depth = citation.depth
+
         tree = RefTree(self.urn, citation)
         try:
             reffs = default_resolver().getReffs(self.urn, level=depth)
