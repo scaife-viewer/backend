@@ -43,7 +43,7 @@ class RefTree:
             ref_parts = reff.start.list
             if reff.end and len(reff.start.list) != len(reff.end.list):
                 raise InvalidPassageReference(
-                    f"Unable to process unbalanced reference: {reff}"
+                    f'Unable to process unbalanced reference: [urn="{self.urn}" reff="{reff}"]'
                 )
 
         mapped = list(
