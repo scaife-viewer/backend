@@ -229,6 +229,7 @@ def test_references_are_valid(version_path):
 
         for match in matches:
             n_attrib = match.attrib["n"]
+            assert n_attrib
             restricted = ALL_RESTRICTED_CODEPOINTS.findall(n_attrib)
             # NOTE: we could raise an assertion error here, but we continue
             # to allow for all invalid references to be detected for the version
