@@ -278,7 +278,7 @@ class ImageAnnotation(models.Model):
 
 
 class ImageROI(models.Model):
-    # TODO: Determine if this needs a URN and what to do in additional datasets
+    # TODO: revisit unique constraints of URN throughout
     urn = models.CharField(max_length=255, blank=True, null=True)
 
     data = JSONField(default=dict, blank=True)
@@ -299,7 +299,6 @@ class ImageROI(models.Model):
     text_annotations = SortedManyToManyField(
         "scaife_viewer_atlas.TextAnnotation", related_name="roi"
     )
-    tokens = models.ManyToManyField("scaife_viewer_atlas.Token", related_name="roi")
 
 
 class AudioAnnotation(models.Model):
