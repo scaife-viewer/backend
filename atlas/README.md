@@ -57,6 +57,13 @@ Default: `None`
 
 The path to the SQLite database referenced by `DB_LABEL`.
 
+### Search
+**SEARCH_TEMPLATE_FIXTURE_PATH**
+
+Default: `scaife_viewer/atlas/backports/scaife_viewer/search/fixtures/base_template.json`
+
+The path to the JSON fixture used to create ElasticSearch index mappings for ATLAS.
+
 ### Annotations
 
 **EXPAND_IMAGE_ANNOTATION_REFS**

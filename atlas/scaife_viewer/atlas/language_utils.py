@@ -1,6 +1,7 @@
 import unicodedata
 
-import icu
+from django.utils.functional import SimpleLazyObject
+
 import regex
 
 
@@ -48,6 +49,16 @@ def normalized_no_digits(value):
     return DIGITS_REGEX.sub("", normalize_value(value))
 
 
-# FIXME: Wrap as a lazy instantiation
-# or allow multiple flags for ICU IDs
-icu_transliterator = icu.Transliterator.createInstance("Any-Latin")
+def get_transliterator():
+    try:
+        import icu
+    except ImportError as excep:
+        # TODO: Pattern / declaration of missing module;
+        # done as a runtime exception for now.
+        raise excep
+    else:
+        # TODO: Allow customization of additional flags
+        return icu.Transliterator.createInstance("Any-Latin")
+
+
+icu_transliterator = SimpleLazyObject(get_transliterator)

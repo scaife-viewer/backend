@@ -829,3 +829,74 @@ class GrammaticalEntry(models.Model):
 
     def __str__(self):
         return f"{self.urn} :: {self.label}"
+
+
+# TODO: Determine how strict we want to be on object vs value; need object type for entry.texts
+
+
+METADATA_VISIBILITY_ALL = "all"
+METADATA_VISIBILITY_LIBRARY = "library"
+METADATA_VISIBILITY_READER = "reader"
+METADATA_VISIBILITY_HIDDEN = "hidden"
+METADATA_VISIBLITY_CHOICES = [
+    (METADATA_VISIBILITY_ALL, "all"),
+    (METADATA_VISIBILITY_LIBRARY, "library"),
+    (METADATA_VISIBILITY_READER, "reader"),
+    (METADATA_VISIBILITY_HIDDEN, "hidden"),
+]
+
+
+class Metadata(models.Model):
+    idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
+    urn = models.CharField(
+        # TODO: Can we encode the collection into the URN too?
+        max_length=255,
+        unique=True,
+        help_text="urn:cite2:<site>:metadata.atlas_v1",
+    )
+    collection_urn = models.CharField(
+        max_length=255, help_text="urn:cite2:<site>:metadata_collection.atlas_v1"
+    )
+    datatype = models.CharField(
+        # TODO: Object vs CITEObj, etc
+        choices=[
+            ("str", "String"),
+            ("int", "Integer"),
+            ("date", "Date"),
+            ("obj", "Object"),
+            ("cite_urn", "CITE URN"),
+        ],
+        max_length=8,
+        default="str",
+    )
+    label = models.CharField(max_length=255)
+    value = models.CharField(blank=True, null=True, max_length=255)
+    value_obj = JSONField(default=dict, blank=True)
+
+    index = models.BooleanField(default=True, help_text="Include in search index")
+    visibility = models.CharField(
+        choices=METADATA_VISIBLITY_CHOICES,
+        max_length=7,
+        default=METADATA_VISIBILITY_ALL,
+    )
+
+    level = models.CharField(
+        choices=[
+            ("text_group", "Text Group"),
+            ("work", "Work"),
+            ("version", "Version"),
+            ("passage", "Passage"),
+        ],
+        max_length=11,
+        default="version",
+        help_text="Human-readable representation of the level of URN(s) to which metadata is attached",
+    )
+    # TODO: Decouple level and depth, but likely refactoring depth
+    depth = models.PositiveIntegerField()
+
+    cts_relations = SortedManyToManyField(
+        "scaife_viewer_atlas.Node", related_name="metadata_records"
+    )
+
+    def __str__(self):
+        return f"{self.label}: {self.value}"

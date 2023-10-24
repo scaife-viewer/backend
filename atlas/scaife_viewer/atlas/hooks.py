@@ -1,16 +1,30 @@
 import logging
+from pathlib import Path
+from typing import Iterable
 
 from . import constants
 from .resolvers.default import resolve_library
+from .utils import get_paths_matching_predicate
 
 
 logger = logging.getLogger(__name__)
+
+ALLOWABLE_CTS_INGESTION_EXCEPTIONS = (KeyError, ValueError, TypeError, AttributeError)
 
 
 def ensure_trailing_colon(urn):
     if not urn.endswith(":"):
         return f"{urn}:"
     return urn
+
+
+def _get_annotation_paths(path, predicate=None) -> Iterable:
+    """
+    Returns paths or an empty list.
+    """
+    if not path.exists():
+        return []
+    return get_paths_matching_predicate(path, predicate=predicate)
 
 
 class DefaultHookSet:
@@ -57,7 +71,7 @@ class DefaultHookSet:
     def get_first_passage_urn(self, version):
         try:
             return str(version.first_passage().urn)
-        except (KeyError, ValueError, TypeError):
+        except ALLOWABLE_CTS_INGESTION_EXCEPTIONS:
             msg = f'Could not extract first_passage_urn [urn="{version.urn}"]'
             logger.warning(msg)
             return None
@@ -68,7 +82,7 @@ class DefaultHookSet:
         # TODO: Move textpart level extractors out to another interface within `Library`
         try:
             textpart_metadata = self.extract_cts_textpart_metadata(version)
-        except (KeyError, ValueError, TypeError):
+        except ALLOWABLE_CTS_INGESTION_EXCEPTIONS:
             msg = f'Could not extract textpart_metadata [urn="{version.urn}"]'
             logger.warning(msg)
             textpart_metadata = {}
@@ -121,6 +135,33 @@ class DefaultHookSet:
         from .ingestion_pipeline import run_ingestion_pipeline
 
         return run_ingestion_pipeline(outf)
+
+    def get_text_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "text-annotations",)
+        return _get_annotation_paths(path)
+
+    def get_syntax_tree_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "syntax-trees")
+        return _get_annotation_paths(path)
+
+    def get_metadata_collection_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "metadata-collections")
+        return _get_annotation_paths(path)
+
+    def get_dictionary_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(settings.SV_ATLAS_DATA_DIR, "annotations", "dictionaries")
+        # FIXME: Standardize "default" annotation formats; currently we have a mixture
+        # of manifest or "all-in-one" files that makes things inconsistent
+        predicate = lambda x: x.suffix == ".json" or x.is_dir()  # noqa
+        return _get_annotation_paths(path, predicate=predicate)
 
 
 class HookProxy:

@@ -32,6 +32,7 @@ from .models import (
     GrammaticalEntryCollection,
     ImageAnnotation,
     ImageROI,
+    Metadata,
     MetricalAnnotation,
     NamedEntity,
     NamedEntityCollection,
@@ -654,8 +655,14 @@ class TextAlignmentMetadata(dict):
         # TODO: Formalize how prototype is enabled
         if self.alignment.metadata.get("enable_prototype"):
             return "regroupedRecords"
-        elif self.alignment.urn == "urn:cite2:scaife-viewer:alignment.v1:hafez-farsi-german-farsi-english-word-alignments-temp":
-            if self["passage"].version.urn == "urn:cts:farsiLit:hafez.divan.perseus-far1-hemis:":
+        elif (
+            self.alignment.urn
+            == "urn:cite2:scaife-viewer:alignment.v1:hafez-farsi-german-farsi-english-word-alignments-temp"
+        ):
+            if (
+                self["passage"].version.urn
+                == "urn:cts:farsiLit:hafez.divan.perseus-far1-hemis:"
+            ):
                 return "regroupedRecords"
         if self.alignment.urn.count("word"):
             return "textParts"
@@ -672,6 +679,7 @@ class TextAlignmentMetadata(dict):
         for version in self.alignment.versions.all():
             data[version.urn] = version.metadata["lang"]
         return data
+
 
 class TextAlignmentMetadataNode(ObjectType):
     passage_references = generic.GenericScalar(
@@ -1010,14 +1018,16 @@ class TokenAnnotationByLemmaFilterSet(django_filters.FilterSet):
         # FIXME: This is a hack for demo only
         work = self.version.get_parent()
         textgroup = work.get_parent()
-        versions = textgroup.get_descendants().filter(depth=5).filter(urn__endswith=".perseus-grc2:")
+        versions = (
+            textgroup.get_descendants()
+            .filter(depth=5)
+            .filter(urn__endswith=".perseus-grc2:")
+        )
         queryset = queryset.filter(data__lemma=value)
         predicate = Q()
         for version in versions:
             nodes = get_lowest_citable_nodes(version)
-            predicate.add(
-                Q(token__text_part__in=nodes), Q.OR
-            )
+            predicate.add(Q(token__text_part__in=nodes), Q.OR)
         queryset = queryset.filter(predicate)
         return queryset
 
@@ -1113,6 +1123,7 @@ class AttributionRecordNode(DjangoObjectType):
 
 class DictionaryNode(DjangoObjectType):
     # FIXME: Implement access checking for all queries
+    data = generic.GenericScalar()
 
     class Meta:
         model = Dictionary
@@ -1213,8 +1224,10 @@ class DictionaryEntryFilterSet(TextPartsReferenceFilterMixin, django_filters.Fil
             # FIXME: Prefer explicit normalize_and_strip_marks argument
             # (Another BI change)
             value_normalized = normalize_and_strip_marks(value)
+            # TODO: Review this pattern and determine if it is too data-specific
+            # to LGO
             lemma_pattern = rf"^({value_normalized})$|^({value_normalized})[\u002C\u002E\u003B\u00B7\s]"
-            return queryset.filter(headword_normalized__regex=lemma_pattern)
+            return queryset.filter(headword_normalized_stripped__regex=lemma_pattern)
         # TODO: Should we have an explicit ordering?
         value = normalized_no_digits(value)
         return queryset.filter(headword_normalized=value)
@@ -1230,6 +1243,7 @@ def _crush_sense(tree):
 
 
 class DictionaryEntryNode(DjangoObjectType):
+    headword_display = String()
     data = generic.GenericScalar()
     sense_tree = generic.GenericScalar(
         description="A nested structure returning the URN(s) of senses attached to this entry"
@@ -1237,6 +1251,12 @@ class DictionaryEntryNode(DjangoObjectType):
     matches_passage_lemma = Boolean(
         description="A nested structure returning the URN(s) of senses attached to this entry"
     )
+
+    def resolve_headword_display(obj, info, **kwargs):
+        value = obj.data.get("headword_display")
+        if value is None:
+            value = f"<b>{obj.headword}</b>"
+        return value
 
     def resolve_matches_passage_lemma(obj, info, **kwargs):
         # HACK: Pass data without using context?
@@ -1393,6 +1413,64 @@ class GrammaticalEntryNode(DjangoObjectType):
         filterset_class = GrammaticalEntryFilterSet
 
 
+class MetadataFilterSet(TextPartsReferenceFilterMixin, django_filters.FilterSet):
+    reference = django_filters.CharFilter(method="reference_filter")
+    # TODO: Deprecate visible field in favor of visibility
+    visible = django_filters.BooleanFilter(method="visible_filter")
+    # TODO: Determine why visibility isn't working right, likely related
+    # to convert_choices_to_enum being disabled
+    visibility = django_filters.CharFilter(method="visibility_filter")
+
+    class Meta:
+        model = Metadata
+        fields = {
+            "collection_urn": ["exact"],
+            "value": ["exact"],
+            "level": ["exact", "in"],
+            "depth": ["exact", "gt", "lt", "gte", "lte"],
+        }
+
+    # TODO: Refactor to `Node` or other schema mixins
+    def get_workparts_queryset(self, version):
+        return version.get_ancestors() | Node.objects.filter(pk=version.pk)
+
+    # TODO: refactor as a mixin
+    def reference_filter(self, queryset, name, value):
+        textparts_queryset = self.get_lowest_textparts_queryset(value)
+        # TODO: Get smarter with an `up_to` filter that could further scope the query
+
+        workparts_queryset = self.get_workparts_queryset(self.request.passage.version)
+
+        union_qs = textparts_queryset | workparts_queryset
+        matches = queryset.filter(cts_relations__in=union_qs).distinct()
+        return queryset.filter(pk__in=matches)
+
+    def visibility_filter(self, queryset, name, value):
+        return queryset.filter(visibility=value)
+
+    def visible_filter(self, queryset, name, value):
+        visibility_lookup = {
+            True: "reader",
+            False: "hidden",
+        }
+        return queryset.filter(visibility=visibility_lookup[value])
+
+
+class MetadataNode(DjangoObjectType):
+    # NOTE: We are going to specify `PassageTextPartNode` so we can use the reference
+    # filter, but it may not be the ideal field long term (mainly, if we want to link to
+    # more generic CITE URNs, not just work-part or textpart URNs)
+    cts_relations = LimitedConnectionField(lambda: PassageTextPartNode)
+
+    class Meta:
+        model = Metadata
+        interfaces = (relay.Node,)
+        filterset_class = MetadataFilterSet
+
+        # TODO: Resolve with a future update to graphene-django
+        convert_choices_to_enum = []
+
+
 class Query(ObjectType):
     text_group = relay.Node.Field(TextGroupNode)
     text_groups = LimitedConnectionField(TextGroupNode)
@@ -1487,6 +1565,9 @@ class Query(ObjectType):
 
     grammatical_entry = relay.Node.Field(GrammaticalEntryNode)
     grammatical_entries = LimitedConnectionField(GrammaticalEntryNode)
+
+    metadata_record = relay.Node.Field(MetadataNode)
+    metadata_records = LimitedConnectionField(MetadataNode)
 
     def resolve_tree(obj, info, urn, **kwargs):
         return TextPart.dump_tree(
