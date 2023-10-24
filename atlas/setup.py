@@ -18,7 +18,7 @@ setup(
     author_email="jtauber+scaife@jtauber.com",
     description="Aligned Text and Linguistic Annotation Server (ATLAS)",
     name="scaife-viewer-atlas",
-    version="0.2a1",
+    version="0.3a1",
     url="http://github.com/scaife-viewer/backend/",
     license="MIT",
     packages=find_packages(),
@@ -64,5 +64,3 @@ setup(
     ],
     zip_safe=False
 )
-
-
