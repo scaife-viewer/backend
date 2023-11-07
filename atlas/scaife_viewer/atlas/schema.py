@@ -897,6 +897,7 @@ class ImageAnnotationNode(DjangoObjectType):
 
 class ImageROINode(DjangoObjectType):
     data = generic.GenericScalar()
+    text_annotations = LimitedConnectionField(lambda: TextAnnotationNode)
 
     class Meta:
         model = ImageROI
