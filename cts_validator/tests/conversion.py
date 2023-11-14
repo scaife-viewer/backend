@@ -63,6 +63,60 @@ def generate_content(cloned, target, target_version, version_data):
     )
 
 
+def process_textpart(
+    target, textpart, version_type, version_data, version_div, work_urn
+):
+    new_textpart = etree.Element(
+        textpart.tag,
+        attrib=textpart.attrib,
+    )
+    for child in textpart.iterchildren():
+        # NOTE: This assumes that the child is a textpart
+        child_type = child.attrib.get("type")
+        new_child = etree.Element(child.tag, attrib=child.attrib)
+        if child_type == "textpart":
+            result, new_child_textpart = process_textpart(
+                target, child, version_type, version_data, version_div, work_urn
+            )
+            version_data.update(result)
+            new_textpart.append(new_child_textpart)
+            new_child = None
+            continue
+        if child_type in ALLOWED_VERSION_TYPES and child_type != version_type:
+            # NOTE: Ensures we don't process the grandchild, (which
+            # is assumed to be a container element) unless it matches
+            # the version we are looking for
+            continue
+        if child_type == version_type and not version_data:
+            version_stem = child.attrib["n"].split(":", maxsplit=1)[0]
+            content_stem = target.attrib["n"]
+            version_data = {
+                "attrib": {
+                    "type": version_type,
+                    "n": f"{work_urn}.{content_stem}-{version_stem}",
+                    "{http://www.w3.org/XML/1998/namespace}lang": child.attrib[
+                        "{http://www.w3.org/XML/1998/namespace}lang"
+                    ],
+                },
+            }
+            # continue
+        for grandchild in child.iterchildren():
+            grandchild_type = grandchild.attrib.get("type")
+            if grandchild_type in ALLOWED_VERSION_TYPES:
+                # NOTE: Ensures we don't process the grandchild, (which
+                # is assumed to be a container element) unless it matches
+                # the version we are looking for
+                continue
+            new_child.append(grandchild)
+        if child_type in ALLOWED_VERSION_TYPES:
+            for grandchild in new_child.iterchildren():
+                new_textpart.append(grandchild)
+        else:
+            new_textpart.append(new_child)
+    version_div.append(new_textpart)
+    return version_data, new_textpart
+
+
 def process_version(source, work_urn, version_type):
     parsed = etree.parse(source.open())
     cloned = etree.ElementTree(parsed.getroot())
@@ -73,37 +127,11 @@ def process_version(source, work_urn, version_type):
     top_level_textparts = target.xpath(
         './tei:div[@type="textpart"]', namespaces=XPATH_NAMESPACES
     )
-    version_data = None
+    version_data = {}
     for textpart in top_level_textparts:
-        new_textpart = etree.Element(
-            textpart.tag,
-            attrib=textpart.attrib,
+        version_data, _ = process_textpart(
+            target, textpart, version_type, version_data, version_div, work_urn
         )
-        for child in textpart.iterchildren():
-            # NOTE: This assumes that the child is a textpart
-            new_child = etree.Element(child.tag, attrib=child.attrib)
-            for gchild in child.iterchildren():
-                if gchild.attrib["type"] != version_type:
-                    # NOTE: Ensures we don't process the grandchild, (which
-                    # is assumed to be a container element) unless it matches
-                    # the version we are looking for
-                    continue
-                if not version_data:
-                    version_stem = gchild.attrib["n"].split(":", maxsplit=1)[0]
-                    content_stem = target.attrib["n"]
-                    version_data = {
-                        "attrib": {
-                            "type": version_type,
-                            "{http://www.w3.org/XML/1998/namespace}lang": gchild.attrib[
-                                "{http://www.w3.org/XML/1998/namespace}lang"
-                            ],
-                            "n": f"{work_urn}.{content_stem}-{version_stem}",
-                        },
-                    }
-                for ggchild in gchild.iterchildren():
-                    new_child.append(ggchild)
-            new_textpart.append(new_child)
-        version_div.append(new_textpart)
 
     # Insert our version_div into the template document and serialize
     # the XML to a string
@@ -127,6 +155,7 @@ def main(path):
     # FIXME: Improve path generation
     parent_path = source.parent.as_posix().replace("cts-templates", "data")
     outpath = Path(parent_path)
+    outpath.mkdir(exist_ok=True, parents=True)
     proc = PySaxonProcessor(license=False)
     for version_data in version_lookup.values():
         name = version_data["attrib"]["n"].rsplit(":", maxsplit=1)[1]
