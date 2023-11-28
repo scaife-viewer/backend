@@ -119,6 +119,7 @@ def process_textpart(
 
 def process_version(source, work_urn, version_type):
     parsed = etree.parse(source.open())
+    parsed.xinclude()
     cloned = etree.ElementTree(parsed.getroot())
     target = cloned.find('//tei:div[@type="integrated"]', namespaces=XPATH_NAMESPACES)
     version_div = etree.Element("div", nsmap=XPATH_NAMESPACES)
