@@ -49,6 +49,14 @@ def get_version_types(source):
     return list(element_types)
 
 
+def safe_nsmap(nsmap):
+    return {
+        key: uri
+        for key, uri in nsmap.items()
+        if uri != "http://www.w3.org/2001/XInclude"
+    }
+
+
 def generate_content(cloned, target, target_version, version_data):
     target_text = etree.Element("text")
     target_body = etree.Element("body")
@@ -58,9 +66,25 @@ def generate_content(cloned, target, target_version, version_data):
     target_body.append(target_version)
     target_text.append(target_body)
     target.getparent().replace(target, target_text)
+
+    # NOTE: Removes xi:include
+    root = cloned.getroot()
+    new_root = etree.Element(root.tag, nsmap=safe_nsmap(root.nsmap), attrib=root.attrib)
+    for child in root:
+        new_root.append(child)
+
     version_data["content"] = etree.tostring(
-        cloned, pretty_print=True, encoding="unicode"
+        new_root, pretty_print=True, encoding="unicode"
     )
+
+
+def safe_attributes(attributes):
+    safe_attributes = {}
+    for k, v in attributes.items():
+        if k in {"{http://www.w3.org/XML/1998/namespace}base"}:
+            continue
+        safe_attributes[k] = v
+    return safe_attributes
 
 
 def process_textpart(
@@ -68,12 +92,12 @@ def process_textpart(
 ):
     new_textpart = etree.Element(
         textpart.tag,
-        attrib=textpart.attrib,
+        attrib=safe_attributes(textpart.attrib),
     )
     for child in textpart.iterchildren():
         # NOTE: This assumes that the child is a textpart
         child_type = child.attrib.get("type")
-        new_child = etree.Element(child.tag, attrib=child.attrib)
+        new_child = etree.Element(child.tag, attrib=safe_attributes(child.attrib))
         if child_type == "textpart":
             result, new_child_textpart = process_textpart(
                 target, child, version_type, version_data, version_div, work_urn
