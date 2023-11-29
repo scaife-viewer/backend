@@ -24,16 +24,14 @@ XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>'
 
 
 def get_work_urn(source):
-    workdir = source.parent
-    work_metadata = workdir / "__cts__.xml"
-    parsed_work_metadata = etree.parse(work_metadata.open())
-    return parsed_work_metadata.xpath("//ti:work/@urn", namespaces=XPATH_NAMESPACES)[0]
+    parsed = etree.parse(source.open())
+    return parsed.xpath('//tei:div[@type="work"]/@n', namespaces=XPATH_NAMESPACES)[0]
 
 
 def get_version_types(source):
     parsed = etree.parse(source.open())
     cloned = etree.ElementTree(parsed.getroot())
-    target = cloned.find('//tei:div[@type="integrated"]', namespaces=XPATH_NAMESPACES)
+    target = cloned.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
     # NOTE: This is done to maintain order in case we need to populate the CTS Work metadata
     # could be refactored using OrderedSet
     element_types = {}
@@ -88,7 +86,7 @@ def safe_attributes(attributes):
 
 
 def process_textpart(
-    target, textpart, version_type, version_data, version_div, work_urn
+    integrated, textpart, version_type, version_data, version_div, work_urn
 ):
     new_textpart = etree.Element(
         textpart.tag,
@@ -100,7 +98,7 @@ def process_textpart(
         new_child = etree.Element(child.tag, attrib=safe_attributes(child.attrib))
         if child_type == "textpart":
             result, new_child_textpart = process_textpart(
-                target, child, version_type, version_data, version_div, work_urn
+                integrated, child, version_type, version_data, version_div, work_urn
             )
             version_data.update(result)
             new_textpart.append(new_child_textpart)
@@ -113,7 +111,7 @@ def process_textpart(
             continue
         if child_type == version_type and not version_data:
             version_stem = child.attrib["n"].split(":", maxsplit=1)[0]
-            content_stem = target.attrib["n"]
+            content_stem = integrated.attrib["n"]
             version_data = {
                 "attrib": {
                     "type": version_type,
@@ -145,17 +143,18 @@ def process_version(source, work_urn, version_type):
     parsed = etree.parse(source.open())
     parsed.xinclude()
     cloned = etree.ElementTree(parsed.getroot())
-    target = cloned.find('//tei:div[@type="integrated"]', namespaces=XPATH_NAMESPACES)
+    target = cloned.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
     version_div = etree.Element("div", nsmap=XPATH_NAMESPACES)
     # FIXME: This assumes that we have content at depth=2; needs to be more
     # robust
-    top_level_textparts = target.xpath(
+    integrated = target.find('./tei:div[@type="integrated"]', namespaces=XPATH_NAMESPACES)
+    top_level_textparts = integrated.xpath(
         './tei:div[@type="textpart"]', namespaces=XPATH_NAMESPACES
     )
     version_data = {}
     for textpart in top_level_textparts:
         version_data, _ = process_textpart(
-            target, textpart, version_type, version_data, version_div, work_urn
+            integrated, textpart, version_type, version_data, version_div, work_urn
         )
 
     # Insert our version_div into the template document and serialize
