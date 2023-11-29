@@ -1,7 +1,8 @@
 import io
 import sys
 from pathlib import Path
-from lxml import etree, builder
+
+from lxml import builder, etree
 from saxonche import PySaxonProcessor
 
 
@@ -37,9 +38,7 @@ def get_version_types(source):
     # could be refactored using OrderedSet
     unique_versions = {}
     seen = set()
-    for type_element in target.xpath(
-        "//tei:div[@type]", namespaces=XPATH_NAMESPACES
-    ):
+    for type_element in target.xpath("//tei:div[@type]", namespaces=XPATH_NAMESPACES):
         element_type = type_element.attrib["type"]
         # TODO: Add a smarter filter here?
         n_attr = type_element.get("n", "")
@@ -206,7 +205,9 @@ def process_integrated_version(source, work_urn, version_type):
     cloned = etree.ElementTree(parsed.getroot())
     target = cloned.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
     version_div = etree.Element("div", nsmap=XPATH_NAMESPACES)
-    integrated = target.find('./tei:div[@type="integrated"]', namespaces=XPATH_NAMESPACES)
+    integrated = target.find(
+        './tei:div[@type="integrated"]', namespaces=XPATH_NAMESPACES
+    )
     top_level_textparts = integrated.xpath(
         './tei:div[@type="textpart"]', namespaces=XPATH_NAMESPACES
     )
@@ -225,7 +226,9 @@ def process_integrated_version(source, work_urn, version_type):
 
 def get_standalone_version_selectors(parsed):
     target = parsed.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
-    children = target.xpath('./tei:div[@type="standalone"]/child::*', namespaces=XPATH_NAMESPACES)
+    children = target.xpath(
+        './tei:div[@type="standalone"]/child::*', namespaces=XPATH_NAMESPACES
+    )
     # NOTE: We're using getpath versus building up a selector
     # using the @n attrib
     for child in children:
@@ -287,11 +290,11 @@ def process_work_template(source):
     version_lookup = {}
     for version_key in version_types:
         version_type, _ = version_key
-        version_lookup[version_key] = process_integrated_version(source, work_urn, version_type)
+        version_lookup[version_key] = process_integrated_version(
+            source, work_urn, version_type
+        )
 
-    version_lookup.update(
-        process_standalone_versions(source, work_urn)
-    )
+    version_lookup.update(process_standalone_versions(source, work_urn))
     # FIXME: Copy files from source
     parent_path = source.parent.as_posix().replace("cts-templates", "data")
     outpath = Path(parent_path)
