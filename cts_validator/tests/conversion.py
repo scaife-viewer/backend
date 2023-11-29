@@ -1,7 +1,7 @@
 import io
 import sys
 from pathlib import Path
-from lxml import etree
+from lxml import etree, builder
 from saxonche import PySaxonProcessor
 
 
@@ -61,6 +61,59 @@ def safe_nsmap(nsmap):
     }
 
 
+# Backported from https://gitlab.com/brillpublishers/code/bpt-converter/-/blob/master/bptconverter/cts/tei.py
+def render_cts_replacement_patterns(levels=[("work", "div")]):
+    """
+    Builds the CTS replacement patterns for references.
+
+    Parameters
+    ----------
+    levels : list
+        Levels is a list of tuples, each tuple consists of (name, xml_tag).
+        Example: ('level1', 'div')
+
+    Returns
+    -------
+    refsDecl : string
+        The XML for the reference declaration
+    """
+    tei = builder.ElementMaker(namespace=XPATH_NAMESPACES["tei"])
+
+    ref_pattern = "/tei:TEI/tei:text/tei:body/tei:div"
+    ref_description = "This pointer pattern extracts "
+    replacement_patterns = []
+
+    for i, (name, tag) in enumerate(levels):
+        ref_pattern += f"/tei:{tag}[@n='${i+1}']"
+        ref_description += " and " if i > 0 else ""
+        ref_description += name
+        match_pattern = ".".join((i + 1) * ["(\\w+)"])
+        replacement_patterns = [
+            tei.cRefPattern(
+                tei.p(ref_description),
+                n=name,
+                matchPattern=match_pattern,
+                replacementPattern=f"#xpath({ref_pattern})",
+            )
+        ] + replacement_patterns
+
+    replacement_patterns = tei.refsDecl(*replacement_patterns, n="CTS")
+
+    return replacement_patterns
+
+
+def rewrite_refsdecls(cloned, version_data):
+    dynamic_refsdecl = cloned.find(
+        '//tei:refsDecl[@type="dynamic"]', namespaces=XPATH_NAMESPACES
+    )
+    if dynamic_refsdecl is None:
+        return
+    refs_decl = render_cts_replacement_patterns(
+        version_data["textpart_levels"].values()
+    )
+    dynamic_refsdecl.getparent().replace(dynamic_refsdecl, refs_decl)
+
+
 def generate_content(cloned, target, target_version, version_data):
     target_text = etree.Element("text")
     target_body = etree.Element("body")
@@ -70,6 +123,8 @@ def generate_content(cloned, target, target_version, version_data):
     target_body.append(target_version)
     target_text.append(target_body)
     target.getparent().replace(target, target_text)
+
+    rewrite_refsdecls(cloned, version_data)
 
     # NOTE: Removes xi:include
     root = cloned.getroot()
@@ -161,6 +216,7 @@ def process_integrated_version(source, work_urn, version_type):
             integrated, textpart, version_type, version_data, version_div, work_urn
         )
 
+    version_data["textpart_levels"] = extract_textpart_levels(version_div)
     # Insert our version_div into the template document and serialize
     # the XML to a string
     generate_content(cloned, target, version_div, version_data)
@@ -174,6 +230,30 @@ def get_standalone_version_selectors(parsed):
     # using the @n attrib
     for child in children:
         yield parsed.getpath(child)
+
+
+def populate_textpart_level_lookup(lookup, element, depth=1):
+    if element is None:
+        return
+    lookup[depth] = (
+        element.attrib["subtype"],
+        etree.QName(element).localname,
+    )
+    child = element.find('./tei:div[@type="textpart"]', namespaces=XPATH_NAMESPACES)
+    if child is not None:
+        return populate_textpart_level_lookup(lookup, child, depth=depth + 1)
+
+
+def extract_textpart_levels(version_div):
+    # NOTE: This assumes that there are always "balanced"
+    # refsdecls; if there are not, we may miss cRefPattern
+    # instances
+    lookup = {}
+    first_top_level_texpart = version_div.find(
+        './tei:div[@type="textpart"]', namespaces=XPATH_NAMESPACES
+    )
+    populate_textpart_level_lookup(lookup, first_top_level_texpart)
+    return lookup
 
 
 def process_standalone_versions(source, work_urn):
@@ -190,8 +270,10 @@ def process_standalone_versions(source, work_urn):
         # we re-fetch the element using the selector extracted above
         version_div = cloned.xpath(selector)[0]
         element_type = version_div.attrib["type"]
-        version_data = dict(attrib=version_div.attrib)
-        # FIXME: Re-write refsDecls
+        version_data = dict(
+            attrib=version_div.attrib,
+            textpart_levels=extract_textpart_levels(version_div),
+        )
         generate_content(cloned, target, version_div, version_data)
         key = (element_type, str(pos))
         lookup[key] = version_data
