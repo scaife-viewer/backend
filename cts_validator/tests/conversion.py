@@ -198,11 +198,7 @@ def process_standalone_versions(source, work_urn):
     return lookup
 
 
-def main(path):
-    """
-    Usage: python conversion.py <path>
-    """
-    source = Path(path)
+def process_work_template(source):
     work_urn = get_work_urn(source)
     version_types = get_version_types(source)
 
@@ -227,9 +223,21 @@ def main(path):
         file_path.write_text("\n".join([XML_DECLARATION, str_xml]))
 
 
+def get_content_template_paths(path):
+    return path.glob("*/*/content-*.xml")
+
+
+def main(path):
+    """
+    Usage: python conversion.py <path>
+    """
+    for content_template_path in get_content_template_paths(path):
+        process_work_template(content_template_path)
+
+
 if __name__ == "__main__":
     path = None
     if not sys.argv[1:]:
         raise ValueError("Missing a filepath.")
-    path = sys.argv[1]
+    path = Path(sys.argv[1])
     main(path)
