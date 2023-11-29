@@ -1,3 +1,4 @@
+import io
 import sys
 from pathlib import Path
 from lxml import etree
@@ -34,17 +35,22 @@ def get_version_types(source):
     target = cloned.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
     # NOTE: This is done to maintain order in case we need to populate the CTS Work metadata
     # could be refactored using OrderedSet
-    element_types = {}
+    unique_versions = {}
     seen = set()
-    for element_type in target.xpath(
-        "//tei:div[@type]/@type", namespaces=XPATH_NAMESPACES
+    for type_element in target.xpath(
+        "//tei:div[@type]", namespaces=XPATH_NAMESPACES
     ):
-        if element_type in seen:
-            continue
-        if element_type in ALLOWED_VERSION_TYPES:
-            element_types[element_type] = None
-        seen.add(element_type)
-    return list(element_types)
+        element_type = type_element.attrib["type"]
+        # TODO: Add a smarter filter here?
+        n_attr = type_element.get("n", "")
+        if n_attr.count(":") and not n_attr.startswith("urn"):
+            key = (element_type, n_attr.split(":", maxsplit=1)[0])
+            if key in seen:
+                continue
+            if element_type in ALLOWED_VERSION_TYPES:
+                unique_versions[key] = None
+            seen.add(element_type)
+    return list(unique_versions)
 
 
 def safe_nsmap(nsmap):
@@ -139,14 +145,12 @@ def process_textpart(
     return version_data, new_textpart
 
 
-def process_version(source, work_urn, version_type):
+def process_integrated_version(source, work_urn, version_type):
     parsed = etree.parse(source.open())
     parsed.xinclude()
     cloned = etree.ElementTree(parsed.getroot())
     target = cloned.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
     version_div = etree.Element("div", nsmap=XPATH_NAMESPACES)
-    # FIXME: This assumes that we have content at depth=2; needs to be more
-    # robust
     integrated = target.find('./tei:div[@type="integrated"]', namespaces=XPATH_NAMESPACES)
     top_level_textparts = integrated.xpath(
         './tei:div[@type="textpart"]', namespaces=XPATH_NAMESPACES
@@ -163,6 +167,37 @@ def process_version(source, work_urn, version_type):
     return version_data
 
 
+def get_standalone_version_selectors(parsed):
+    target = parsed.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
+    children = target.xpath('./tei:div[@type="standalone"]/child::*', namespaces=XPATH_NAMESPACES)
+    # NOTE: We're using getpath versus building up a selector
+    # using the @n attrib
+    for child in children:
+        yield parsed.getpath(child)
+
+
+def process_standalone_versions(source, work_urn):
+    parsed = etree.parse(source.open())
+    parsed.xinclude()
+    # We keep a copy of the parsed XML in-memory to modify for each standalone version
+    frozen_xml = io.BytesIO(etree.tostring(parsed))
+
+    selectors = get_standalone_version_selectors(parsed)
+    lookup = dict()
+    for pos, selector in enumerate(selectors):
+        cloned = etree.parse(frozen_xml)
+        target = cloned.find('//tei:div[@type="work"]', namespaces=XPATH_NAMESPACES)
+        # we re-fetch the element using the selector extracted above
+        version_div = cloned.xpath(selector)[0]
+        element_type = version_div.attrib["type"]
+        version_data = dict(attrib=version_div.attrib)
+        # FIXME: Re-write refsDecls
+        generate_content(cloned, target, version_div, version_data)
+        key = (element_type, str(pos))
+        lookup[key] = version_data
+    return lookup
+
+
 def main(path):
     """
     Usage: python conversion.py <path>
@@ -172,11 +207,14 @@ def main(path):
     version_types = get_version_types(source)
 
     version_lookup = {}
-    for version_type in version_types:
-        version_lookup[version_type] = process_version(source, work_urn, version_type)
+    for version_key in version_types:
+        version_type, _ = version_key
+        version_lookup[version_key] = process_integrated_version(source, work_urn, version_type)
 
+    version_lookup.update(
+        process_standalone_versions(source, work_urn)
+    )
     # FIXME: Copy files from source
-    # FIXME: Improve path generation
     parent_path = source.parent.as_posix().replace("cts-templates", "data")
     outpath = Path(parent_path)
     outpath.mkdir(exist_ok=True, parents=True)
