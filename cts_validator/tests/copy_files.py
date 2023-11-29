@@ -3,6 +3,9 @@ import sys
 from pathlib import Path
 
 
+CONTENT_FILE_PREFIX = "content-"
+
+
 def main(path):
     """
     Usage: python copy_files.py <path>
@@ -23,6 +26,19 @@ def main(path):
             )
             dest_path.parent.mkdir(exist_ok=True, parents=True)
             shutil.copy2(work_header_path, dest_path)
+            # Get XML files not ending in .xml
+            xml_files = work_header_path.parent.glob("*.xml")
+            # Exclude content files
+            non_content_xml_files = filter(
+                lambda x: not x.name.startswith(CONTENT_FILE_PREFIX), xml_files
+            )
+            # Copy remaining XML files
+            for xml_file_path in non_content_xml_files:
+                dest_path = Path(
+                    xml_file_path.as_posix().replace("cts-templates", "data")
+                )
+                dest_path.parent.mkdir(exist_ok=True, parents=True)
+                shutil.copy2(xml_file_path, dest_path)
 
 
 if __name__ == "__main__":
