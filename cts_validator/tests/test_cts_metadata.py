@@ -320,3 +320,17 @@ def test_balanced_refsdecls(version_path):
             check_matches(
                 parsed, max_pos, lookup, pos=0, references=references, match=match
             )
+
+
+@pytest.mark.parametrize("version_path", VERSION_PATHS, ids=VERSION_PATH_IDS)
+def test_has_expected_filename(version_path):
+    """
+    Test that the version filename can be decomposed into a textgroup,
+    work, and version
+    """
+    parts = version_path.stem.split(".")
+    try:
+        textgroup, work, version = parts
+    except ValueError:
+        msg = f"Could not split path into textgroup, version, work: {parts}"
+        pytest.fail(msg)
