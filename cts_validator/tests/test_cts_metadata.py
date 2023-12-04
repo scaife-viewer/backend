@@ -154,6 +154,11 @@ def test_cts_metadata_files(version_path):
         work_metadata_file.exists()
     ), f'No work metadata file found [path="{work_metadata_file}"]'
 
+    version_stem = version_path.stem
+    assert (
+        version_stem in work_metadata_file.read_text()
+    ), f'Version URN stem was not found in work metadata file [stem="{version_stem}" path="{work_metadata_file}"]'
+
     textgroup_dir = work_dir.parent
     textgroup_metadata_file = textgroup_dir / "__cts__.xml"
     assert (
