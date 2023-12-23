@@ -1,13 +1,29 @@
 # @@@ restore typing
+import re
 
+from ....chunking_poc import venetus_a_ref_to_folio
 from .passage import Passage
 from .utils import natural_keys
+
+
+VENETUS_A_FOLIOS_URN = "urn:cts:greekLit:tlg0012.tlg001.msA-folios:"
+VENETUS_A_HEALABLE_REGEX = re.compile(r"[\d]+[vr].{0,1}")
 
 
 def heal(passage):
     if not passage.exists():
         # @@@ always operates on the start of the passage
-        ref_list = passage.reference.rsplit(":", maxsplit=1)[1].split("-")[0].split(".")
+        passage_ref = passage.reference.rsplit(":", maxsplit=1)[1].split("-")[0]
+        ref_list = passage_ref.split(".")
+
+        if (
+            passage.version.urn == VENETUS_A_FOLIOS_URN
+            and not VENETUS_A_HEALABLE_REGEX.match(passage_ref)
+        ):
+            folio_urn = venetus_a_ref_to_folio(passage.version, passage_ref)
+            if folio_urn:
+                return Passage(f"{folio_urn}"), True
+
         healed_node = heal_recursive(passage.version, ref_list)
         return Passage(f"{healed_node.urn}"), True
     return passage, False

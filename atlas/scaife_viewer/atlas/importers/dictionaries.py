@@ -1,12 +1,13 @@
 import json
 import logging
-import os
 from collections import defaultdict
+from pathlib import Path
 
+import jsonlines
 from tqdm import tqdm
 
 from ..hooks import hookset
-from ..language_utils import normalize_string
+from ..language_utils import normalize_and_strip_marks, normalized_no_digits
 from ..models import Citation, Dictionary, DictionaryEntry, Node, Sense
 from ..utils import chunked_bulk_create
 
@@ -22,7 +23,7 @@ RESOLVE_CITATIONS_AS_TEXT_PARTS = True
 logger = logging.getLogger(__name__)
 
 
-def _prepare_citation_objs(sense, citations):
+def _prepare_citation_objs(lookup_dict, citations):
     idx = 0
     to_create = []
     for citation in citations:
@@ -35,7 +36,8 @@ def _prepare_citation_objs(sense, citations):
         )
         # FIXME: This is a bit hacky; we likely want a parallel data structure
         # that passes FKs for "deferred" purposes
-        citation_obj.sense_urn = sense.urn
+        citation_obj.entry_urn = lookup_dict.get("entry_urn")
+        citation_obj.sense_urn = lookup_dict.get("sense_urn")
         idx += 1
         to_create.append(citation_obj)
     return to_create
@@ -103,7 +105,11 @@ def _process_sense(entry, s, idx, parent=None, last_sibling=None):
 
     senses.append(obj)
 
-    citations.extend(_prepare_citation_objs(obj, s.get("citations", [])))
+    citations.extend(
+        _prepare_citation_objs(
+            dict(entry_urn=entry.urn, sense_urn=obj.urn), s.get("citations", [])
+        )
+    )
     idx += 1
 
     for ss in s.get("children", []):
@@ -162,6 +168,9 @@ def _defer_entry(deferred, entry, data, s_idx):
     """
     senses = []
     citations = []
+    citations.extend(
+        _prepare_citation_objs(dict(entry_urn=entry.urn), data.get("citations", []))
+    )
     for sense in data["senses"]:
         new_senses, new_citations = _process_sense(entry, sense, s_idx, parent=None)
         senses.extend(new_senses)
@@ -171,25 +180,20 @@ def _defer_entry(deferred, entry, data, s_idx):
     deferred["citations"].append(citations)
 
 
-def _create_dictionaries(path):
-    # TODO: Prefer JSONL spec to avoid memory headaches
-    msg = f"Loading dictionary from {path}"
-    logger.info(msg)
-    data = json.load(open(path))
-    dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
+def process_entries(dictionary, entries, entry_count=None):
     s_idx = 0
-    entry_count = len(data["entries"])
     deferred = defaultdict(list)
-
     logger.info("Extracting entries, senses and citations")
     with tqdm(total=entry_count) as pbar:
-        for e_idx, e in enumerate(data["entries"]):
+        for e_idx, e in enumerate(entries):
             pbar.update(1)
             headword = e["headword"]
-            headword_normalized = normalize_string(headword)
+            headword_normalized = normalized_no_digits(headword)
+            headword_normalized_stripped = normalize_and_strip_marks(headword)
             entry = DictionaryEntry(
                 headword=headword,
                 headword_normalized=headword_normalized,
+                headword_normalized_stripped=headword_normalized_stripped,
                 idx=e_idx,
                 urn=e["urn"],
                 dictionary=dictionary,
@@ -202,11 +206,14 @@ def _create_dictionaries(path):
     chunked_bulk_create(DictionaryEntry, deferred["entries"])
 
     logger.info("Setting entry_id on Sense objects")
-    entry_ids = (
+    entry_urn_pk_lookup = {}
+    entry_urn_pk_lookup.update(
         DictionaryEntry.objects.filter(dictionary_id=dictionary.id)
         .order_by("pk")
-        .values_list("pk", flat=True)
+        .values_list("urn", "pk")
     )
+
+    entry_ids = entry_urn_pk_lookup.values()
     for entry_id, entry_senses in zip(entry_ids, deferred["senses"]):
         for s in entry_senses:
             s.entry_id = entry_id
@@ -225,7 +232,9 @@ def _create_dictionaries(path):
     )
     for citations in deferred["citations"]:
         for citation in citations:
-            sense_id = sense_urn_pk_lookup[citation.sense_urn]
+            entry_id = entry_urn_pk_lookup.get(citation.entry_urn, None)
+            citation.entry_id = entry_id
+            sense_id = sense_urn_pk_lookup.get(citation.sense_urn, None)
             citation.sense_id = sense_id
 
     logger.info("Inserting Citation objects")
@@ -239,10 +248,59 @@ def _create_dictionaries(path):
         _resolve_citation_textparts(citations_with_urns)
 
 
+def _iter_values(paths):
+    for path in paths:
+        with jsonlines.open(path) as reader:
+            for row in reader.iter():
+                yield row
+
+
+def _create_dictionary(path):
+    msg = f"Loading dictionary from {path}"
+    logger.info(msg)
+    data = json.load(open(path))
+    dictionary = Dictionary.objects.create(label=data["label"], urn=data["urn"],)
+    return dictionary, data
+
+
+def _process_jsonl_entries(path):
+    metadata_path = Path(path, "metadata.json")
+    if not metadata_path.exists():
+        return
+    dictionary, data = _create_dictionary(metadata_path)
+
+    entries = data.get("entries")
+    if not entries:
+        return
+    if not isinstance(entries, list):
+        entries = [entries]
+    entry_paths = [Path(path, e) for e in entries]
+    entries = _iter_values(entry_paths)
+    return process_entries(dictionary, entries, entry_count=None)
+
+
+def _process_json_entries(path):
+    dictionary, data = _create_dictionary(path)
+    entries = data["entries"]
+    entry_count = len(entries)
+    return process_entries(dictionary, entries, entry_count)
+
+
+def _process_dictionary_path(path):
+    # TODO: Deprecate JSON?
+    # TODO: Prefer JSONL spec to avoid memory headaches
+    if path.is_dir():
+        return _process_jsonl_entries(path)
+    else:
+        return _process_json_entries(path)
+
+
+# TODO: Standardize metadata, token annotations and dictionaries
+# values, JSON vs YML, etc
 def import_dictionaries(reset=False):
     if reset:
         Dictionary.objects.all().delete()
 
     dictionary_paths = hookset.get_dictionary_annotation_paths()
     for path in dictionary_paths:
-        _create_dictionaries(path)
+        _process_dictionary_path(path)
