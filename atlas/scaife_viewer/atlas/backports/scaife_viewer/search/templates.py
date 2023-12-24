@@ -4,9 +4,18 @@ from scaife_viewer.atlas.conf import settings
 
 
 def text_field_template():
+    # TODO: make this opt in
     return {
         "type": "text",
-        "fields": {"keyword": {"ignore_above": 256, "type": "keyword"}},
+        "fields": {
+            "keyword": {"ignore_above": 256, "type": "keyword"},
+            "normalizedKeyword": {
+                "ignore_above": 256,
+                "type": "keyword",
+                "normalizer": "fulltext_normalizer",
+            },
+        },
+        "analyzer": "fulltext_analyzer",
     }
 
 
@@ -81,7 +90,7 @@ def get_search_template():
         template = json.load(f)
     collections = get_collections()
     fields = get_metadata_fields(collections)
-    template["mappings"]["text"]["properties"].update(fields)
+    template["mappings"]["properties"].update(fields)
     return template
 
 
