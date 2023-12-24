@@ -8,6 +8,7 @@ from MyCapytain.resources.prototypes.cts import inventory as cts
 
 from ..hooks import hookset
 from .capitains import default_resolver
+from .exceptions import InvalidPassageReference
 from .passage import Passage
 from .reference import URN
 from .toc import RefTree
@@ -180,6 +181,8 @@ class Text(Collection):
             for reff in reffs:
                 tree.add(reff)
             return tree
+        except InvalidPassageReference as e:
+            raise e
         except Exception:
             raise ValueError(f"{self.urn} has an invalid refsDecl")
 

@@ -16,6 +16,11 @@ def default_es_client_config():
         hosts=settings.ELASTICSEARCH_HOSTS,
         sniff_on_start=settings.ELASTICSEARCH_SNIFF_ON_START,
         sniff_on_connection_fail=settings.ELASTICSEARCH_SNIFF_ON_CONNECTION_FAIL,
+        # TODO: Refactor these as env vars /
+        # refactor the defaults to a hookset
+        timeout=30,
+        max_retries=10,
+        retry_on_timeout=True
     )
 
 
@@ -68,7 +73,7 @@ class SearchQuery:
         self.total_count = None
 
     def query_index(self):
-        return {"index": settings.ELASTICSEARCH_INDEX_NAME, "doc_type": "text"}
+        return {"index": settings.ELASTICSEARCH_INDEX_NAME}
 
     def query_sort(self):
         if not self.sort_by:

@@ -1,3 +1,4 @@
 include LICENSE
 recursive-include scaife_viewer/core/static *
 recursive-include scaife_viewer/core/templates *
+recursive-include scaife_viewer/core/fixtures *
