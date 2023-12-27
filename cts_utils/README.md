@@ -1,5 +1,6 @@
-# Scaife Viewer :: CTS Validators
+# Scaife Viewer :: CTS Utils
 
+## CTS Validators
 Clone the backend repo:
 ```
 cd /tmp
@@ -190,4 +191,60 @@ FAILED test_cts_metadata.py::test_balanced_refsdecls[viaf76387703.viaf003.xml] -
 FAILED test_cts_metadata.py::test_balanced_refsdecls[viaf76387703.viaf004.xml] - Failed: No refsDecl element found
 FAILED test_cts_metadata.py::test_balanced_refsdecls[viaf81013.viaf001.perseus-eng1.xml] - Failed: No refsDecl element found
 ======================== 61 failed, 35 passed in 0.77s =========================
+```
+
+## Content Templates
+Clone the backend repo:
+```
+cd /tmp
+➜  /tmp git clone git@github.com:scaife-viewer/backend.git
+Cloning into 'backend'...
+remote: Enumerating objects: 3346, done.
+remote: Counting objects: 100% (1116/1116), done.
+remote: Compressing objects: 100% (399/399), done.
+remote: Total 3346 (delta 771), reused 1038 (delta 711), pack-reused 2230
+Receiving objects: 100% (3346/3346), 888.57 KiB | 4.21 MiB/s, done.
+Resolving deltas: 100% (2147/2147), done.
+```
+
+Check out the `cts-validator/content-templates` branch:
+```
+➜  /tmp cd backend
+➜  backend git:(main) git checkout cts-validator/content-templates
+branch 'cts-validator/content-templates' set up to track 'origin/cts-validator/content-templates'.
+Switched to a new branch 'cts-validator/content-templates'
+```
+
+Check out the `cts-validator/content-templates` branch:
+```
+➜  /tmp cd cts_utils
+➜  backend git:(main) git checkout cts-validator/content-templates
+branch 'cts-validator/content-templates' set up to track 'origin/cts-validator/content-templates'.
+Switched to a new branch 'cts-validator/content-templates'
+```
+
+Build the Docker image:
+```
+/tmp/backend cd cts_utils
+./devops/build.sh
+```
+
+Run against pez
+```
+./devops/convert.sh /Users/jwegner/Data/development/repos/brill/data/pez
+```
+
+Inspect the result:
+```
+tree -L 3 /Users/jwegner/Data/development/repos/brill/data/pez/data
+/Users/jwegner/Data/development/repos/brill/data/pez/data
+└── dqiog
+    ├── 0015
+    │   ├── __cts__.xml
+    │   ├── dqiog.0015.pez-1-comm-eng.xml
+    │   ├── dqiog.0015.pez-1-ed-lat.xml
+    │   └── dqiog.0015.pez-1-tr-eng.xml
+    └── __cts__.xml
+
+3 directories, 5 files
 ```
