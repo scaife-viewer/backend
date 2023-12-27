@@ -6,3 +6,4 @@ ENV PATH="/opt/cts-utils/bin:${PATH}" VIRTUAL_ENV="/opt/scaife-stack"
 RUN set -x \
     && virtualenv /opt/cts-utils \
     && pip install -r tests/requirements.txt
+COPY . .
