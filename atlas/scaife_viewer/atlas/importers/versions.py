@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 
+from django.db import IntegrityError
 from django.utils.translation import ugettext_noop
 
 from tqdm import tqdm
@@ -79,7 +80,12 @@ class CTSImporter:
 
     @staticmethod
     def add_child(parent, data):
-        return parent.add_child(**data)
+        try:
+            return parent.add_child(**data)
+        except IntegrityError:
+            # TODO: Make this a specific option _only_ when ingesting
+            # a portion of the corpus
+            return Node.objects.get(urn=data["urn"])
 
     @staticmethod
     def check_depth(path):
@@ -177,7 +183,12 @@ class CTSImporter:
 
     def generate_node(self, idx, node_data, parent_urn):
         if idx == 0:
-            return self.add_root(node_data)
+            try:
+                return self.add_root(node_data)
+            except IntegrityError:
+                # TODO: As above, only swallow this exception
+                # when doing a partial ingestion
+                return Node.objects.get(urn=node_data["urn"])
         parent = self.nodes.get(parent_urn)
         if USE_BULK_INGESTION:
             return self.add_child_bulk(parent, node_data)
@@ -277,7 +288,7 @@ def get_first_value_for_language(values, lang, fallback=True):
     return value.get("value")
 
 
-def import_versions(reset=False):
+def import_versions(reset=False, predicate=None):
     if reset:
         Node.objects.filter(kind="nid").delete()
     # TODO: Wire up logging
@@ -287,6 +298,18 @@ def import_versions(reset=False):
     logger.info("Building Node tree")
     importer_class = hookset.get_importer_class()
     nodes = {}
+
+    to_ingest = list(library.versions.values())
+
+    if predicate:
+        """
+        Suggested usage:
+        predicate = lambda x: x["urn"] == "urn:cts:greekLit:tlg0012.tlg001.parrish-eng1:"
+        from scaife_viewer.atlas.importers.versions import *
+        import_versions(predicate=predicate)
+        """
+        to_ingest = filter(predicate, to_ingest)
+
     to_defer = []
     lookup = None
 
@@ -294,7 +317,7 @@ def import_versions(reset=False):
     # report on the number of versions, but for now, I thought a Node
     # counter from tqdm would be more useful.
     with tqdm() as pbar:
-        for _, version_data in library.versions.items():
+        for version_data in to_ingest:
             importer = importer_class(library, version_data, nodes, lookup)
             deferred_nodes = importer.apply()
 
