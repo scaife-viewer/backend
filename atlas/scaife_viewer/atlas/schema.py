@@ -451,7 +451,7 @@ class VersionNode(AbstractTextPartNode):
             "commentaries": TextAnnotation.objects.filter(
                 text_parts__urn__startswith=obj.urn
             )
-            .filter(kind=constants.TEXT_ANNOTATION_KIND_SCHOLIA)
+            .filter(kind=constants.TEXT_ANNOTATION_KIND_COMMENTARY)
             .exists(),
             "named-entities": NamedEntity.objects.filter(
                 tokens__text_part__urn__startswith=obj.urn
@@ -800,7 +800,7 @@ class TextAnnotationFilterSet(TextPartsReferenceFilterMixin, django_filters.Filt
 
     class Meta:
         model = TextAnnotation
-        fields = ["urn", "collection__urn"]
+        fields = ["urn", "collection__urn", "kind"]
 
     def reference_filter(self, queryset, name, value):
         textparts_queryset = self.get_lowest_textparts_queryset(value)
@@ -836,9 +836,12 @@ class AbstractTextAnnotationNode(DjangoObjectType):
 class TextAnnotationNode(AbstractTextAnnotationNode):
     # TODO: Eventually rename this as a scholia
     # annotation
+    # FIXME: Upgrade for enums
+    # https://github.com/graphql-python/graphene-django/pull/1119/files
+
     @classmethod
     def get_queryset(cls, queryset, info):
-        return queryset.filter(kind=constants.TEXT_ANNOTATION_KIND_SCHOLIA)
+        return queryset.exclude(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
 
 
 class SyntaxTreeNode(AbstractTextAnnotationNode):
@@ -895,6 +898,7 @@ class ImageAnnotationNode(DjangoObjectType):
 
 class ImageROINode(DjangoObjectType):
     data = generic.GenericScalar()
+    text_annotations = LimitedConnectionField(lambda: TextAnnotationNode)
 
     class Meta:
         model = ImageROI

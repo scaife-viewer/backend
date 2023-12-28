@@ -16,6 +16,7 @@ from scaife_viewer.atlas import constants
 from scaife_viewer.atlas.conf import settings
 
 from .hooks import hookset
+from .managers import NodeManager
 
 
 class TextAlignment(models.Model):
@@ -345,6 +346,8 @@ class Node(MP_Node):
 
     alphabet = settings.SV_ATLAS_NODE_ALPHABET
 
+    objects = NodeManager()
+
     def __str__(self):
         return f"{self.kind}: {self.urn}"
 
@@ -528,6 +531,8 @@ class Token(models.Model):
         help_text="a human-readable reference to the token via a virtualized exemplar",
     )
 
+    space_after = models.BooleanField(default=True)
+
     @staticmethod
     def get_word_value(value):
         return re.sub(r"[^\w]", "", value)
@@ -566,6 +571,7 @@ class Token(models.Model):
                 ve_ref=f"{text_part_node.ref}.t{position}",
                 idx=counters["token_idx"],
                 subref_value=subref_value,
+                space_after=True,
             )
             if as_dict:
                 to_create.append(data)

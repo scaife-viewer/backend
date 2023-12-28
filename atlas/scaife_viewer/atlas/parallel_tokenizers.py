@@ -51,6 +51,9 @@ def prepare_tokens(version_exemplar_urn):
 
 
 def write_to_csv(dirpath, urn, token_instances, fields=None):
+    # NOTE: Boolean fields (such as `space_after`) are encoded in the
+    # CSV as strings, e.g. "True" and "False".
+    # pandas read_csv will convert True and False by default.
     if fields is None:
         fields = token_instances[0].keys()
 
@@ -72,18 +75,23 @@ def insert_from_csv(path):
     logger.info("Inserting...")
     start = time.time()
     table_name = "scaife_viewer_atlas_token"
-    conn = sqlite3.connect(django.conf.settings.DATABASES["default"]["NAME"])
+    sv_atlas_db_name = django.conf.settings.DATABASES[
+        django.conf.settings.SV_ATLAS_DB_LABEL
+    ]["NAME"]
+    conn = sqlite3.connect(sv_atlas_db_name)
     pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
     end = time.time()
     logger.info(f"Inserted tokens [elapsed={end-start}]", file=sys.stderr)
 
 
-def tokenize_text_parts(dirpath, node_urn, force=False):
-    tokens = prepare_tokens(node_urn)
-    # TODO: We may also rewrite this to append to a file or throw onto
-    # another processing queue
-    path = write_to_csv(dirpath, node_urn, tokens)
-    return path
+def tokenize_text_parts(dirpath, node_urn):
+    from .hooks import hookset
+
+    tokens = hookset.get_prepared_tokens(node_urn)
+    if tokens:
+        # TODO: We may also rewrite this to append to a file or throw onto
+        # another processing queue
+        return write_to_csv(dirpath, node_urn, tokens)
 
 
 def process_csvs(paths):
@@ -91,13 +99,35 @@ def process_csvs(paths):
         insert_from_csv(path)
 
 
-def tokenize_all_text_parts_parallel(reset=False):
+def tokenize_textparts_and_insert(dirpath, node_urn, reset=False):
+    """
+    Read text parts from the database, generate token CSV and insert
+    tokens
+
+    Usage:
+
+    ```python
+    from pathlib import Path
+
+    from scaife_viewer.atlas.parallel_tokenizers tokenize_textparts_and_insert
+
+    outdir = Path(".")
+    version_urn = "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2:"
+    tokenize_textparts_and_insert(outdir, version_urn, reset=True)
+    ```
+    """
     Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
-    Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
+    tokenized_path = tokenize_text_parts(dirpath, node_urn)
+
+    if not tokenized_path:
+        return
 
     if reset:
-        Token.objects.all()._raw_delete("default")
+        Token.objects.filter(text_part__urn__startswith=node_urn).delete()
+    insert_from_csv(tokenized_path)
 
+
+def tokenize_text_parts_parallel(node_urns):
     exceptions = []
     start = time.time()
     paths_to_ingest = []
@@ -107,23 +137,19 @@ def tokenize_all_text_parts_parallel(reset=False):
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=django.conf.settings.SV_ATLAS_INGESTION_CONCURRENCY
     ) as executor:
-        node_urns = list(
-            Node.objects.filter(kind__in=["version", "exemplar"]).values_list(
-                "urn", flat=True
-            )
-        )
         # NOTE: avoids locking protocol errors from SQLite
         django.db.connections.close_all()
         urn_futures = {
-            executor.submit(tokenize_text_parts, dirpath, urn, force=reset): urn
-            for urn in node_urns
+            executor.submit(tokenize_text_parts, dirpath, urn): urn for urn in node_urns
         }
         for f in tqdm.tqdm(
             concurrent.futures.as_completed(urn_futures), total=len(node_urns)
         ):
             urn = urn_futures[f]
             try:
-                paths_to_ingest.append(f.result())
+                path = f.result()
+                if path:
+                    paths_to_ingest.append(path)
             except Exception as exc:
                 exceptions.append(exc)
                 logger.info("{} generated an exception: {}".format(urn, exc))
@@ -132,6 +158,25 @@ def tokenize_all_text_parts_parallel(reset=False):
 
     process_csvs(paths_to_ingest)
     end = time.time()
-    logger.info(f"Elapsed: {end-start}")
+    duration = "{:.2f}".format(end - start)
+    logger.info(f"Elapsed: {duration}")
     # TODO: call `cleanup` on failure too
     tempdir.cleanup()
+
+
+def tokenize_all_text_parts_parallel(node_urns=None, reset=False):
+    from django.conf import settings
+
+    Token = django.apps.apps.get_model("scaife_viewer_atlas.Token")
+    Node = django.apps.apps.get_model("scaife_viewer_atlas.Node")
+
+    if reset:
+        # NOTE: Using must specify the ATLAS db alias
+        Token.objects.all()._raw_delete(using=settings.SV_ATLAS_DB_LABEL)
+    if node_urns is None:
+        node_urns = list(
+            Node.objects.filter(kind__in=["version", "exemplar"]).values_list(
+                "urn", flat=True
+            )
+        )
+    return tokenize_text_parts_parallel(node_urns)
