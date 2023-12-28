@@ -41,7 +41,7 @@ class ATLASAppConf(AppConf):
         "scaife_viewer.atlas.importers.versions.import_versions",
     ]
     # TODO: Review alphabet in light of SQLite case-sensitivity
-    NODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    TREE_PATH_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
     # Annotations
     EXPAND_IMAGE_ANNOTATION_REFS = True

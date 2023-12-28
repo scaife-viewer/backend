@@ -344,7 +344,11 @@ class Node(MP_Node):
     # @@@ we may want to furthe de-norm label from metadata
     metadata = JSONField(default=dict, blank=True, null=True)
 
-    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+    # NOTE: We currently assume SQLite for ATLAS databases;
+    # if we end up supporting other backends, there may be additional
+    # configuration changes to ensure consistent sorting (e.g. Postgres collation)
+    # https://github.com/django-treebeard/django-treebeard/pull/143#issuecomment-1871226772
+    alphabet = settings.SV_ATLAS_TREE_PATH_ALPHABET
 
     objects = NodeManager()
 
@@ -738,7 +742,7 @@ class Sense(MP_Node):
     label = models.CharField(blank=True, null=True, max_length=255)
     definition = models.CharField(blank=True, null=True, max_length=255)
 
-    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+    alphabet = settings.SV_ATLAS_TREE_PATH_ALPHABET
 
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
     urn = models.CharField(
@@ -917,9 +921,7 @@ class TOCEntry(MP_Node):
 
     uri = models.CharField(max_length=255)
 
-    # TODO: Refactor constant name since we're using it elsewhere?
-    # TODO: Document collation issue with PostgreSQL
-    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+    alphabet = settings.SV_ATLAS_TREE_PATH_ALPHABET
 
     cts_relations = SortedManyToManyField(
         "scaife_viewer_atlas.Node", related_name="toc_entries"
