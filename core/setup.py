@@ -18,19 +18,25 @@ setup(
     author_email="jtauber+scaife@jtauber.com",
     description="Scaife Viewer Backend :: Core Functionality",
     name="scaife-viewer-core",
-    version="0.1a9",
+    version="0.3rc1",
     url="https://github.com/scaife-viewer/backend/",
     license="MIT",
     packages=find_packages(),
     include_package_data=True,
+    entry_points={
+        "console_scripts": [
+            "scaife=scaife_viewer.core.cli:cli"
+        ],
+    },
     test_suite="runtests.runtests",
     install_requires=[
         "anytree==2.4.3",
         "certifi==2018.11.29",
-        "dask[bag]==1.1.0",
+        "click>=8.0.0",
+        "dask[bag]==2022.1.0",
         "django_appconf>=1.0.4",
         "Django>=2.2,<3.0",
-        "elasticsearch==6.3.1",
+        "elasticsearch>=7,<8",
         "google-auth==1.6.2",
         "google-cloud-pubsub==0.39.1",
         "lxml>=4.3.5",
@@ -40,6 +46,7 @@ setup(
         "rdflib==4.2.2",
         "regex>=2020.11.13",
         "requests==2.22.0",
+        "ruamel.yaml==0.17.21",
         "wrapt==1.11.1",
     ],
     tests_require=tests_require,
@@ -60,4 +67,3 @@ setup(
     ],
     zip_safe=False
 )
-

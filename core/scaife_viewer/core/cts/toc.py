@@ -4,6 +4,7 @@ from operator import attrgetter, itemgetter, methodcaller
 
 import anytree
 
+from .exceptions import InvalidPassageReference
 from .utils import chunker, natural_keys
 
 
@@ -37,7 +38,14 @@ class RefTree:
         if isinstance(reff, str):
             ref_parts = reff.split(".")
         else:
+            # TODO: Add better boundaries around poor references
+            # e.g., do we ever want a start and end here?
             ref_parts = reff.start.list
+            if reff.end and len(reff.start.list) != len(reff.end.list):
+                raise InvalidPassageReference(
+                    f"Unable to process unbalanced reference: {reff}"
+                )
+
         mapped = list(
             zip_longest(
                 # MyCapytain bugish: citation name could be None (should always be a string)

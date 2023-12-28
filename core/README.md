@@ -24,6 +24,12 @@ Default: `"scaife_viewer.core.hooks.DefaultHookSet"`
 
 The path to a hookset that can be used to customize package functionality.
 
+#### hookset.content_manifest_path
+
+Default: Callable returning `pathlib.Path` resolving to `data/content-manifests/production.yaml`
+
+Can be customized via the `CONTENT_MANIFEST_PATH` env var.
+
 **RESOLVER_CACHE_LABEL**
 
 Default: `"cts-resolver"`
@@ -37,3 +43,11 @@ Default: `False`
 
 When `True`, sets GCE-specific metadata for the search index management
 command
+
+## CLI
+
+For information about the CLI:
+
+```shell
+scaife --help
+```

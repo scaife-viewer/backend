@@ -1,9 +1,13 @@
+import csv
 import json
+import logging
 import multiprocessing
 import os
 from collections import Counter, deque
+from functools import lru_cache
 from itertools import zip_longest
 from operator import attrgetter
+from pathlib import Path
 from typing import Iterable, List, NamedTuple
 
 from django.conf import settings
@@ -18,15 +22,21 @@ from .morphology import Morphology
 from .search import default_es_client_config
 
 
+logger = logging.getLogger(__name__)
 morphology = None
 DASK_CONFIG_NUM_WORKERS = int(
     os.environ.get("DASK_CONFIG_NUM_WORKERS", multiprocessing.cpu_count() - 1)
 )
+DASK_PARTITIONS = int(os.environ.get("DASK_PARTITIONS", "100"))
 LEMMA_CONTENT = bool(int(os.environ.get("LEMMA_CONTENT", 0)))
+
+NO_LEMMA = "�"
+TOKEN_ANNOTATIONS_PATH = os.environ.get("TOKEN_ANNOTATIONS_PATH")
 
 
 def compute_kwargs(**params):
-    kwargs = {"num_workers": DASK_CONFIG_NUM_WORKERS}
+    max_workers = params.get("max_workers", DASK_CONFIG_NUM_WORKERS)
+    kwargs = {"num_workers": max_workers}
     kwargs.update(params)
     return kwargs
 
@@ -46,12 +56,14 @@ class Indexer:
         chunk_size=100,
         limit=None,
         dry_run=False,
+        max_workers=None,
     ):
         self.pusher = pusher
         self.urn_prefix = urn_prefix
         self.chunk_size = chunk_size
         self.limit = limit
         self.dry_run = dry_run
+        self.max_workers = max_workers
         self.load_morphology(morphology_path)
 
     def load_morphology(self, path):
@@ -93,10 +105,6 @@ class Indexer:
             self.texts(urn_prefix.upTo(cts.URN.NO_PASSAGE) if urn_prefix else None)
         )
 
-        if LEMMA_CONTENT:
-            # only retrieve greek texts
-            texts = texts.filter(lambda t: t.lang == "grc")
-
         passages = []
         for text in texts:
             passages.extend(self.passages_from_text(text))
@@ -104,22 +112,59 @@ class Indexer:
             passages = passages[0 : self.limit]
         return passages
 
+    @staticmethod
+    # TODO: Make maxsize configurable; this really exists
+    # so we can use a threadlocal within each process
+    @lru_cache(maxsize=1)
+    def get_lemma_lookup(version_urn):
+        workparts = str(version_urn).rsplit(":", maxsplit=1)[1]
+        tg, work, _ = workparts.split(".")
+        inf = Path(TOKEN_ANNOTATIONS_PATH, f"{tg}/{work}/{workparts}.tsv")
+        if not inf.exists():
+            print(f"{inf.name} not found")
+            return None
+
+        # TODO: Experiment with loading this lookup
+        # in a similar fashion as the `morphology` global, or via
+        # Pandas or via SQLite
+        lemma_lookup = {}
+        for row in csv.DictReader(inf.open(), delimiter="\t"):
+            lemma_lookup[row["subref"]] = row["lemma"]
+        return lemma_lookup
+
     def index(self):
         cts.TextInventory.load()
         print("Text inventory loaded")
         urn_obj = self.get_urn_obj()
         prefix_filter = self.get_urn_prefix_filter(urn_obj)
 
-        passages = self.prepare_passage(urn_prefix=prefix_filter)
+        passages = self.prepare_passages(urn_prefix=prefix_filter)
 
         print(f"Indexing {len(passages)} passages")
-        indexer_kwargs = dict(lemma_content=LEMMA_CONTENT and bool(morphology))
-        # @@@ revisit partitions based on `DASK_CONFIG_NUM_WORKERS`; also partitions sorted by
-        # token size for consistent memory usage
+        process_lemmas = LEMMA_CONTENT
+
+        if process_lemmas:
+            print(f"Processing lemmas")
+            # FIXME: Refactor without globals;
+            # may cause an issue with lru_cache and our staticmethod
+            global TOKEN_ANNOTATIONS_PATH
+            if TOKEN_ANNOTATIONS_PATH:
+                TOKEN_ANNOTATIONS_PATH = Path(TOKEN_ANNOTATIONS_PATH)
+                print(f"Will load annotations from {TOKEN_ANNOTATIONS_PATH}")
+            elif bool(morphology):
+                print(f"Will load annotations from `morphology` global")
+            else:
+                # Nothing to populate lemmas with
+                process_lemmas = False
+                print(
+                    "`morphology` and `TOKEN_ANNOTATIONS_PATH` are falsey; aborting lemma processing"
+                )
+
+        indexer_kwargs = dict(lemma_content=process_lemmas)
         word_counts = (
-            dask.bag.from_sequence(passages)
+            dask.bag.from_sequence(passages, npartitions=DASK_PARTITIONS)
             .map_partitions(self.indexer, **indexer_kwargs)
-            .compute(**compute_kwargs())
+            .compute(**compute_kwargs(max_workers=self.max_workers))
         )
         total_word_counts = Counter()
         for (lang, count) in word_counts:
@@ -216,6 +261,25 @@ class Indexer:
         return n
 
     def lemma_content(self, passage, tokens) -> str:
+        if TOKEN_ANNOTATIONS_PATH:
+            urn = str(passage.urn)
+            version_urn, ref = str(urn).rsplit(":", maxsplit=1)
+
+            lemma_lookup = self.get_lemma_lookup(version_urn)
+            if not lemma_lookup:
+                return None
+
+            lemma_tokens = []
+            for svt in tokens:
+                token = svt["w"]
+                subref_count = svt["i"]
+                subref = f"{ref}@{token}"
+                if subref_count != 1:
+                    subref = f"{subref}[{subref_count}]"
+                lt = lemma_lookup.get(subref) or NO_LEMMA
+                lemma_tokens.append(lt)
+            return " ".join(lemma_tokens)
+
         if morphology is None:
             return ""
         short_key = morphology.short_keys.get(str(passage.text.urn))
@@ -250,26 +314,29 @@ class Indexer:
     def passage_to_doc(self, passage, sort_idx, tokens, word_stats, lemma_content):
         urn = str(passage.urn)
         language, word_count = word_stats
-        if lemma_content:
+
+        lc = None
+        # TODO: Support lemmas in other languages
+        if language == "grc" and lemma_content:
             lc = self.lemma_content(passage, tokens)
-            return {"urn": urn, "lemma_content": lc}
-        else:
-            return {
-                "urn": urn,
-                "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
-                "work": str(passage.text.urn.upTo(cts.URN.WORK)),
-                "text": {
-                    "urn": str(passage.text.urn),
-                    "label": passage.text.label,
-                    "description": passage.text.description,
-                },
-                "reference": str(passage.reference),
-                "sort_idx": sort_idx,
-                "content": " ".join([token["w"] for token in tokens]),
-                "raw_content": passage.content,
-                "language": language,
-                "word_count": word_count,
-            }
+
+        return {
+            "urn": urn,
+            "text_group": str(passage.text.urn.upTo(cts.URN.TEXTGROUP)),
+            "work": str(passage.text.urn.upTo(cts.URN.WORK)),
+            "text": {
+                "urn": str(passage.text.urn),
+                "label": passage.text.label,
+                "description": passage.text.description,
+            },
+            "reference": str(passage.reference),
+            "sort_idx": sort_idx,
+            "content": " ".join([token["w"] for token in tokens]),
+            "raw_content": passage.content,
+            "lemma_content": lc,
+            "language": language,
+            "word_count": word_count,
+        }
 
 
 def consume(it):
@@ -283,9 +350,11 @@ def chunker(iterable, n):
 
 
 class DirectPusher:
-    def __init__(self, chunk_size=500):
+    def __init__(self, chunk_size=500, index_name=None):
         self.chunk_size = chunk_size
-        self.index_name = settings.ELASTICSEARCH_INDEX_NAME
+        if index_name is None:
+            index_name = settings.ELASTICSEARCH_INDEX_NAME
+        self.index_name = index_name
         self.es.indices.create(index=self.index_name, ignore=400)
 
     @property
@@ -306,7 +375,12 @@ class DirectPusher:
             self.commit_docs()
 
     def commit_docs(self):
-        metadata = {"_op_type": "index", "_index": self.index_name, "_type": "text"}
+        msg = f"Committing {len(self.docs)} doc(s) to {self.index_name}"
+        # FIXME: Prefer logger, but am not seeing messages locally
+        print(msg)
+        # logger.info(msg)
+
+        metadata = {"_op_type": "index", "_index": self.index_name}
         docs = ({"_id": doc["urn"], **metadata, **doc} for doc in self.docs)
         elasticsearch.helpers.bulk(self.es, docs)
         self.docs.clear()
@@ -318,7 +392,6 @@ class DirectPusher:
         # we need to ensure the deque is cleared if less than
         # `chunk_size`
         self.commit_docs()
-        print("Committing documents to ElasticSearch")
 
     def __getstate__(self):
         s = self.__dict__.copy()

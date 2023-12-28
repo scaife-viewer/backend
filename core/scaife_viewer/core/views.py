@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+from pathlib import Path
 from urllib.parse import urlencode
 
 from django.http import (
@@ -10,14 +11,21 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import redirect, render
+from django.utils.safestring import SafeString
 from django.views import View
 from django.views.generic.base import TemplateView
 
 import dateutil.parser
 import requests
+from MyCapytain.common.constants import Mimetypes
+
+import yaml
 
 from . import cts
 from .conf import settings
+from .cts.capitains import default_resolver
+from .cts.reference import URN
+from .hooks import hookset
 from .http import ConditionMixin
 from .precomputed import library_view_json
 from .search import SearchQuery
@@ -122,7 +130,7 @@ class LibraryCollectionView(LibraryConditionMixin, BaseLibraryView):
         try:
             return JsonResponse(self.json_paylod)
         except ValueError as e:
-            """"
+            """
             TODO: good idea to refactor this to send back consistent error
             messages and codes that the client is aware of
 
@@ -470,3 +478,113 @@ def morpheus(request):
         data_body.append(entry)
     data = {"Body": data_body}
     return JsonResponse(data)
+
+
+class CTSApiGetPassageView(LibraryConditionMixin, View):
+    """
+    Mirrors the output of the Nautilus `GetPassage` endpoint.
+    """
+
+    def get_version(self, urn):
+        try:
+            cts_obj = cts.collection(urn)
+        except cts.CollectionDoesNotExist:
+            raise Http404()
+
+        if not isinstance(cts_obj, cts.Text):
+            raise cts.InvalidURN(
+                f'This endpoint only supports passage or version-level URNs [urn="{cts_obj.urn}"]'
+            )
+        return cts_obj
+
+    def resolve_urn_to_obj(self, urn):
+        if not urn.reference:
+            return self.get_version(str(urn))
+        else:
+            return cts.passage(str(urn))
+
+    def get_textual_node(self, cts_obj):
+        if isinstance(cts_obj, cts.Text):
+            return default_resolver().getTextualNode(
+                textId=cts_obj.urn.upTo(URN.NO_PASSAGE)
+            )
+        return cts_obj.textual_node()
+
+    def get(self, request, **kwargs):
+        urn = normalize_urn(self.kwargs["urn"])
+        urn_obj = cts.URN(urn)
+        try:
+            cts_obj = self.resolve_urn_to_obj(urn_obj)
+        except cts.InvalidURN as e:
+            return HttpResponse(
+                json.dumps({"reason": str(e)}),
+                status=404,
+                content_type="application/json",
+            )
+        node = self.get_textual_node(cts_obj)
+        ctx = {
+            "request_urn": urn,
+            # TODO: simplify this, as it appears to always be
+            #  the same as request_urn
+            "full_urn": urn,
+            "passage": SafeString(node.export(Mimetypes.XML.TEI)),
+        }
+        return render(
+            self.request, "cts_api/get_passage.xml", ctx, content_type="application/xml"
+        )
+
+
+class CTSApiGetValidReffView(LibraryConditionMixin, View):
+    """
+    Mirrors the output of the Nautilus `GetValidReff` endpoint
+    """
+
+    def get(self, request, **kwargs):
+        urn = normalize_urn(self.kwargs["urn"])
+        urn = URN(urn)
+        subreference = None
+        textId = urn.upTo(URN.NO_PASSAGE)
+        if urn.reference is not None:
+            subreference = str(urn.reference)
+
+        level = int(request.GET.get("level", 1))
+        reffs = default_resolver().getReffs(
+            textId=textId, subreference=subreference, level=level
+        )
+        ctx = {
+            "reffs": reffs,
+            "urn": textId,
+            "level": level,
+            "request_urn": str(urn),
+        }
+        return render(
+            request,
+            "cts_api/get_valid_reffs.xml",
+            ctx,
+            content_type="application/xml",
+        )
+
+
+class CorporaReposView(View):
+    """
+    Backport of `/repos` route from scaife-cts-api.
+    """
+
+    def get(self, request, **kwargs):
+        manifest = hookset.content_manifest_path
+        with manifest.open("rb") as f:
+            data = yaml.safe_load(f)
+            return JsonResponse(data)
+
+
+class CorpusMetadata(View):
+    """
+    Backport of `/corpus-metadata` route from scaife-cts-api.
+    """
+
+    def get(self, request, **kwargs):
+        cts_data_path = Path(settings.CTS_LOCAL_DATA_PATH)
+        metadata = cts_data_path / ".scaife-viewer.json"
+        with open(metadata, "rb") as f:
+            data = json.load(f)
+            return JsonResponse(data, safe=False)
