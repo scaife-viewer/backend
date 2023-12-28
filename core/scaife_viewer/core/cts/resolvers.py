@@ -208,7 +208,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
         cleaned = []
         for entry in entries:
             valid_texts = []
-            for text in entry["texts"]:
+            for text in sorted(entry["texts"]):
                 if text in to_remove_set:
                     continue
                 valid_texts.append(text)

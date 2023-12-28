@@ -898,12 +898,6 @@ class ImageROINode(DjangoObjectType):
 
     class Meta:
         model = ImageROI
-        fields = [
-            "coordinates_value",
-            "image_identifier",
-            "text_parts",
-            "text_annotations",
-        ]
 
 
 class AudioAnnotationNode(DjangoObjectType):
