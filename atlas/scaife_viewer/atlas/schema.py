@@ -452,6 +452,11 @@ class VersionNode(AbstractTextPartNode):
             )
             .filter(kind=constants.TEXT_ANNOTATION_KIND_COMMENTARY)
             .exists(),
+            "textual-notes": TextAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            )
+            .filter(kind=constants.TEXT_ANNOTATION_KIND_TEXTUAL_NOTE)
+            .exists(),
             "named-entities": NamedEntity.objects.filter(
                 tokens__text_part__urn__startswith=obj.urn
             ).exists(),
