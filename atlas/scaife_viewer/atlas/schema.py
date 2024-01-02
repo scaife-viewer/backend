@@ -843,6 +843,12 @@ class TextAnnotationNode(AbstractTextAnnotationNode):
         return queryset.exclude(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
 
 
+class TextualNoteNode(AbstractTextAnnotationNode):
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind=constants.TEXT_ANNOTATION_KIND_TEXTUAL_NOTE)
+
+
 class SyntaxTreeNode(AbstractTextAnnotationNode):
     @classmethod
     def get_queryset(cls, queryset, info):
@@ -1508,6 +1514,9 @@ class Query(ObjectType):
 
     text_annotation = relay.Node.Field(TextAnnotationNode)
     text_annotations = LimitedConnectionField(TextAnnotationNode)
+
+    textual_note = relay.Node.Field(TextualNoteNode)
+    textual_notes = LimitedConnectionField(TextualNoteNode)
 
     text_annotation_collection = relay.Node.Field(TextAnnotationCollectionNode)
     text_annotation_collections = LimitedConnectionField(TextAnnotationCollectionNode)
