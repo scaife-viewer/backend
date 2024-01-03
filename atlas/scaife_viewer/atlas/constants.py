@@ -84,8 +84,9 @@ NAMED_ENTITY_KINDS = [
 ]
 
 HUMAN_FRIENDLY_LANGUAGE_MAP = {
-    "eng": "English",
     "ang": "English, Old (ca.450-1100)",
+    "ara": "Arabic",
+    "eng": "English",
     "fa": "Farsi",
     "far": "Farsi",
     "fre": "French",
@@ -95,9 +96,14 @@ HUMAN_FRIENDLY_LANGUAGE_MAP = {
     "lat": "Latin",
 }
 
+# TODO: Reconsider default
 TEXT_ANNOTATION_KIND_SCHOLIA = "scholia"
 TEXT_ANNOTATION_KIND_SYNTAX_TREE = "syntax-tree"
+# TODO: Refactor as textual notes
+# TODO: Reconsider this pattern
+TEXT_ANNOTATION_KIND_COMMENTARY = "commentary"
 TEXT_ANNOTATION_KIND_CHOICES = (
     (TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),
     (TEXT_ANNOTATION_KIND_SYNTAX_TREE, "Syntax tree"),
+    (TEXT_ANNOTATION_KIND_COMMENTARY, "Commentary"),
 )

@@ -7,6 +7,7 @@ import jsonlines
 from ..constants import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
+    TEXT_ANNOTATION_KIND_COMMENTARY,
 )
 from ..hooks import hookset
 from ..models import Node, TextAnnotation
@@ -84,6 +85,7 @@ def _resolve_text_annotation_text_parts(qs):
     chunked_bulk_create(TextAnnotationThroughModel, prepared_objs)
 
 
+# TODO: Break this part into individual pipelines
 def import_text_annotations(reset=False):
     if reset:
         TextAnnotation.objects.all().delete()
@@ -96,6 +98,14 @@ def import_text_annotations(reset=False):
     for path in scholia_annotation_paths:
         to_create.extend(
             _prepare_text_annotations(path, counters, kind=TEXT_ANNOTATION_KIND_SCHOLIA)
+        )
+
+    commentary_annotation_paths = hookset.get_commentary_annotation_paths()
+    for path in commentary_annotation_paths:
+        to_create.extend(
+            _prepare_text_annotations(
+                path, counters, kind=TEXT_ANNOTATION_KIND_COMMENTARY
+            )
         )
 
     syntax_tree_annotation_paths = hookset.get_syntax_tree_annotation_paths()
