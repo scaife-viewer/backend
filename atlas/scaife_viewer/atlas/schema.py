@@ -453,6 +453,11 @@ class VersionNode(AbstractTextPartNode):
             )
             .filter(kind=constants.TEXT_ANNOTATION_KIND_COMMENTARY)
             .exists(),
+            "textual-notes": TextAnnotation.objects.filter(
+                text_parts__urn__startswith=obj.urn
+            )
+            .filter(kind=constants.TEXT_ANNOTATION_KIND_TEXTUAL_NOTE)
+            .exists(),
             "named-entities": NamedEntity.objects.filter(
                 tokens__text_part__urn__startswith=obj.urn
             ).exists(),
@@ -842,6 +847,12 @@ class TextAnnotationNode(AbstractTextAnnotationNode):
     @classmethod
     def get_queryset(cls, queryset, info):
         return queryset.exclude(kind=constants.TEXT_ANNOTATION_KIND_SYNTAX_TREE)
+
+
+class TextualNoteNode(AbstractTextAnnotationNode):
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return queryset.filter(kind=constants.TEXT_ANNOTATION_KIND_TEXTUAL_NOTE)
 
 
 class SyntaxTreeNode(AbstractTextAnnotationNode):
@@ -1536,6 +1547,9 @@ class Query(ObjectType):
 
     text_annotation = relay.Node.Field(TextAnnotationNode)
     text_annotations = LimitedConnectionField(TextAnnotationNode)
+
+    textual_note = relay.Node.Field(TextualNoteNode)
+    textual_notes = LimitedConnectionField(TextualNoteNode)
 
     text_annotation_collection = relay.Node.Field(TextAnnotationCollectionNode)
     text_annotation_collections = LimitedConnectionField(TextAnnotationCollectionNode)

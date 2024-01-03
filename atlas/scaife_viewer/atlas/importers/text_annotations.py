@@ -8,6 +8,7 @@ from ..constants import (
     TEXT_ANNOTATION_KIND_SCHOLIA,
     TEXT_ANNOTATION_KIND_SYNTAX_TREE,
     TEXT_ANNOTATION_KIND_COMMENTARY,
+    TEXT_ANNOTATION_KIND_TEXTUAL_NOTE,
 )
 from ..hooks import hookset
 from ..models import Node, TextAnnotation
@@ -105,6 +106,14 @@ def import_text_annotations(reset=False):
         to_create.extend(
             _prepare_text_annotations(
                 path, counters, kind=TEXT_ANNOTATION_KIND_COMMENTARY
+            )
+        )
+
+    textual_note_annotation_paths = hookset.get_textual_note_annotation_paths()
+    for path in textual_note_annotation_paths:
+        to_create.extend(
+            _prepare_text_annotations(
+                path, counters, kind=TEXT_ANNOTATION_KIND_TEXTUAL_NOTE
             )
         )
 
