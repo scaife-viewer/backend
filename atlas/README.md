@@ -21,7 +21,7 @@ Sets the number of processes available to ProcessPoolExecutors during ingestion.
 
 When `None`, defaults to number of processors as reported by multiprocessing.cpu_count()
 
-**NODE_ALPHABET**
+**TREE_PATH_ALPHABET**
 
 Default: `"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`
 

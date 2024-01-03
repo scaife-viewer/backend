@@ -344,7 +344,11 @@ class Node(MP_Node):
     # @@@ we may want to furthe de-norm label from metadata
     metadata = JSONField(default=dict, blank=True, null=True)
 
-    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+    # NOTE: We currently assume SQLite for ATLAS databases;
+    # if we end up supporting other backends, there may be additional
+    # configuration changes to ensure consistent sorting (e.g. Postgres collation)
+    # https://github.com/django-treebeard/django-treebeard/pull/143#issuecomment-1871226772
+    alphabet = settings.SV_ATLAS_TREE_PATH_ALPHABET
 
     objects = NodeManager()
 
@@ -738,7 +742,7 @@ class Sense(MP_Node):
     label = models.CharField(blank=True, null=True, max_length=255)
     definition = models.CharField(blank=True, null=True, max_length=255)
 
-    alphabet = settings.SV_ATLAS_NODE_ALPHABET
+    alphabet = settings.SV_ATLAS_TREE_PATH_ALPHABET
 
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
     urn = models.CharField(
@@ -905,3 +909,20 @@ class Metadata(models.Model):
 
     def __str__(self):
         return f"{self.label}: {self.value}"
+
+
+class TOCEntry(MP_Node):
+    urn = models.CharField(max_length=255, unique=True)
+    # TODO: Determine if we want to enforce label constraint;
+    # frontend assumes we have a label, and it is probably
+    # always useful.
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+
+    uri = models.CharField(max_length=255)
+
+    alphabet = settings.SV_ATLAS_TREE_PATH_ALPHABET
+
+    cts_relations = SortedManyToManyField(
+        "scaife_viewer_atlas.Node", related_name="toc_entries"
+    )
