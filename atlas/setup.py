@@ -37,7 +37,7 @@ setup(
         # @@@ can be dropped in Django 3.1+
         "django-jsonfield-backport>=1.0.0,<2",
         "graphene-django==2.6.0",
-        "PyYAML==5.4.1",
+        "PyYAML==6.0.1",
         # @@@ can be dropped in Python > 3.8
         "importlib-resources>=5.1.2,<6",
         "jsonlines>=2.0.0,<3",
