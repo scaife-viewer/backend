@@ -79,7 +79,9 @@ def insert_from_csv(path):
         django.conf.settings.SV_ATLAS_DB_LABEL
     ]["NAME"]
     conn = sqlite3.connect(sv_atlas_db_name)
-    pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
+    pandas.read_csv(path, keep_default_na=False).to_sql(
+        table_name, conn, if_exists="append", index=False
+    )
     end = time.time()
     logger.info(f"Inserted tokens [elapsed={end-start}]", file=sys.stderr)
 
