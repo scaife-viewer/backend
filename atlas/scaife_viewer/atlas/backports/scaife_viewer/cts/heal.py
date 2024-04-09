@@ -12,9 +12,25 @@ VENETUS_A_HEALABLE_REGEX = re.compile(r"[\d]+[vr].{0,1}")
 
 def heal(passage):
     if not passage.exists():
+        lowest_indexed_node = (
+            passage.version.get_descendants().order_by("-depth").first()
+        )
+        if not lowest_indexed_node:
+            raise NotImplementedError(
+                "Healing cannot occur if no text part nodes are indexed"
+            )
+
         # @@@ always operates on the start of the passage
         passage_ref = passage.reference.rsplit(":", maxsplit=1)[1].split("-")[0]
         ref_list = passage_ref.split(".")
+
+        lowest_depth_indexed = lowest_indexed_node.depth
+        attempted_depth = 5 + len(ref_list)
+        if attempted_depth > lowest_depth_indexed:
+            # e.g. reference was 1.1 (book 1 line 1), but only book is indexed.
+            difference = lowest_depth_indexed - attempted_depth
+            ref_list = ref_list[0:difference]
+            return Passage(f'{passage.version.urn}{".".join(ref_list)}'), True
 
         if (
             passage.version.urn == VENETUS_A_FOLIOS_URN
