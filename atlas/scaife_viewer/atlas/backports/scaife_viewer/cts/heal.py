@@ -30,7 +30,7 @@ def heal(passage):
             # e.g. reference was 1.1 (book 1 line 1), but only book is indexed.
             difference = lowest_depth_indexed - attempted_depth
             ref_list = ref_list[0:difference]
-            return heal(Passage(f'{passage.version.urn}{".".join(ref_list)}'))
+            return Passage(f'{passage.version.urn}{".".join(ref_list)}'), True
 
         if (
             passage.version.urn == VENETUS_A_FOLIOS_URN
