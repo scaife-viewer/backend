@@ -2,7 +2,6 @@
 
 from django.db import migrations, models
 import django.db.models.deletion
-import django_jsonfield_backport.models
 
 
 class Migration(migrations.Migration):
@@ -27,7 +26,7 @@ class Migration(migrations.Migration):
                 ("label", models.CharField(blank=True, max_length=255, null=True)),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -56,7 +55,7 @@ class Migration(migrations.Migration):
                 ("label", models.CharField(blank=True, max_length=255, null=True)),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),

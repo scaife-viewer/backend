@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from django.conf import settings
 from django.db import IntegrityError
-from django.utils.translation import ugettext_noop
+from django.utils.translation import gettext_noop
 
 from tqdm import tqdm
 from treebeard.exceptions import PathOverflow

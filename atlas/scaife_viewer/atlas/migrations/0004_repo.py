@@ -2,8 +2,6 @@
 
 from django.db import migrations, models
 
-import django_jsonfield_backport.models
-
 
 class Migration(migrations.Migration):
 
@@ -28,7 +26,7 @@ class Migration(migrations.Migration):
                 ("sha", models.CharField(blank=True, max_length=255, null=True)),
                 (
                     "metadata",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),

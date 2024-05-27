@@ -13,7 +13,7 @@ from graphene_django.utils import camelize
 from . import constants
 
 # @@@ ensure convert signal is registered
-from .compat import convert_jsonfield_to_string  # noqa
+# from .compat import convert_jsonfield_to_string  # noqa
 from .hooks import hookset
 from .language_utils import (
     icu_transliterator,
@@ -72,41 +72,42 @@ TextPart = Node
 
 
 class LimitedConnectionField(DjangoFilterConnectionField):
-    """
-    Ensures that queries without `first` or `last` return up to
-    `max_limit` results.
-    """
+    pass
+    # """
+    # Ensures that queries without `first` or `last` return up to
+    # `max_limit` results.
+    # """
 
-    @classmethod
-    def connection_resolver(
-        cls,
-        resolver,
-        connection,
-        default_manager,
-        max_limit,
-        enforce_first_or_last,
-        filterset_class,
-        filtering_args,
-        root,
-        info,
-        **resolver_kwargs,
-    ):
-        first = resolver_kwargs.get("first")
-        last = resolver_kwargs.get("last")
-        if not first and not last:
-            resolver_kwargs["first"] = max_limit
-        return super(LimitedConnectionField, cls).connection_resolver(
-            resolver,
-            connection,
-            default_manager,
-            max_limit,
-            enforce_first_or_last,
-            filterset_class,
-            filtering_args,
-            root,
-            info,
-            **resolver_kwargs,
-        )
+    # @classmethod
+    # def connection_resolver(
+    #     cls,
+    #     resolver,
+    #     connection,
+    #     default_manager,
+    #     max_limit,
+    #     enforce_first_or_last,
+    #     filterset_class,
+    #     filtering_args,
+    #     root,
+    #     info,
+    #     **resolver_kwargs,
+    # ):
+    #     first = resolver_kwargs.get("first")
+    #     last = resolver_kwargs.get("last")
+    #     if not first and not last:
+    #         resolver_kwargs["first"] = max_limit
+    #     return super(LimitedConnectionField, cls).connection_resolver(
+    #         resolver,
+    #         connection,
+    #         default_manager,
+    #         max_limit,
+    #         enforce_first_or_last,
+    #         filterset_class,
+    #         filtering_args,
+    #         root,
+    #         info,
+    #         **resolver_kwargs,
+    #     )
 
 
 class PassageOverviewNode(ObjectType):

@@ -3,7 +3,6 @@
 import django.db.models.deletion
 from django.db import migrations, models
 
-import django_jsonfield_backport.models
 import sortedm2m.fields
 
 
@@ -34,7 +33,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -78,7 +77,7 @@ class Migration(migrations.Migration):
                 ("text_content", models.TextField(blank=True, null=True)),
                 (
                     "metadata",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict, null=True
                     ),
                 ),
@@ -101,7 +100,7 @@ class Migration(migrations.Migration):
                 ("slug", models.SlugField()),
                 (
                     "metadata",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -228,7 +227,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -259,13 +258,13 @@ class Migration(migrations.Migration):
                 ("citation", models.CharField(max_length=13)),
                 (
                     "items",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=list
                     ),
                 ),
                 (
                     "metadata",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -328,7 +327,7 @@ class Migration(migrations.Migration):
                 ("url", models.URLField()),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -361,7 +360,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -398,7 +397,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),
@@ -453,7 +452,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "data",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),

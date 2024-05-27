@@ -3,7 +3,6 @@
 import django.db.models.deletion
 from django.db import migrations, models
 
-import django_jsonfield_backport.models
 import sortedm2m.fields
 
 
@@ -29,7 +28,7 @@ class Migration(migrations.Migration):
                 ("urn", models.CharField(max_length=255, unique=True)),
                 (
                     "metadata",
-                    django_jsonfield_backport.models.JSONField(
+                    models.JSONField(
                         blank=True, default=dict
                     ),
                 ),

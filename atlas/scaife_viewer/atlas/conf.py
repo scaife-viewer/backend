@@ -5,10 +5,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from appconf import AppConf
 
-# TODO: Replace with importlib.resources
-# in Python > 3.8
-# https://importlib-resources.readthedocs.io/en/latest/
-from importlib_resources import files
+from importlib.resources import files
 
 
 def load_path_attr(path):
