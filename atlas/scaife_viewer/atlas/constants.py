@@ -96,14 +96,15 @@ HUMAN_FRIENDLY_LANGUAGE_MAP = {
     "lat": "Latin",
 }
 
+# TODO: Reconsider this pattern
 # TODO: Reconsider default
 TEXT_ANNOTATION_KIND_SCHOLIA = "scholia"
 TEXT_ANNOTATION_KIND_SYNTAX_TREE = "syntax-tree"
-# TODO: Refactor as textual notes
-# TODO: Reconsider this pattern
 TEXT_ANNOTATION_KIND_COMMENTARY = "commentary"
+TEXT_ANNOTATION_KIND_TEXTUAL_NOTE = "textual-note"
 TEXT_ANNOTATION_KIND_CHOICES = (
     (TEXT_ANNOTATION_KIND_SCHOLIA, "Scholia"),
     (TEXT_ANNOTATION_KIND_SYNTAX_TREE, "Syntax tree"),
     (TEXT_ANNOTATION_KIND_COMMENTARY, "Commentary"),
+    (TEXT_ANNOTATION_KIND_TEXTUAL_NOTE, "Textual note"),
 )
