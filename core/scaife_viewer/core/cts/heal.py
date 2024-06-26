@@ -5,6 +5,7 @@ from .toc import RefNode
 from .utils import natural_keys
 
 
+# TODO: This needs to take subreferences into account
 def heal(passage: Passage) -> Tuple[Passage, bool]:
     if not passage.exists():
         toc = passage.text.toc()
