@@ -170,6 +170,16 @@ class DefaultHookSet:
         )
         return _get_annotation_paths(path)
 
+    def get_textual_note_annotation_paths(self):
+        from .conf import settings  # noqa; avoids race condition
+
+        path = Path(
+            settings.SV_ATLAS_DATA_DIR,
+            "annotations",
+            "textual-notes",
+        )
+        return _get_annotation_paths(path)
+
     def get_syntax_tree_annotation_paths(self):
         from .conf import settings  # noqa; avoids race condition
 
