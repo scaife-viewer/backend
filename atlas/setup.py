@@ -18,7 +18,7 @@ setup(
     author_email="jtauber+scaife@jtauber.com",
     description="Aligned Text and Linguistic Annotation Server (ATLAS)",
     name="scaife-viewer-atlas",
-    version="0.3rc3",
+    version="0.3rc4",
     url="http://github.com/scaife-viewer/backend/",
     license="MIT",
     packages=find_packages(),
@@ -37,7 +37,7 @@ setup(
         # @@@ can be dropped in Django 3.1+
         "django-jsonfield-backport>=1.0.0,<2",
         "graphene-django==2.6.0",
-        "PyYAML==6.0.1",
+        "PyYAML==6.0.2",
         # @@@ can be dropped in Python > 3.8
         "importlib-resources>=5.1.2,<6",
         "jsonlines>=2.0.0,<3",
