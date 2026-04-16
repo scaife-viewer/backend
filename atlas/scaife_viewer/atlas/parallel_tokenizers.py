@@ -9,7 +9,6 @@ from tempfile import TemporaryDirectory
 
 import django
 
-import pandas
 import tqdm
 
 
@@ -67,7 +66,7 @@ def write_to_csv(dirpath, urn, token_instances, fields=None):
         for token in token_instances:
             writer.writerow(token)
     end = time.time()
-    logger.info(f"Prepared [elapsed={end-start}]")
+    logger.info(f"Prepared [elapsed={end - start}]")
     return path
 
 
@@ -78,10 +77,11 @@ def insert_from_csv(path):
     sv_atlas_db_name = django.conf.settings.DATABASES[
         django.conf.settings.SV_ATLAS_DB_LABEL
     ]["NAME"]
-    conn = sqlite3.connect(sv_atlas_db_name)
-    pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
+    print("Unable to insert tokens due to dependency conflicts")
+    # conn = sqlite3.connect(sv_atlas_db_name)
+    # pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
     end = time.time()
-    logger.info(f"Inserted tokens [elapsed={end-start}]", file=sys.stderr)
+    logger.info(f"Inserted tokens [elapsed={end - start}]", file=sys.stderr)
 
 
 def tokenize_text_parts(dirpath, node_urn):
