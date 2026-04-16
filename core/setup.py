@@ -24,9 +24,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     entry_points={
-        "console_scripts": [
-            "scaife=scaife_viewer.core.cli:cli"
-        ],
+        "console_scripts": ["scaife=scaife_viewer.core.cli:cli"],
     },
     test_suite="runtests.runtests",
     install_requires=[
@@ -45,7 +43,7 @@ setup(
         "python-mimeparse==1.6.0",
         "rdflib==4.2.2",
         "regex>=2020.11.13",
-        "requests==2.22.0",
+        "requests>=2.22.0",
         "ruamel.yaml==0.17.21",
         "wrapt==1.11.1",
     ],
@@ -65,5 +63,5 @@ setup(
         "Programming Language :: Python :: 3",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    zip_safe=False
+    zip_safe=False,
 )
