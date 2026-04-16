@@ -1,5 +1,7 @@
 from MyCapytain.errors import UnknownCollection
 
+from ..conf import settings
+
 from .capitains import default_resolver  # noqa
 from .collections import (  # noqa
     Collection,
@@ -39,11 +41,15 @@ def _passage_urn_objs(urn: str):
         raise InvalidURN(f"{urn} is invalid")
     if urn.reference is None:
         raise InvalidPassageReference("URN must contain a reference")
+
     reference = urn.reference
-    if reference.start.subreference or (reference.end and reference.end.subreference):
+    if not settings.SCAIFE_VIEWER_CORE_NORMALIZE_SUBREFERENCES and (
+        reference.start.subreference or (reference.end and reference.end.subreference)
+    ):
         raise InvalidPassageReference(
             "URN must not contain a start or end subreference"
         )
+
     urn = urn.upTo(URN.NO_PASSAGE)
     c = collection(urn)
     if isinstance(c, Work):
