@@ -43,7 +43,7 @@ setup(
         "python-mimeparse==1.6.0",
         "rdflib==4.2.2",
         "regex>=2020.11.13",
-        "requests>=2.22.0",
+        "requests>=2.23.0",
         "ruamel.yaml==0.17.21",
         "wrapt==1.11.1",
     ],

@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import django
-
+import pandas
 import tqdm
 
 
@@ -77,9 +77,8 @@ def insert_from_csv(path):
     sv_atlas_db_name = django.conf.settings.DATABASES[
         django.conf.settings.SV_ATLAS_DB_LABEL
     ]["NAME"]
-    print("Unable to insert tokens due to dependency conflicts")
-    # conn = sqlite3.connect(sv_atlas_db_name)
-    # pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
+    conn = sqlite3.connect(sv_atlas_db_name)
+    pandas.read_csv(path).to_sql(table_name, conn, if_exists="append", index=False)
     end = time.time()
     logger.info(f"Inserted tokens [elapsed={end - start}]", file=sys.stderr)
 
