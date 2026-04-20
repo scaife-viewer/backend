@@ -6,8 +6,6 @@ from django.core import serializers
 from django.db import models
 from django.utils.functional import cached_property
 
-# @@@ optional for Django 3.1+
-from django_jsonfield_backport.models import JSONField
 from graphene_django.utils import camelize
 from sortedm2m.fields import SortedManyToManyField
 from treebeard.mp_tree import MP_Node
@@ -33,7 +31,7 @@ class TextAlignment(models.Model):
     """
     metadata contains author / attribution information
     """
-    metadata = JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
 
     """
     versions being sorted maps onto the "items" within a particular record
@@ -52,7 +50,7 @@ class TextAlignmentRecord(models.Model):
     """
 
     urn = models.CharField(max_length=255, unique=True)
-    metadata = JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index")
 
@@ -86,7 +84,7 @@ class TextAnnotationCollection(models.Model):
 
     label = models.CharField(blank=True, null=True, max_length=255)
     # TODO: Move out to attributions model
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
     # TODO: Do we denorm kind here?
 
     urn = models.CharField(
@@ -105,7 +103,7 @@ class TextAnnotation(models.Model):
         default=hookset.TEXT_ANNOTATION_DEFAULT_KIND,
         choices=hookset.TEXT_ANNOTATION_KIND_CHOICES,
     )
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
     idx = models.IntegerField(help_text="0-based index")
 
     text_parts = SortedManyToManyField(
@@ -142,7 +140,7 @@ class TextAnnotation(models.Model):
 class MetricalAnnotation(models.Model):
     # @@@ in the future, we may ingest any attributes into
     # `data` and query via JSON
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     html_content = models.TextField()
     short_form = models.TextField(
@@ -265,7 +263,7 @@ class ImageAnnotation(models.Model):
         default=IMAGE_ANNOTATION_KIND_CANVAS,
         choices=IMAGE_ANNOTATION_KIND_CHOICES,
     )
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
     # @@@ denormed from data
     image_identifier = models.CharField(max_length=255, blank=True, null=True)
     canvas_identifier = models.CharField(max_length=255, blank=True, null=True)
@@ -282,7 +280,7 @@ class ImageROI(models.Model):
     # TODO: revisit unique constraints of URN throughout
     urn = models.CharField(max_length=255, blank=True, null=True)
 
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     # @@@ denormed from data; could go away when Django's SQLite backend has proper
     # JSON support
@@ -303,7 +301,7 @@ class ImageROI(models.Model):
 
 
 class AudioAnnotation(models.Model):
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
     asset_url = models.URLField(max_length=200)
     idx = models.IntegerField(help_text="0-based index")
 
@@ -342,7 +340,7 @@ class Node(MP_Node):
     rank = models.IntegerField(blank=True, null=True)
     text_content = models.TextField(blank=True, null=True)
     # @@@ we may want to furthe de-norm label from metadata
-    metadata = JSONField(default=dict, blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True, null=True)
 
     # NOTE: We currently assume SQLite for ATLAS databases;
     # if we end up supporting other backends, there may be additional
@@ -478,7 +476,7 @@ class TokenAnnotationCollection(models.Model):
     urn = models.CharField(max_length=255, unique=True)
     label = models.CharField(max_length=255)
 
-    metadata = JSONField(default=dict, blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True, null=True)
 
 
 class TokenAnnotation(models.Model):
@@ -487,7 +485,7 @@ class TokenAnnotation(models.Model):
         related_name="annotations",
         on_delete=models.CASCADE,
     )
-    data = JSONField(default=dict, blank=True, null=True)
+    data = models.JSONField(default=dict, blank=True, null=True)
 
     # TODO: Determine if this needs to be CITEable / addressable
     # Also determine if we need more of an EAV approach for addressable
@@ -595,7 +593,7 @@ class NamedEntityCollection(models.Model):
 
     label = models.CharField(blank=True, null=True, max_length=255)
     # TODO: Move out to attributions model
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     urn = models.CharField(
         max_length=255,
@@ -609,7 +607,7 @@ class NamedEntity(models.Model):
     description = models.TextField(blank=True, null=True)
     kind = models.CharField(max_length=6, choices=constants.NAMED_ENTITY_KINDS)
     url = models.URLField(max_length=200)
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
     urn = models.CharField(max_length=255, unique=True)
@@ -635,7 +633,7 @@ class Dictionary(models.Model):
     """
 
     label = models.CharField(blank=True, null=True, max_length=255)
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     urn = models.CharField(
         max_length=255, unique=True, help_text="urn:cite2:<site>:dictionaries.atlas_v1"
@@ -654,7 +652,7 @@ class Repo(models.Model):
     name = models.CharField(blank=True, null=True, max_length=255)
     sha = models.CharField(blank=True, null=True, max_length=255)
     urns = models.ManyToManyField("scaife_viewer_atlas.Node", related_name="repos")
-    metadata = JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
 
 
 class AttributionPerson(models.Model):
@@ -688,7 +686,7 @@ class AttributionRecord(models.Model):
 
     # TODO: Enforce person or organization constraint
 
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
     # NOTE:
     # data --> references are CTS URNs (maybe database field is too)
     # data --> annotations are CITE URNs (also maybe further modeled in the database)
@@ -724,7 +722,7 @@ class DictionaryEntry(models.Model):
         max_length=255, blank=True, null=True, db_index=True
     )
 
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index")
     urn = models.CharField(
@@ -776,7 +774,7 @@ class Citation(models.Model):
         related_name="citations",
         on_delete=models.CASCADE,
     )
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
     # TODO: There may be additional optimizations we can do on the text part / citation relation
     # TODO: Higher-order URNs?
     text_parts = SortedManyToManyField(
@@ -809,7 +807,7 @@ class GrammaticalEntryCollection(models.Model):
 
     label = models.CharField(blank=True, null=True, max_length=255)
     # TODO: Move out to attributions model
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     urn = models.CharField(
         max_length=255,
@@ -821,7 +819,7 @@ class GrammaticalEntryCollection(models.Model):
 # TODO: Refactor with a common pattern
 class GrammaticalEntry(models.Model):
     label = models.CharField(blank=True, null=True, max_length=255)
-    data = JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     idx = models.IntegerField(help_text="0-based index", blank=True, null=True)
     urn = models.CharField(max_length=255, unique=True)
@@ -880,7 +878,7 @@ class Metadata(models.Model):
     )
     label = models.CharField(max_length=255)
     value = models.CharField(blank=True, null=True, max_length=255)
-    value_obj = JSONField(default=dict, blank=True)
+    value_obj = models.JSONField(default=dict, blank=True)
 
     index = models.BooleanField(default=True, help_text="Include in search index")
     visibility = models.CharField(
