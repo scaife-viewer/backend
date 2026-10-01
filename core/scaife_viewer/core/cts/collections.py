@@ -171,7 +171,7 @@ class Text(Collection):
         for translation in self.metadata.translations():
             yield Text("translation", translation.urn, translation)
 
-    @lru_cache()
+    @lru_cache(maxsize=4)
     def toc(self):
         citation = self.metadata.citation
         depth = citation.depth

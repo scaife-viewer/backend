@@ -60,7 +60,7 @@ class LocalResolver(CtsCapitainsLocalResolver):
                 self.logger.warning(f"Unknown work: {e}")
         return metadata
 
-    @lru_cache()
+    @lru_cache(maxsize=4)
     def load_text(self, path):
         with open(path) as f:
             text = self.CLASSES["text"](resource=self.xmlparse(f))
